@@ -1,0 +1,42 @@
+# Usage: cp .env.example .env, adjust the values, then `docker compose up -d --build`.
+name: bergacast
+
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bergacast}
+      POSTGRES_USER: ${POSTGRES_USER:-bergacast}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      # PostgreSQL 18 images keep their data under /var/lib/postgresql/<major>/docker.
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  app:
+    build: .
+    image: bergacast:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      BERGACAST_PUBLIC_BASE_URL: ${BERGACAST_PUBLIC_BASE_URL:-http://localhost:8080}
+      BERGACAST_ADMIN_USERNAME: ${BERGACAST_ADMIN_USERNAME:-}
+      BERGACAST_ADMIN_PASSWORD: ${BERGACAST_ADMIN_PASSWORD:-}
+      BERGACAST_JWT_SECRET: ${BERGACAST_JWT_SECRET:?BERGACAST_JWT_SECRET is required}
+      BERGACAST_MAX_UPLOAD_SIZE: ${BERGACAST_MAX_UPLOAD_SIZE:-500MB}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-bergacast}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-bergacast}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    ports:
+      - "${BERGACAST_PORT:-8080}:8080"
+
+volumes:
+  db-data:
