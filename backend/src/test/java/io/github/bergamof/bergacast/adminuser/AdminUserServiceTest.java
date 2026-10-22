@@ -8,31 +8,28 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.bergamof.bergacast.web.ConflictException;
+import io.github.bergamof.bergacast.web.ResourceNotFoundException;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class AdminUserServiceTest {
 
     private final AdminUserRepository repository = mock(AdminUserRepository.class);
     private final AdminUserService service =
             new AdminUserService(repository, mock(PasswordEncoder.class), Clock.systemUTC());
-    private final UUID targetId = UUID.randomUUID();
-
-    @BeforeEach
-    void existingAdministrator() {
-        when(repository.findById(targetId)).thenReturn(Optional.of(new AdminUser("target", "hash", Instant.EPOCH)));
-    }
+    private final AdminUser target = administrator();
+    private final AdminUser other = administrator();
 
     @Test
     void refusesToDeleteTheLastAdministrator() {
-        when(repository.count()).thenReturn(1L);
+        when(repository.findAllForUpdate()).thenReturn(List.of(target));
 
-        assertThatThrownBy(() -> service.delete(targetId, UUID.randomUUID()))
+        assertThatThrownBy(() -> service.delete(target.getId(), UUID.randomUUID()))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("last administrator");
         verify(repository, never()).delete(any());
@@ -40,18 +37,32 @@ class AdminUserServiceTest {
 
     @Test
     void refusesToDeleteOneself() {
-        when(repository.count()).thenReturn(2L);
+        when(repository.findAllForUpdate()).thenReturn(List.of(target, other));
 
-        assertThatThrownBy(() -> service.delete(targetId, targetId)).isInstanceOf(ConflictException.class);
+        assertThatThrownBy(() -> service.delete(target.getId(), target.getId())).isInstanceOf(ConflictException.class);
         verify(repository, never()).delete(any());
     }
 
     @Test
+    void reportsAnUnknownAdministrator() {
+        when(repository.findAllForUpdate()).thenReturn(List.of(target, other));
+
+        assertThatThrownBy(() -> service.delete(UUID.randomUUID(), other.getId()))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
     void deletesAnotherAdministrator() {
-        when(repository.count()).thenReturn(2L);
+        when(repository.findAllForUpdate()).thenReturn(List.of(target, other));
 
-        service.delete(targetId, UUID.randomUUID());
+        service.delete(target.getId(), other.getId());
 
-        verify(repository).delete(any(AdminUser.class));
+        verify(repository).delete(target);
+    }
+
+    private static AdminUser administrator() {
+        AdminUser adminUser = new AdminUser("user", "hash", Instant.EPOCH);
+        ReflectionTestUtils.setField(adminUser, "id", UUID.randomUUID());
+        return adminUser;
     }
 }

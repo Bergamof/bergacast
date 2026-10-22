@@ -10,7 +10,8 @@ import org.springframework.web.ErrorResponseException;
  * <p>The hierarchy is sealed so that every error the API can produce on purpose is listed here.
  */
 public abstract sealed class ApiException extends ErrorResponseException
-        permits ResourceNotFoundException,
+        permits BadRequestException,
+                ResourceNotFoundException,
                 ConflictException,
                 PreconditionFailedException,
                 UnprocessableContentException,

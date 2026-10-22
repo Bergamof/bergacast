@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import org.springframework.web.util.DisconnectedClientHelper;
 
 /**
  * Renders every error raised while handling a request as RFC 9457 Problem Details, without leaking internals.
@@ -37,6 +38,10 @@ public class ProblemDetailsExceptionHandler extends ResponseEntityExceptionHandl
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ProblemDetailsExceptionHandler.class);
     private static final String BODY_FIELD = "$";
+    private static final String BEARER_CHALLENGE = "Bearer";
+    /** Clients closing the connection (e.g. a player seeking) are routine: logged briefly, without stack trace. */
+    private static final DisconnectedClientHelper DISCONNECTED_CLIENTS =
+            new DisconnectedClientHelper(ProblemDetailsExceptionHandler.class.getName() + ".disconnected-clients");
 
     @Override
     protected @Nullable ResponseEntity<Object> handleMethodArgumentNotValid(
@@ -71,8 +76,10 @@ public class ProblemDetailsExceptionHandler extends ResponseEntityExceptionHandl
     }
 
     @ExceptionHandler
-    ProblemDetail handleAuthentication(AuthenticationException exception) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Authentication failed");
+    ResponseEntity<ProblemDetail> handleAuthentication(AuthenticationException exception) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .header(HttpHeaders.WWW_AUTHENTICATE, BEARER_CHALLENGE)
+                .body(ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Authentication failed"));
     }
 
     @ExceptionHandler
@@ -101,7 +108,11 @@ public class ProblemDetailsExceptionHandler extends ResponseEntityExceptionHandl
     }
 
     @ExceptionHandler
+    @Nullable
     ProblemDetail handleUnexpected(Exception exception) {
+        if (DISCONNECTED_CLIENTS.checkAndLogClientDisconnectedException(exception)) {
+            return null;
+        }
         LOGGER.error("Unexpected error while handling a request", exception);
         return ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred");
     }

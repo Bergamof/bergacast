@@ -159,6 +159,48 @@ class RssFeedWriterTest {
         assertThat(text("/rss/channel/itunes:explicit")).isEqualTo("false");
     }
 
+    @Test
+    void stripsCharactersForbiddenByXml() throws Exception {
+        FeedChannel channel = new FeedChannel(
+                "Bad\u0001title",
+                URI.create("https://example.test"),
+                "D\uFFFF",
+                "en",
+                Instant.EPOCH,
+                "\u0002",
+                null,
+                null,
+                "https://example.test/i\u0003.png",
+                "Cat\u0004",
+                false,
+                URI.create("https://example.test/t.xml"));
+        FeedItem item = new FeedItem(
+                UUID.randomUUID(),
+                "guid\u0005",
+                "Ep\u0006 1",
+                "Notes\uD800",
+                Instant.EPOCH,
+                Instant.EPOCH,
+                null,
+                null,
+                null,
+                EpisodeType.FULL,
+                null,
+                new FeedItem.Enclosure(URI.create("https://example.test/a.mp3"), 1, "audio/mpeg"));
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        document = factory.newDocumentBuilder()
+                .parse(new ByteArrayInputStream(new RssFeedWriter().write(channel, List.of(item))));
+
+        assertThat(text("/rss/channel/title")).isEqualTo("Badtitle");
+        assertThat(text("/rss/channel/description")).isEqualTo("D");
+        assertThat(text("/rss/channel/itunes:image/@href")).isEqualTo("https://example.test/i.png");
+        assertThat(text("/rss/channel/itunes:category/@text")).isEqualTo("Cat");
+        assertThat(text("/rss/channel/item/guid")).isEqualTo("guid");
+        assertThat(text("/rss/channel/item/title")).isEqualTo("Ep 1");
+        assertThat(text("/rss/channel/item/description")).isEqualTo("Notes");
+    }
+
     private String text(String expression) throws Exception {
         return xpath.evaluate(expression, document);
     }

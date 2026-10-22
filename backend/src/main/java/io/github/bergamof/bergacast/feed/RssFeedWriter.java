@@ -32,7 +32,7 @@ public class RssFeedWriter {
             XMLStreamWriter xml = outputFactory.createXMLStreamWriter(output, ENCODING);
             xml.writeStartDocument(ENCODING, "1.0");
             xml.writeStartElement("rss");
-            xml.writeAttribute("version", RSS_VERSION);
+            attribute(xml, "version", RSS_VERSION);
             xml.writeNamespace(ITUNES, ITUNES_NAMESPACE);
             xml.writeNamespace(ATOM, ATOM_NAMESPACE);
             xml.writeStartElement("channel");
@@ -57,9 +57,9 @@ public class RssFeedWriter {
         element(xml, "language", channel.language());
         element(xml, "lastBuildDate", RFC_1123.format(channel.lastBuildDate()));
         xml.writeEmptyElement(ATOM, "link", ATOM_NAMESPACE);
-        xml.writeAttribute("href", channel.selfUrl().toString());
-        xml.writeAttribute("rel", "self");
-        xml.writeAttribute("type", "application/rss+xml");
+        attribute(xml, "href", channel.selfUrl().toString());
+        attribute(xml, "rel", "self");
+        attribute(xml, "type", "application/rss+xml");
         itunesElement(xml, "author", channel.author());
         if (channel.ownerName() != null || channel.ownerEmail() != null) {
             xml.writeStartElement(ITUNES, "owner", ITUNES_NAMESPACE);
@@ -69,11 +69,11 @@ public class RssFeedWriter {
         }
         if (channel.imageUrl() != null) {
             xml.writeEmptyElement(ITUNES, "image", ITUNES_NAMESPACE);
-            xml.writeAttribute("href", channel.imageUrl());
+            attribute(xml, "href", channel.imageUrl());
         }
         if (channel.category() != null) {
             xml.writeEmptyElement(ITUNES, "category", ITUNES_NAMESPACE);
-            xml.writeAttribute("text", channel.category());
+            attribute(xml, "text", channel.category());
         }
         itunesElement(xml, "explicit", Boolean.toString(channel.explicit()));
     }
@@ -85,14 +85,14 @@ public class RssFeedWriter {
             element(xml, "description", item.description());
         }
         xml.writeStartElement("guid");
-        xml.writeAttribute("isPermaLink", "false");
-        xml.writeCharacters(item.guid());
+        attribute(xml, "isPermaLink", "false");
+        xml.writeCharacters(XmlCharacters.sanitize(item.guid()));
         xml.writeEndElement();
         element(xml, "pubDate", RFC_1123.format(item.publicationDate()));
         xml.writeEmptyElement("enclosure");
-        xml.writeAttribute("url", item.enclosure().url().toString());
-        xml.writeAttribute("length", Long.toString(item.enclosure().lengthBytes()));
-        xml.writeAttribute("type", item.enclosure().mimeType());
+        attribute(xml, "url", item.enclosure().url().toString());
+        attribute(xml, "length", Long.toString(item.enclosure().lengthBytes()));
+        attribute(xml, "type", item.enclosure().mimeType());
         itunesElement(xml, "duration", toText(item.durationSeconds()));
         itunesElement(xml, "season", toText(item.season()));
         itunesElement(xml, "episode", toText(item.episodeNumber()));
@@ -103,7 +103,7 @@ public class RssFeedWriter {
 
     private static void element(XMLStreamWriter xml, String name, String text) throws XMLStreamException {
         xml.writeStartElement(name);
-        xml.writeCharacters(text);
+        xml.writeCharacters(XmlCharacters.sanitize(text));
         xml.writeEndElement();
     }
 
@@ -113,8 +113,12 @@ public class RssFeedWriter {
             return;
         }
         xml.writeStartElement(ITUNES, name, ITUNES_NAMESPACE);
-        xml.writeCharacters(text);
+        xml.writeCharacters(XmlCharacters.sanitize(text));
         xml.writeEndElement();
+    }
+
+    private static void attribute(XMLStreamWriter xml, String name, String value) throws XMLStreamException {
+        xml.writeAttribute(name, XmlCharacters.sanitize(value));
     }
 
     private static @Nullable String toText(@Nullable Object value) {

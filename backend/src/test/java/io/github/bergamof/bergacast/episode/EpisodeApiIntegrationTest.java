@@ -21,12 +21,16 @@ import io.github.bergamof.bergacast.web.Sha256;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
 import tools.jackson.databind.JsonNode;
 
 @IntegrationTest
@@ -119,6 +123,37 @@ class EpisodeApiIntegrationTest {
                 .andExpect(jsonPath("$.page.totalElements").value(1));
     }
 
+    @ParameterizedTest(name = "metadata sent as {0}")
+    @NullSource
+    @ValueSource(
+            strings = {
+                "application/json",
+                "application/octet-stream",
+                "text/plain;charset=UTF-8",
+                "application/vnd.bergacast+json"
+            })
+    void acceptsMetadataPartsThatCanHoldJson(String contentType) throws Exception {
+        mockMvc.perform(metadataUpload(contentType, "{\"title\":\"Lenient\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.title").value("Lenient"));
+    }
+
+    @Test
+    void rejectsMetadataPartsThatCannotHoldJson() throws Exception {
+        mockMvc.perform(metadataUpload("image/png", "{\"title\":\"x\"}"))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
+    }
+
+    @Test
+    void rejectsMalformedMetadata() throws Exception {
+        mockMvc.perform(metadataUpload(null, "{\"title\":"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
+        mockMvc.perform(metadataUpload("text/plain", "{\"title\":\"x\",\"season\":\"first\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     void rejectsADuplicateGuid() throws Exception {
         api.publishEpisode(slug, token, "{\"title\":\"A\",\"guid\":\"same\"}", AUDIO);
@@ -147,14 +182,17 @@ class EpisodeApiIntegrationTest {
                 .andExpect(jsonPath("$.errors[1].field").value("title"));
     }
 
+    private MockMultipartHttpServletRequestBuilder metadataUpload(String contentType, String metadata) {
+        return multipart("/api/v1/{slug}/episodes", slug)
+                .part(ApiTestClient.metadataPart(contentType, metadata))
+                .file(new MockMultipartFile("audio", "a.mp3", "audio/mpeg", AUDIO))
+                .header(HttpHeaders.AUTHORIZATION, token);
+    }
+
     @Test
     void requiresTheAudioPart() throws Exception {
         mockMvc.perform(multipart("/api/v1/{slug}/episodes", slug)
-                        .file(new MockMultipartFile(
-                                "metadata",
-                                "",
-                                "application/json",
-                                "{\"title\":\"x\"}".getBytes(StandardCharsets.UTF_8)))
+                        .part(ApiTestClient.metadataPart("application/json", "{\"title\":\"x\"}"))
                         .header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));

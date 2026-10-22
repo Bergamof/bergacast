@@ -7,10 +7,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.mock.web.MockPart;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
@@ -86,12 +88,17 @@ public class ApiTestClient {
     public static MockMultipartHttpServletRequestBuilder uploadRequest(
             String slug, String metadataJson, byte[] audio, String audioContentType) {
         return multipart("/api/v1/{slug}/episodes", slug)
-                .file(new MockMultipartFile(
-                        "metadata",
-                        "",
-                        MediaType.APPLICATION_JSON_VALUE,
-                        metadataJson.getBytes(StandardCharsets.UTF_8)))
+                .part(metadataPart(MediaType.APPLICATION_JSON_VALUE, metadataJson))
                 .file(new MockMultipartFile("audio", "episode.mp3", audioContentType, audio));
+    }
+
+    /** A form field (no file name) named {@code metadata}, as sent by HTTP clients. */
+    public static MockPart metadataPart(@Nullable String contentType, String metadataJson) {
+        MockPart part = new MockPart("metadata", metadataJson.getBytes(StandardCharsets.UTF_8));
+        if (contentType != null) {
+            part.getHeaders().setContentType(MediaType.parseMediaType(contentType));
+        }
+        return part;
     }
 
     public JsonNode publishEpisode(String slug, String authorization, String metadataJson, byte[] audio)

@@ -1,11 +1,6 @@
 package io.github.bergamof.bergacast.web;
 
-import jakarta.validation.ConstraintViolation;
-import jakarta.validation.Validator;
-import java.util.Comparator;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
@@ -17,11 +12,11 @@ import tools.jackson.databind.node.ObjectNode;
 public class JsonMergePatch {
 
     private final JsonMapper jsonMapper;
-    private final Validator validator;
+    private final RequestValidator requestValidator;
 
-    public JsonMergePatch(JsonMapper jsonMapper, Validator validator) {
+    public JsonMergePatch(JsonMapper jsonMapper, RequestValidator requestValidator) {
         this.jsonMapper = jsonMapper;
-        this.validator = validator;
+        this.requestValidator = requestValidator;
     }
 
     /**
@@ -35,7 +30,7 @@ public class JsonMergePatch {
             throw new UnprocessableContentException("$", "A merge patch document must be a JSON object");
         }
         T patched = map(merge(jsonMapper.valueToTree(current), patch), type);
-        validate(patched, validationGroups);
+        requestValidator.validate(patched, validationGroups);
         return patched;
     }
 
@@ -65,17 +60,5 @@ public class JsonMergePatch {
     private static String fieldOf(JacksonException exception) {
         String path = exception.getPathReference();
         return path == null ? "$" : path;
-    }
-
-    private <T> void validate(T patched, Class<?>... validationGroups) {
-        Set<ConstraintViolation<T>> violations = validator.validate(patched, validationGroups);
-        if (!violations.isEmpty()) {
-            List<InvalidField> errors = violations.stream()
-                    .map(violation ->
-                            new InvalidField(violation.getPropertyPath().toString(), violation.getMessage()))
-                    .sorted(Comparator.comparing(InvalidField::field))
-                    .toList();
-            throw new UnprocessableContentException(errors);
-        }
     }
 }

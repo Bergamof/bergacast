@@ -34,6 +34,9 @@ class InitialAdminUserCreator implements ApplicationRunner {
                     + "nobody can log in to the administration");
             return;
         }
+        if (!PasswordPolicy.isSatisfiedBy(initialAdmin.password())) {
+            throw new IllegalStateException("BERGACAST_ADMIN_PASSWORD " + PasswordPolicy.DESCRIPTION);
+        }
         adminUserService.create(initialAdmin.username(), initialAdmin.password());
         LOGGER.info("Created the initial administrator '{}'", initialAdmin.username());
     }

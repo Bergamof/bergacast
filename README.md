@@ -325,7 +325,7 @@ ce podcast.
 
 `POST /api/v1/{slug}/episodes` en `multipart/form-data` avec deux parties :
 
-- `metadata` (**`Content-Type: application/json` obligatoire**) : `title` (requis), `description`, `publicationDate`
+- `metadata` (JSON ; type de partie `application/json`, `text/plain`, `application/octet-stream` ou absent) : `title` (requis), `description`, `publicationDate`
   (ISO 8601 avec fuseau, défaut : maintenant), `guid` (défaut : UUID aléatoire, unique par podcast), `durationSeconds`,
   `season`, `episodeNumber`, `episodeType` (`FULL` par défaut, `TRAILER`, `BONUS`), `explicit` ;
 - `audio` : le fichier, de type `audio/*` (sinon `415`).
@@ -371,10 +371,8 @@ Chaque podcast a un objet `feed`, appliqué à chaque génération du flux, dans
 
 - Un JWT administrateur reste valide jusqu’à 15 minutes après la suppression de l’administrateur ou le changement de
   son mot de passe (jetons sans état).
-- La partie `metadata` doit être envoyée en `application/json` (avec curl : suffixe `;type=application/json`).
 - Une seule plage d’octets par requête `Range` (pas de `multipart/byteranges`).
 - L’audio d’un épisode programmé dans le futur est accessible à qui connaît son URL.
-- Un téléchargement audio occupe une connexion à la base pendant toute sa durée (lecture du large object).
 
 ## Documentation de l’API
 

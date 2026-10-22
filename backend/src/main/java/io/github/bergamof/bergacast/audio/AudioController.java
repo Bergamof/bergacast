@@ -1,6 +1,7 @@
 package io.github.bergamof.bergacast.audio;
 
 import io.github.bergamof.bergacast.web.RangeNotSatisfiableException;
+import io.github.bergamof.bergacast.web.ResourceNotFoundException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -13,6 +14,8 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -37,6 +40,8 @@ class AudioController {
     private static final String BYTES_UNIT = "bytes";
     private static final CacheControl IMMUTABLE_FOR_A_YEAR =
             CacheControl.maxAge(Duration.ofDays(365)).cachePublic().immutable();
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(AudioController.class);
 
     private final AudioDownloads audioDownloads;
 
@@ -105,6 +110,15 @@ class AudioController {
         if (HttpMethod.HEAD.matches(webRequest.getRequest().getMethod())) {
             return;
         }
-        audioDownloads.write(audio, offset, length, response.getOutputStream());
+        try {
+            audioDownloads.write(audio, offset, length, response.getOutputStream());
+        } catch (AudioContentUnavailableException gone) {
+            if (response.isCommitted()) {
+                LOGGER.warn("Audio of episode {} disappeared during a download, response truncated", episodeId);
+                return;
+            }
+            response.reset();
+            throw new ResourceNotFoundException("No audio for episode " + episodeId);
+        }
     }
 }

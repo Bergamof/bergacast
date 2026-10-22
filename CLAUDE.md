@@ -63,7 +63,7 @@ Docker (racine) : `cp .env.example .env` (renseigner `BERGACAST_JWT_SECRET`, mot
 - Cascades : suppression podcast → épisodes et jetons (FK `ON DELETE CASCADE`) ; triggers : suppression épisode → `audio_file` → `lo_unlink`.
 ## Décisions techniques
 - 2026-10-22 — Java 25 (LTS en cours, Temurin), Spring Boot 4.1.1, Gradle 9.8.2, Node 24 LTS, npm 12.2.1, PostgreSQL 18.
-- 2026-10-22 — Audio en large objects PostgreSQL (une seule dépendance à sauvegarder) ; upload streamé par blocs de 64 Ko avec calcul taille + SHA-256 (`audio/LargeObjectStorage`), parts multipart écrites sur disque (`file-size-threshold: 0`) ; nettoyage par triggers SQL plutôt que par code applicatif (aucun orphelin, même via cascade).
+- 2026-10-22 — Audio en large objects PostgreSQL (une seule dépendance à sauvegarder) ; upload streamé par blocs de 64 Ko avec calcul taille + SHA-256 (`audio/LargeObjectStorage`), parts multipart écrites sur disque (`file-size-threshold: 0`) ; nettoyage par triggers SQL plutôt que par code applicatif (aucun orphelin, même via cascade). Téléchargement par blocs de 1 Mio, chacun lu dans une transaction courte commitée avant l’écriture au client : aucune connexion du pool tenue pendant l’envoi (`AudioStreamingIntegrationTest`).
 - 2026-10-22 — Flux généré à chaque requête (pas de cache serveur) : toujours cohérent avec les réglages et les épisodes programmés qui deviennent publics à leur date ; coût faible, ETag = SHA-256 du document et `max-age=300`.
 - 2026-10-22 — ETags forts : podcast `"version.episodeCount"`, épisode `"version"`, flux = SHA-256 du document, audio = sha256 du fichier.
 - 2026-10-22 — Slug immuable (URL de flux et d’audio stables pour les agrégateurs) ; noms réservés pour ne pas masquer une route.
@@ -73,13 +73,14 @@ Docker (racine) : `cp .env.example .env` (renseigner `BERGACAST_JWT_SECRET`, mot
 - 2026-10-22 — JWT admin HS256 15 min via Spring Security resource server (Nimbus), secret ≥ 32 octets obligatoire (échec au démarrage). Sans état : pas de révocation (limite assumée).
 - 2026-10-22 — OpenAPI et Swagger UI publics en production (demande d’Adrien, pour brancher des outils externes).
 - 2026-10-22 — SPA embarquée dans le jar sous `/admin` (un seul déploiement) ; pas de CSP sur `/admin` car l’index SvelteKit contient un script inline.
+- 2026-10-22 — Flux XML : caractères interdits en XML 1.0 retirés (`feed/XmlCharacters`) pour qu’une métadonnée ne casse jamais le flux. Limite de requête multipart = limite fichier + 1 Mio (`config/MultipartConfiguration`). `Idempotency-Key` concurrente : violation d’unicité rattrapée → rejeu (`episode/EpisodePublication`). Jeton Bearer lu uniquement sous `/api/` (un en-tête invalide n’affecte pas flux/audio/doc).
 - 2026-10-22 — Problem Details partout, y compris erreurs de sécurité (`ProblemDetailsSecurityHandler`) et `/error` (`ProblemDetailsErrorController`) ; jamais de stack trace.
 - 2026-10-22 — CI : `setup-java` lit `.sdkmanrc` `25.0.4.1-tem` comme `25.0.4` (suffisant, même ligne Temurin).
-- 2026-10-22 — Limites acceptées : audio des épisodes futurs accessible si l’URL est connue ; une seule plage `Range` ; un téléchargement occupe une connexion DB pendant sa durée.
+- 2026-10-22 — Limites acceptées : audio des épisodes futurs accessible si l’URL est connue ; une seule plage `Range`.
 ## Pièges et conventions spécifiques
 - Maven Central renvoie parfois HTTP 429 : réessayer (retries configurés dans `backend/gradle.properties`).
 - Testcontainers exige Docker, y compris pour `./gradlew generateOpenApiSpec` (démarre l’application).
-- Partie `metadata` de l’upload : `Content-Type: application/json` obligatoire (curl : `-F 'metadata={...};type=application/json'`), sinon erreur.
+- Partie `metadata` de l’upload : lue brute (`episode/EpisodeMetadataReader`), acceptée sans type, `text/plain`, `application/octet-stream`, `application/json` ou `*+json` (outils type n8n/Zapier) ; JSON invalide → 400, validation → 422.
 - SvelteKit 3 : pas de `svelte.config.js` (config dans `vite.config.ts`) ; imports `#lib/*` (champ `imports` de package.json) avec extension explicite au lieu de `$lib` ; `resolve()` de `$app/paths` prend l’id de route avec groupe (`resolve('/(app)/podcasts')`).
 - `engine-strict=true` : Node ≠ 24 ou npm ≠ 12.2.1 → `npm ci` échoue ; installer `npm install -g npm@12.2.1`.
 - Spotless formate aussi les `*.gradle.kts` (ktlint) : lancer `spotlessApply` après toute modif du build.

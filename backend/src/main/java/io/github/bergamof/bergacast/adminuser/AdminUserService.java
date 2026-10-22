@@ -3,6 +3,7 @@ package io.github.bergamof.bergacast.adminuser;
 import io.github.bergamof.bergacast.web.ConflictException;
 import io.github.bergamof.bergacast.web.ResourceNotFoundException;
 import java.time.Clock;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -63,11 +64,16 @@ public class AdminUserService {
      * @throws ConflictException when deleting oneself or the last administrator, which would lock everybody out
      */
     public void delete(UUID id, UUID currentAdminId) {
-        AdminUser adminUser = get(id);
+        // Locking every administrator serializes concurrent deletions, which could otherwise remove the last two.
+        List<AdminUser> administrators = adminUserRepository.findAllForUpdate();
+        AdminUser adminUser = administrators.stream()
+                .filter(administrator -> administrator.getId().equals(id))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("No administrator " + id));
         if (id.equals(currentAdminId)) {
             throw new ConflictException("An administrator cannot delete their own account");
         }
-        if (adminUserRepository.count() <= 1) {
+        if (administrators.size() <= 1) {
             throw new ConflictException("The last administrator cannot be deleted");
         }
         adminUserRepository.delete(adminUser);

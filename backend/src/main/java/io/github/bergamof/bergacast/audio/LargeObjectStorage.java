@@ -3,10 +3,11 @@ package io.github.bergamof.bergacast.audio;
 import io.github.bergamof.bergacast.web.Sha256;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.security.MessageDigest;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.Arrays;
 import javax.sql.DataSource;
 import org.postgresql.PGConnection;
 import org.postgresql.largeobject.LargeObject;
@@ -27,6 +28,8 @@ class LargeObjectStorage {
 
     private static final int BUFFER_SIZE = 64 * 1024;
     private static final int END_OF_STREAM = -1;
+    /** PostgreSQL error code raised when opening a large object that does not exist. */
+    private static final String UNDEFINED_OBJECT = "42704";
 
     private final DataSource dataSource;
 
@@ -57,23 +60,32 @@ class LargeObjectStorage {
         }
     }
 
-    /** Writes {@code length} bytes of large object {@code oid}, starting at {@code offset}, to {@code target}. */
+    /**
+     * Reads {@code length} bytes of large object {@code oid} starting at {@code offset} (fewer at its end).
+     *
+     * @throws AudioContentUnavailableException when the large object does not exist
+     */
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
-    public void copy(long oid, long offset, long length, OutputStream target) throws IOException {
+    public byte[] read(long oid, long offset, int length) {
         try (LargeObject largeObject = largeObjectManager().open(oid, LargeObjectManager.READ)) {
             largeObject.seek64(offset, LargeObject.SEEK_SET);
-            byte[] buffer = new byte[BUFFER_SIZE];
-            long remaining = length;
-            while (remaining > 0) {
-                int read = largeObject.read(buffer, 0, (int) Math.min(buffer.length, remaining));
+            byte[] buffer = new byte[length];
+            int filled = 0;
+            while (filled < length) {
+                int read = largeObject.read(buffer, filled, length - filled);
                 if (read <= 0) {
-                    throw new IOException("Large object " + oid + " is shorter than expected");
+                    return Arrays.copyOf(buffer, filled);
                 }
-                target.write(buffer, 0, read);
-                remaining -= read;
+                filled += read;
             }
+            return buffer;
         } catch (SQLException exception) {
-            throw new IOException("Cannot read the large object " + oid, exception);
+            if (UNDEFINED_OBJECT.equals(exception.getSQLState())) {
+                throw new AudioContentUnavailableException(oid, exception);
+            }
+            throw new UncheckedIOException(new IOException("Cannot read the large object " + oid, exception));
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
         }
     }
 

@@ -30,6 +30,8 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationProvider;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 
@@ -46,6 +48,7 @@ class SecurityConfiguration {
     private static final String ADMIN_ROLE = "ROLE_" + AdminPrincipal.ROLE;
     private static final String SLUG_VARIABLE = "slug";
     private static final String HMAC_ALGORITHM = "HmacSHA256";
+    private static final String API_PREFIX = "/api/";
 
     @Bean
     SecurityFilterChain securityFilterChain(
@@ -74,12 +77,26 @@ class SecurityConfiguration {
                         .anyRequest()
                         .permitAll())
                 .oauth2ResourceServer(resourceServer -> resourceServer
+                        .bearerTokenResolver(apiBearerTokenResolver())
                         .authenticationManagerResolver(request -> bearerAuthenticationManager)
                         .authenticationEntryPoint(problemHandler)
                         .accessDeniedHandler(problemHandler))
                 .exceptionHandling(exceptions ->
                         exceptions.authenticationEntryPoint(problemHandler).accessDeniedHandler(problemHandler));
         return http.build();
+    }
+
+    /**
+     * Only API requests carry credentials: public resources (feeds, audio, SPA, OpenAPI) ignore any
+     * {@code Authorization} header, so that a stale or foreign token never breaks them.
+     */
+    private static BearerTokenResolver apiBearerTokenResolver() {
+        BearerTokenResolver headerResolver = new DefaultBearerTokenResolver();
+        return request -> {
+            String path =
+                    request.getRequestURI().substring(request.getContextPath().length());
+            return path.startsWith(API_PREFIX) ? headerResolver.resolve(request) : null;
+        };
     }
 
     /** Grants admins, and podcast tokens whose podcast is the one of the {@code {slug}} path variable. */

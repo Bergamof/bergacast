@@ -13,8 +13,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.bergamof.bergacast.support.ApiTestClient;
 import io.github.bergamof.bergacast.support.IntegrationTest;
 import io.github.bergamof.bergacast.web.Sha256;
+import java.io.ByteArrayInputStream;
 import java.net.URI;
 import java.util.Arrays;
+import javax.xml.parsers.DocumentBuilderFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +24,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.w3c.dom.Document;
 import tools.jackson.databind.JsonNode;
 
 @IntegrationTest
@@ -66,6 +69,36 @@ class PublicFeedIntegrationTest {
                 .andExpect(content().string(not(containsString("<title>Oldest</title>"))))
                 .andExpect(content().string(not(containsString("<title>Future</title>"))))
                 .andExpect(content().string(containsString("length=\"1000\" type=\"audio/mpeg\"")));
+    }
+
+    @Test
+    void producesWellFormedXmlFromControlCharacters() throws Exception {
+        api.publishEpisode(slug, token, "{\"title\":\"Bell\\u0007 and \\u0001 start\"}", AUDIO);
+
+        byte[] feed = mockMvc.perform(get("/{slug}.xml", slug))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsByteArray();
+
+        Document document =
+                DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new ByteArrayInputStream(feed));
+        assertThat(document.getElementsByTagName("item").item(0).getFirstChild().getTextContent())
+                .isEqualTo("Bell and  start");
+    }
+
+    @Test
+    void ignoresCredentialsOnPublicResources() throws Exception {
+        String audioPath = audioPathOf(publish());
+
+        mockMvc.perform(get("/{slug}.xml", slug).header(HttpHeaders.AUTHORIZATION, "Bearer junk"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get(audioPath).header(HttpHeaders.AUTHORIZATION, "Bearer junk"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/v3/api-docs").header(HttpHeaders.AUTHORIZATION, "Bearer junk"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/podcasts").header(HttpHeaders.AUTHORIZATION, "Bearer junk"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

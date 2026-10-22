@@ -13,7 +13,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
+import jakarta.servlet.http.Part;
 import jakarta.validation.constraints.Size;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -53,14 +53,20 @@ class EpisodeController {
     private static final String AUDIO_PART = "audio";
 
     private final EpisodeService episodeService;
+    private final EpisodePublication episodePublication;
+    private final EpisodeMetadataReader metadataReader;
     private final EpisodeModelAssembler assembler;
     private final PagedResourcesAssembler<Episode> pagedAssembler;
 
     EpisodeController(
             EpisodeService episodeService,
+            EpisodePublication episodePublication,
+            EpisodeMetadataReader metadataReader,
             EpisodeModelAssembler assembler,
             PagedResourcesAssembler<Episode> pagedAssembler) {
         this.episodeService = episodeService;
+        this.episodePublication = episodePublication;
+        this.metadataReader = metadataReader;
         this.assembler = assembler;
         this.pagedAssembler = pagedAssembler;
     }
@@ -70,13 +76,16 @@ class EpisodeController {
             operationId = "publishEpisode",
             summary = "Publish an episode",
             description = "Uploads the audio file and the metadata of a new episode. With an Idempotency-Key "
-                    + "already used for this podcast, returns the episode created by the first request.",
+                    + "already used for this podcast, returns the episode created by the first request. The metadata "
+                    + "part should be sent as application/json; for convenience, a part without content type or "
+                    + "sent as text/plain or application/octet-stream is also parsed as JSON.",
             requestBody =
                     @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             required = true,
                             content =
                                     @Content(
                                             mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
+                                            schema = @Schema(implementation = EpisodeUploadForm.class),
                                             encoding = {
                                                 @Encoding(
                                                         name = METADATA_PART,
@@ -90,18 +99,22 @@ class EpisodeController {
     @ApiResponse(responseCode = "201", description = "Episode published (or already published with this key)")
     @ApiResponse(responseCode = "409", description = "Duplicate guid", content = @Content)
     @ApiResponse(responseCode = "413", description = "Audio file too large", content = @Content)
-    @ApiResponse(responseCode = "415", description = "The audio part is not audio/*", content = @Content)
+    @ApiResponse(responseCode = "400", description = "The metadata part is not JSON", content = @Content)
+    @ApiResponse(
+            responseCode = "415",
+            description = "The audio part is not audio/*, or the metadata part cannot hold JSON",
+            content = @Content)
     @ApiResponse(responseCode = "422", description = "Invalid metadata", content = @Content)
     ResponseEntity<EntityModel<EpisodeResponse>> publish(
             @PathVariable String slug,
-            @RequestPart(METADATA_PART) @Valid EpisodeInput metadata,
-            @RequestPart(AUDIO_PART) MultipartFile audio,
+            @Parameter(hidden = true) @RequestPart(METADATA_PART) Part metadata,
+            @Parameter(hidden = true) @RequestPart(AUDIO_PART) MultipartFile audio,
             @Parameter(description = "Makes retries safe: a key already used for this podcast replays the result")
                     @RequestHeader(name = IDEMPOTENCY_KEY, required = false)
                     @Size(max = MAX_IDEMPOTENCY_KEY_LENGTH)
                     @Nullable
                     String idempotencyKey) {
-        Episode episode = episodeService.publish(slug, metadata, audio, idempotencyKey);
+        Episode episode = episodePublication.publish(slug, metadataReader.read(metadata), audio, idempotencyKey);
         return ResponseEntity.created(ApiLinks.uri(ApiPaths.EPISODE, slug, episode.getId()))
                 .eTag(EpisodeService.entityTag(episode))
                 .body(assembler.toModel(episode));

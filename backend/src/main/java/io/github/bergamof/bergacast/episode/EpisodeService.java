@@ -65,6 +65,12 @@ public class EpisodeService {
         return episodeRepository.saveAndFlush(new Episode(podcast, audioFile, metadata, now, idempotencyKey));
     }
 
+    /** Returns the episode published with an idempotency key, if any. */
+    @Transactional(readOnly = true)
+    public Optional<Episode> findByIdempotencyKey(String slug, String idempotencyKey) {
+        return episodeRepository.findByPodcastAndIdempotencyKey(podcastService.getBySlug(slug), idempotencyKey);
+    }
+
     @Transactional(readOnly = true)
     public Page<Episode> list(String slug, Pageable pageable) {
         return episodeRepository.findByPodcast(podcastService.getBySlug(slug), pageable);

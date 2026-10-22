@@ -13,8 +13,8 @@ spring:
     locations: classpath:db/migration
   servlet:
     multipart:
+      # Maximum audio file size; the request limit adds some room for the metadata (see MultipartConfiguration).
       max-file-size: ${BERGACAST_MAX_UPLOAD_SIZE:500MB}
-      max-request-size: ${BERGACAST_MAX_UPLOAD_SIZE:500MB}
       # Parts are written to a temporary file as soon as they arrive, never kept in memory.
       file-size-threshold: 0
   mvc:
