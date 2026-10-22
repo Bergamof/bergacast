@@ -1,0 +1,584 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    # Explicit bash enables `-o pipefail`, so `cmd | tee log` keeps the exit status of `cmd`.
+    shell: bash
+
+env:
+  SPECTRAL_CLI_VERSION: 6.17.0
+
+# Every verification job publishes a one-line `summary` output (plus a few detailed ones), computed in a step
+# that runs `if: always()` so the outputs exist even when the verification fails. The `report` job gathers them.
+jobs:
+  backend-lint:
+    name: Backend lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+      checkstyle-violations: ${{ steps.summary.outputs.checkstyle-violations }}
+      spotless: ${{ steps.summary.outputs.spotless }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: gradle/actions/wrapper-validation@v6
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version-file: .sdkmanrc
+          cache: gradle
+          cache-dependency-path: |
+            backend/*.gradle*
+            backend/gradle/wrapper/gradle-wrapper.properties
+      - name: Spotless and Checkstyle
+        working-directory: backend
+        run: ./gradlew --continue --console=plain spotlessCheck checkstyleMain checkstyleTest 2>&1 | tee "$RUNNER_TEMP/backend-lint.log"
+      - name: Summarize
+        id: summary
+        if: always()
+        env:
+          LOG_FILE: ${{ runner.temp }}/backend-lint.log
+        run: |
+          python3 - <<'PY'
+          import glob, os, re
+          import xml.etree.ElementTree as ET
+
+          reports = glob.glob("backend/build/reports/checkstyle/*.xml")
+          violations = 0
+          for path in reports:
+              try:
+                  violations += sum(1 for _ in ET.parse(path).getroot().iter("error"))
+              except ET.ParseError:
+                  pass
+          log = open(os.environ["LOG_FILE"], encoding="utf-8").read() if os.path.isfile(os.environ["LOG_FILE"]) else ""
+          if re.search(r"Task :spotless\w*Check FAILED", log):
+              spotless = "violations"
+          elif re.search(r"Task :spotless\w*Check", log):
+              spotless = "ok"
+          else:
+              spotless = "not run"
+          checkstyle = f"{violations} violation(s)" if reports else "not run"
+          summary = f"Spotless: {spotless} · Checkstyle: {checkstyle}"
+          print(summary)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"summary={summary}\ncheckstyle-violations={violations if reports else ''}\nspotless={spotless}\n")
+          PY
+
+  backend-test:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+      passed: ${{ steps.summary.outputs.passed }}
+      failed: ${{ steps.summary.outputs.failed }}
+      skipped: ${{ steps.summary.outputs.skipped }}
+      line-coverage: ${{ steps.summary.outputs.line-coverage }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version-file: .sdkmanrc
+          cache: gradle
+          cache-dependency-path: |
+            backend/*.gradle*
+            backend/gradle/wrapper/gradle-wrapper.properties
+      - name: Tests (Testcontainers PostgreSQL) and JaCoCo report
+        working-directory: backend
+        run: ./gradlew test
+      - name: Summarize
+        id: summary
+        if: always()
+        env:
+          JUNIT_GLOB: backend/build/test-results/test/*.xml
+          JACOCO_XML: backend/build/reports/jacoco/test/jacocoTestReport.xml
+        run: |
+          python3 - <<'PY'
+          import glob, os
+          import xml.etree.ElementTree as ET
+
+          tests = failed = skipped = 0
+          files = glob.glob(os.environ["JUNIT_GLOB"])
+          for path in files:
+              try:
+                  root = ET.parse(path).getroot()
+              except ET.ParseError:
+                  continue
+              for suite in [root] if root.tag == "testsuite" else root.iter("testsuite"):
+                  tests += int(suite.get("tests", 0))
+                  failed += int(suite.get("failures", 0)) + int(suite.get("errors", 0))
+                  skipped += int(suite.get("skipped", 0))
+          passed = tests - failed - skipped
+
+          coverage = ""
+          if os.path.isfile(os.environ["JACOCO_XML"]):
+              for counter in ET.parse(os.environ["JACOCO_XML"]).getroot().findall("counter"):
+                  if counter.get("type") == "LINE":
+                      missed, covered = int(counter.get("missed")), int(counter.get("covered"))
+                      coverage = f"{100 * covered / (missed + covered):.1f}" if missed + covered else "0.0"
+
+          if files:
+              summary = f"{passed} passed, {failed} failed, {skipped} skipped"
+              summary += f" · line coverage {coverage}%" if coverage else " · no coverage report"
+          else:
+              summary = "no test report"
+              passed = failed = skipped = ""
+          print(summary)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"summary={summary}\npassed={passed}\nfailed={failed}\nskipped={skipped}\nline-coverage={coverage}\n")
+          PY
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-test-reports
+          path: |
+            backend/build/reports/tests/test/
+            backend/build/test-results/test/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  backend-build:
+    name: Backend build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version-file: .sdkmanrc
+          cache: gradle
+          cache-dependency-path: |
+            backend/*.gradle*
+            backend/gradle/wrapper/gradle-wrapper.properties
+      - name: Boot jar
+        working-directory: backend
+        run: ./gradlew bootJar
+      - name: Summarize
+        id: summary
+        if: always()
+        run: |
+          shopt -s nullglob
+          jars=(backend/build/libs/*.jar)
+          if [ "${#jars[@]}" -gt 0 ]; then
+            summary="$(basename "${jars[0]}") ($(numfmt --to=iec-i --suffix=B "$(stat -c %s "${jars[0]}")"))"
+          else
+            summary="no jar produced"
+          fi
+          echo "$summary"
+          echo "summary=$summary" >> "$GITHUB_OUTPUT"
+
+  openapi-lint:
+    name: OpenAPI lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+      errors: ${{ steps.summary.outputs.errors }}
+      warnings: ${{ steps.summary.outputs.warnings }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version-file: .sdkmanrc
+          cache: gradle
+          cache-dependency-path: |
+            backend/*.gradle*
+            backend/gradle/wrapper/gradle-wrapper.properties
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Generate the OpenAPI document (boots the app against Testcontainers PostgreSQL)
+        working-directory: backend
+        run: ./gradlew generateOpenApiSpec
+      - name: Spectral
+        run: >-
+          npx --yes "@stoplight/spectral-cli@${SPECTRAL_CLI_VERSION}" lint backend/build/openapi.json
+          --ruleset .spectral.yaml --fail-severity=warn
+          --format=stylish --format=json --output.json="$RUNNER_TEMP/spectral.json"
+      - name: Summarize
+        id: summary
+        if: always()
+        env:
+          SPECTRAL_JSON: ${{ runner.temp }}/spectral.json
+        run: |
+          python3 - <<'PY'
+          import json, os
+
+          errors = warnings = infos = ""
+          if not os.path.isfile("backend/build/openapi.json"):
+              summary = "OpenAPI document not generated"
+          elif not os.path.isfile(os.environ["SPECTRAL_JSON"]):
+              summary = "Spectral did not run"
+          else:
+              results = json.load(open(os.environ["SPECTRAL_JSON"], encoding="utf-8"))
+              severities = [r.get("severity") for r in results]
+              errors, warnings = severities.count(0), severities.count(1)
+              infos = len(severities) - errors - warnings
+              summary = f"Spectral: {errors} error(s), {warnings} warning(s), {infos} info/hint(s)"
+          print(summary)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"summary={summary}\nerrors={errors}\nwarnings={warnings}\n")
+          PY
+
+  frontend-lint:
+    name: Frontend lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+      prettier-issues: ${{ steps.summary.outputs.prettier-issues }}
+      eslint-errors: ${{ steps.summary.outputs.eslint-errors }}
+      svelte-check-errors: ${{ steps.summary.outputs.svelte-check-errors }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install the npm version pinned by packageManager
+        working-directory: frontend
+        run: npm install --global "$(node -p "require('./package.json').packageManager")"
+      - name: Install dependencies
+        id: install
+        working-directory: frontend
+        run: npm ci
+      - name: Prettier and ESLint
+        id: lint
+        working-directory: frontend
+        run: npm run lint 2>&1 | tee "$RUNNER_TEMP/lint.log"
+      - name: svelte-check
+        id: check
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        working-directory: frontend
+        run: npm run check -- --output machine 2>&1 | tee "$RUNNER_TEMP/check.log"
+      - name: Summarize
+        id: summary
+        if: always()
+        env:
+          LINT_LOG: ${{ runner.temp }}/lint.log
+          CHECK_LOG: ${{ runner.temp }}/check.log
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+        run: |
+          python3 - <<'PY'
+          import os, re
+
+          def read(name):
+              path = os.environ[name]
+              return open(path, encoding="utf-8").read() if os.path.isfile(path) else None
+
+          outputs = {"prettier-issues": "", "eslint-errors": "", "svelte-check-errors": ""}
+          parts = []
+          lint = read("LINT_LOG")
+          if lint is None:
+              parts += ["Prettier: not run", "ESLint: not run"]
+          else:
+              prettier = sum(
+                  1 for line in lint.splitlines()
+                  if re.match(r"\[(warn|error)\] ", line) and "Code style issues" not in line
+              )
+              outputs["prettier-issues"] = prettier
+              parts.append(f"Prettier: {prettier} file(s) to format")
+              eslint = re.search(r"(\d+) problems? \((\d+) errors?, (\d+) warnings?\)", lint)
+              if eslint:
+                  outputs["eslint-errors"] = eslint.group(2)
+                  parts.append(f"ESLint: {eslint.group(2)} error(s), {eslint.group(3)} warning(s)")
+              elif prettier and os.environ["LINT_OUTCOME"] == "failure":
+                  parts.append("ESLint: not run")
+              else:
+                  outputs["eslint-errors"] = 0
+                  parts.append("ESLint: 0 error(s), 0 warning(s)")
+          check = read("CHECK_LOG")
+          found = re.search(r"COMPLETED \d+ FILES (\d+) ERRORS (\d+) WARNINGS", check or "")
+          if found:
+              outputs["svelte-check-errors"] = found.group(1)
+              parts.append(f"svelte-check: {found.group(1)} error(s), {found.group(2)} warning(s)")
+          else:
+              parts.append("svelte-check: not run" if check is None else "svelte-check: no result")
+          outputs["summary"] = " · ".join(parts)
+          print(outputs["summary"])
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.writelines(f"{key}={value}\n" for key, value in outputs.items())
+          PY
+
+  frontend-test:
+    name: Frontend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+      passed: ${{ steps.summary.outputs.passed }}
+      failed: ${{ steps.summary.outputs.failed }}
+      skipped: ${{ steps.summary.outputs.skipped }}
+      line-coverage: ${{ steps.summary.outputs.line-coverage }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install the npm version pinned by packageManager
+        working-directory: frontend
+        run: npm install --global "$(node -p "require('./package.json').packageManager")"
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Vitest with coverage
+        working-directory: frontend
+        run: >-
+          npm run test --
+          --reporter=default --reporter=junit --outputFile.junit="$RUNNER_TEMP/frontend-junit.xml"
+          --coverage.reporter=text --coverage.reporter=html --coverage.reporter=json-summary
+      - name: Summarize
+        id: summary
+        if: always()
+        env:
+          JUNIT_XML: ${{ runner.temp }}/frontend-junit.xml
+          COVERAGE_JSON: frontend/coverage/coverage-summary.json
+        run: |
+          python3 - <<'PY'
+          import json, os
+          import xml.etree.ElementTree as ET
+
+          tests = failed = skipped = 0
+          report = os.path.isfile(os.environ["JUNIT_XML"])
+          if report:
+              root = ET.parse(os.environ["JUNIT_XML"]).getroot()
+              for suite in [root] if root.tag == "testsuite" else root.iter("testsuite"):
+                  tests += int(suite.get("tests", 0))
+                  failed += int(suite.get("failures", 0)) + int(suite.get("errors", 0))
+                  skipped += int(suite.get("skipped", 0))
+          passed = tests - failed - skipped
+
+          coverage = ""
+          if os.path.isfile(os.environ["COVERAGE_JSON"]):
+              total = json.load(open(os.environ["COVERAGE_JSON"], encoding="utf-8"))["total"]["lines"]
+              coverage = f"{total['pct']:.1f}" if isinstance(total.get("pct"), (int, float)) else ""
+
+          if report:
+              summary = f"{passed} passed, {failed} failed, {skipped} skipped"
+              summary += f" · line coverage {coverage}%" if coverage else " · no coverage report"
+          else:
+              summary = "no test report"
+              passed = failed = skipped = ""
+          print(summary)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"summary={summary}\npassed={passed}\nfailed={failed}\nskipped={skipped}\nline-coverage={coverage}\n")
+          PY
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-test-reports
+          path: |
+            ${{ runner.temp }}/frontend-junit.xml
+            frontend/coverage/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  frontend-build:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install the npm version pinned by packageManager
+        working-directory: frontend
+        run: npm install --global "$(node -p "require('./package.json').packageManager")"
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Vite build
+        working-directory: frontend
+        run: npm run build
+      - name: Summarize
+        id: summary
+        if: always()
+        run: |
+          if [ -d frontend/build ]; then
+            files=$(find frontend/build -type f | wc -l)
+            size=$(numfmt --to=iec-i --suffix=B "$(du -sb frontend/build | cut -f1)")
+            summary="${files} file(s), ${size}"
+          else
+            summary="no build output"
+          fi
+          echo "$summary"
+          echo "summary=$summary" >> "$GITHUB_OUTPUT"
+
+  docker-build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+      image-size-bytes: ${{ steps.summary.outputs.image-size-bytes }}
+    env:
+      IMAGE: bergacast:ci
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@v4
+      - name: Build the image (not pushed)
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          load: true
+          tags: ${{ env.IMAGE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Summarize
+        id: summary
+        if: always()
+        env:
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+        run: |
+          if [ "$BUILD_OUTCOME" = "success" ] && bytes=$(docker image inspect --format '{{.Size}}' "$IMAGE" 2>/dev/null); then
+            summary="image size $(numfmt --to=iec-i --suffix=B "$bytes")"
+          else
+            bytes=""
+            summary="image not built"
+          fi
+          echo "$summary"
+          {
+            echo "summary=$summary"
+            echo "image-size-bytes=$bytes"
+          } >> "$GITHUB_OUTPUT"
+
+  report:
+    name: PR report
+    needs:
+      - backend-lint
+      - backend-test
+      - backend-build
+      - openapi-lint
+      - frontend-lint
+      - frontend-test
+      - frontend-build
+      - docker-build
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      # On pull requests from forks GITHUB_TOKEN is read-only: the comment cannot be posted, the script then only
+      # logs a warning and the report stays available in the job summary. Never switch to pull_request_target.
+      - name: Post or update the PR comment
+        uses: actions/github-script@v9
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        with:
+          script: |
+            const marker = '<!-- bergacast-ci-report -->';
+            const checks = [
+              ['backend-lint', 'Backend lint (Spotless, Checkstyle)'],
+              ['backend-test', 'Backend tests'],
+              ['backend-build', 'Backend build (bootJar)'],
+              ['openapi-lint', 'OpenAPI lint (Spectral)'],
+              ['frontend-lint', 'Frontend lint (Prettier, ESLint, svelte-check)'],
+              ['frontend-test', 'Frontend tests'],
+              ['frontend-build', 'Frontend build'],
+              ['docker-build', 'Docker build'],
+            ];
+            const icons = { success: '✅', failure: '❌', cancelled: '⚠️', skipped: '⚠️' };
+            try {
+              let needs = {};
+              try {
+                needs = JSON.parse(process.env.NEEDS || '{}');
+              } catch (error) {
+                core.warning(`Cannot parse job results: ${error.message}`);
+              }
+              const results = checks.map(([id]) => needs[id]?.result ?? 'unknown');
+              const status = results.includes('failure')
+                ? '❌ Some checks failed'
+                : results.every((result) => result === 'success')
+                  ? '✅ All checks passed'
+                  : '⚠️ Some checks were cancelled or skipped';
+              const cell = (text) => String(text || '—').replace(/\r?\n/g, ' ').replace(/\|/g, '\\|');
+              const rows = checks.map(([id, label], index) => {
+                const result = results[index];
+                return `| ${icons[result] ?? '❔'} | ${label} | ${cell(needs[id]?.outputs?.summary || result)} |`;
+              });
+              const sha = (context.payload.pull_request?.head?.sha ?? context.sha).slice(0, 7);
+              const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+              const body = [
+                marker,
+                `## Bergacast CI — ${status}`,
+                '',
+                '| | Check | Summary |',
+                '|:-:|---|---|',
+                ...rows,
+                '',
+                `Commit \`${sha}\` · [workflow run](${runUrl})`,
+              ].join('\n');
+
+              await core.summary.addRaw(body).write();
+
+              const issue_number = context.payload.pull_request?.number;
+              if (!issue_number) {
+                core.warning('No pull request in the event payload, comment skipped.');
+                return;
+              }
+              const { owner, repo } = context.repo;
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner,
+                repo,
+                issue_number,
+                per_page: 100,
+              });
+              const existing = comments.find((comment) => comment.body?.includes(marker));
+              if (existing) {
+                await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+                core.info(`Updated comment ${existing.html_url}`);
+              } else {
+                const { data } = await github.rest.issues.createComment({ owner, repo, issue_number, body });
+                core.info(`Created comment ${data.html_url}`);
+              }
+            } catch (error) {
+              // The job reports results, it does not judge them: never fail because of the comment.
+              core.warning(`Cannot publish the CI report comment: ${error.message}`);
+            }
