@@ -1,0 +1,31 @@
+# Only what the image build needs; everything else stays out of the context.
+**/.git
+**/.gitignore
+**/.DS_Store
+**/.idea
+**/*.iml
+**/.vscode
+**/*.swp
+
+# Secrets
+**/.env
+**/.env.*
+!**/.env.example
+
+# Frontend
+frontend/node_modules
+frontend/.svelte-kit
+frontend/build
+frontend/coverage
+
+# Backend
+backend/.gradle
+backend/build
+backend/bin
+backend/out
+backend/src/main/resources/static/admin
+
+# Docker
+Dockerfile
+.dockerignore
+compose.yaml

@@ -1,0 +1,3 @@
+# OpenAPI lint rules applied by CI (openapi-lint job) to backend/build/openapi.json.
+extends:
+  - "spectral:oas"

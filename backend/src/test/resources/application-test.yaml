@@ -1,0 +1,7 @@
+bergacast:
+  public-base-url: https://podcasts.example.test/
+  jwt:
+    secret: test-secret-that-is-long-enough-for-hs256-signatures
+  admin:
+    username: admin
+    password: admin-password-123

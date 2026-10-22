@@ -1,0 +1,68 @@
+spring:
+  application:
+    name: bergacast
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/bergacast}
+    username: ${SPRING_DATASOURCE_USERNAME:bergacast}
+    password: ${SPRING_DATASOURCE_PASSWORD:bergacast}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    locations: classpath:db/migration
+  servlet:
+    multipart:
+      # Maximum audio file size; the request limit adds some room for the metadata (see MultipartConfiguration).
+      max-file-size: ${BERGACAST_MAX_UPLOAD_SIZE:500MB}
+      # Parts are written to a temporary file as soon as they arrive, never kept in memory.
+      file-size-threshold: 0
+  mvc:
+    problemdetails:
+      enabled: true
+  web:
+    resources:
+      # Only the admin SPA is served as static content (see AdminSpaConfiguration).
+      add-mappings: false
+  data:
+    web:
+      pageable:
+        max-page-size: 100
+
+server:
+  forward-headers-strategy: framework
+  error:
+    include-stacktrace: never
+    include-message: never
+    include-binding-errors: never
+    include-exception: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+# Public on purpose, including in production, to help plugging external tools.
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+  default-produces-media-type: application/hal+json
+  writer-with-order-by-keys: true
+
+bergacast:
+  public-base-url: ${BERGACAST_PUBLIC_BASE_URL:http://localhost:8080}
+  jwt:
+    secret: ${BERGACAST_JWT_SECRET:}
+    lifetime: 15m
+  admin:
+    username: ${BERGACAST_ADMIN_USERNAME:}
+    password: ${BERGACAST_ADMIN_PASSWORD:}
