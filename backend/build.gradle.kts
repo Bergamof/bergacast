@@ -1,0 +1,116 @@
+plugins {
+    java
+    jacoco
+    checkstyle
+    id("org.springframework.boot") version "4.1.1"
+    id("com.diffplug.spotless") version "8.10.4"
+}
+
+group = "io.github.bergamof"
+version = "0.1.0-SNAPSHOT"
+description = "Self-hosted podcast publishing"
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+val springdocVersion = "3.1.1"
+val checkstyleVersion = "14.3.0"
+val jacocoVersion = "0.8.15"
+val palantirJavaFormatVersion = "2.102.0"
+
+dependencies {
+    implementation(platform(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES))
+    testImplementation(platform(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES))
+
+    implementation("org.springframework.boot:spring-boot-starter-webmvc")
+    implementation("org.springframework.boot:spring-boot-starter-security")
+    implementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.springframework.boot:spring-boot-starter-validation")
+    implementation("org.springframework.boot:spring-boot-starter-hateoas")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("org.springframework.boot:spring-boot-starter-flyway")
+    implementation("org.flywaydb:flyway-database-postgresql")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:$springdocVersion")
+    implementation("org.postgresql:postgresql")
+
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
+    testImplementation("org.springframework.boot:spring-boot-starter-security-test")
+    testImplementation("org.springframework.boot:spring-boot-testcontainers")
+    testImplementation("org.testcontainers:testcontainers-junit-jupiter")
+    testImplementation("org.testcontainers:testcontainers-postgresql")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.encoding = "UTF-8"
+    options.compilerArgs.addAll(listOf("-parameters", "-Xlint:all,-serial,-processing", "-Werror"))
+}
+
+val openApiSpecFile = layout.buildDirectory.file("openapi.json")
+val openApiExportTestClass = "io.github.bergamof.bergacast.config.OpenApiSpecExportTest"
+
+tasks.test {
+    useJUnitPlatform()
+    systemProperty("bergacast.openapi.output", openApiSpecFile.get().asFile.absolutePath)
+    finalizedBy(tasks.jacocoTestReport)
+}
+
+tasks.register<Test>("generateOpenApiSpec") {
+    description = "Writes the OpenAPI document of the running application to build/openapi.json."
+    group = "documentation"
+    testClassesDirs =
+        sourceSets.test
+            .get()
+            .output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform()
+    filter { includeTestsMatching(openApiExportTestClass) }
+    systemProperty("bergacast.openapi.output", openApiSpecFile.get().asFile.absolutePath)
+    outputs.file(openApiSpecFile)
+    outputs.upToDateWhen { false }
+}
+
+jacoco {
+    toolVersion = jacocoVersion
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+checkstyle {
+    toolVersion = checkstyleVersion
+    configFile = file("config/checkstyle/checkstyle.xml")
+    maxWarnings = 0
+}
+
+spotless {
+    java {
+        target("src/**/*.java")
+        palantirJavaFormat(palantirJavaFormatVersion)
+        removeUnusedImports()
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+    kotlinGradle {
+        target("*.gradle.kts")
+        ktlint()
+    }
+}
+
+tasks.check {
+    dependsOn(tasks.spotlessCheck)
+}
