@@ -51,7 +51,7 @@ Monorepo :
 
 | Dossier      | Contenu                                                                                                |
 |--------------|--------------------------------------------------------------------------------------------------------|
-| `backend/`   | Spring Boot 4.1 (Java 25, Gradle Kotlin DSL), package `io.github.bergamof.bergacast`, découpé par fonctionnalité : `podcast`, `episode`, `audio`, `feed`, `token`, `adminuser`, `security`, `web`, `config`. Migrations Flyway dans `src/main/resources/db/migration`. |
+| `backend/`   | Spring Boot 4.1 (Java 25, Gradle Kotlin DSL), package `fr.bergadev.bergacast`, découpé par fonctionnalité : `podcast`, `episode`, `audio`, `feed`, `token`, `adminuser`, `security`, `web`, `config`. Migrations Flyway dans `src/main/resources/db/migration`. |
 | `frontend/`  | SPA SvelteKit 3 / Svelte 5 (TypeScript, `adapter-static`), servie sous `/admin` (voir [`frontend/README.md`](frontend/README.md)). |
 | racine       | `Dockerfile`, `compose.yaml`, `.env.example`, `.sdkmanrc`, `.nvmrc`, `.spectral.yaml`, `.github/` (CI, Dependabot). |
 
@@ -268,7 +268,7 @@ données).
 | `./gradlew spotlessApply` | Formate le code (palantir-java-format pour Java, ktlint pour `*.gradle.kts`). |
 | `./gradlew spotlessCheck checkstyleMain checkstyleTest` | Lint (formatage + Checkstyle, zéro avertissement toléré). |
 | `./gradlew test` | Tests unitaires et d’intégration (Testcontainers PostgreSQL 18 : **Docker requis**) + rapport JaCoCo. |
-| `./gradlew test --tests 'io.github.bergamof.bergacast.feed.FeedEpisodeSelectorTest'` | Une seule classe de test. |
+| `./gradlew test --tests 'fr.bergadev.bergacast.feed.FeedEpisodeSelectorTest'` | Une seule classe de test. |
 | `./gradlew check` | Lint + tests. |
 | `./gradlew bootJar` | Jar exécutable dans `build/libs/` (sans la SPA, ajoutée par le `Dockerfile`). |
 | `./gradlew generateOpenApiSpec` | Écrit le document OpenAPI dans `build/openapi.json` (démarre l’application sur Testcontainers : **Docker requis**). |

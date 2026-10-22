@@ -6,7 +6,7 @@ plugins {
     id("com.diffplug.spotless") version "8.10.4"
 }
 
-group = "io.github.bergamof"
+group = "fr.bergadev"
 version = "0.1.0-SNAPSHOT"
 description = "Self-hosted podcast publishing"
 
@@ -56,7 +56,7 @@ tasks.withType<JavaCompile>().configureEach {
 }
 
 val openApiSpecFile = layout.buildDirectory.file("openapi.json")
-val openApiExportTestClass = "io.github.bergamof.bergacast.config.OpenApiSpecExportTest"
+val openApiExportTestClass = "fr.bergadev.bergacast.config.OpenApiSpecExportTest"
 
 tasks.test {
     useJUnitPlatform()

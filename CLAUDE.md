@@ -15,7 +15,7 @@ Service auto-hébergé de publication de podcasts : des outils automatisés publ
 ## Commandes
 Backend (dans `backend/`, `JAVA_HOME` = JDK 25) :
 - Formater : `./gradlew spotlessApply` — Lint : `./gradlew spotlessCheck checkstyleMain checkstyleTest`
-- Tests : `./gradlew test` (Docker requis) ; un test : `./gradlew test --tests 'io.github.bergamof.bergacast.feed.FeedEpisodeSelectorTest'`
+- Tests : `./gradlew test` (Docker requis) ; un test : `./gradlew test --tests 'fr.bergadev.bergacast.feed.FeedEpisodeSelectorTest'`
 - Tout : `./gradlew check` — Jar : `./gradlew bootJar` — OpenAPI : `./gradlew generateOpenApiSpec` → `build/openapi.json` (Docker requis)
 - Lancer : `BERGACAST_JWT_SECRET=$(openssl rand -base64 48) BERGACAST_ADMIN_USERNAME=admin BERGACAST_ADMIN_PASSWORD=… ./gradlew bootRun` (PostgreSQL sur `localhost:5432`, `bergacast`/`bergacast` par défaut ; autres variables : `SPRING_DATASOURCE_URL/USERNAME/PASSWORD`, `BERGACAST_PUBLIC_BASE_URL`, `BERGACAST_MAX_UPLOAD_SIZE`).
 - Base de dev : `docker run -d --name bergacast-dev-db -e POSTGRES_DB=bergacast -e POSTGRES_USER=bergacast -e POSTGRES_PASSWORD=bergacast -p 5432:5432 postgres:18` (le service `db` de compose ne publie pas de port).
@@ -47,7 +47,7 @@ Docker (racine) : `cp .env.example .env` (renseigner `BERGACAST_JWT_SECRET`, mot
 - Ressources : `GET /api/v1` (racine, public) ; `POST /api/v1/access-tokens` (public) ; `/api/v1/podcasts[/{slug}]` ; `/api/v1/podcasts/{slug}/api-tokens[/{id}]` ; `/api/v1/{slug}/episodes[/{id}]` (jeton du podcast ou admin pour GET/POST ; PATCH/DELETE admin) ; `/api/v1/admin-users[/{id}]`. Public hors API : `/{slug}.xml`, `GET|HEAD /{slug}/episodes/{id}/audio.{ext}`.
 - Chemins centralisés dans `web/ApiPaths` (mappings, liens, règles de sécurité). PATCH = vrai JSON Merge Patch (`application/merge-patch+json`, `web/JsonMergePatch`). Validation → `422` avec `errors[{field, message}]`. `If-Match` optionnel, discordant → `412` ; `If-None-Match` → `304`.
 ## Architecture
-- Backend package-by-feature `io.github.bergamof.bergacast` : `podcast`, `episode`, `audio` (large objects, `Range`), `feed` (`FeedEpisodeSelector` pur + `RssFeedWriter`), `token` (jetons d’API), `adminuser`, `security` (chaîne de filtres, JWT, handler Problem Details), `web` (Problem Details, ETags, liens, racine, `/error`), `config` (`BergacastProperties`, SPA, OpenAPI, `Clock`).
+- Backend package-by-feature `fr.bergadev.bergacast` : `podcast`, `episode`, `audio` (large objects, `Range`), `feed` (`FeedEpisodeSelector` pur + `RssFeedWriter`), `token` (jetons d’API), `adminuser`, `security` (chaîne de filtres, JWT, handler Problem Details), `web` (Problem Details, ETags, liens, racine, `/error`), `config` (`BergacastProperties`, SPA, OpenAPI, `Clock`).
 - Migrations Flyway : `backend/src/main/resources/db/migration` (`V1__create_schema.sql`, `ddl-auto: validate`).
 - Tests : `backend/src/test/...` ; `support/IntegrationTest` + `TestcontainersConfiguration` (postgres:18) + `ApiTestClient` ; `config/OpenApiSpecExportTest` alimente `generateOpenApiSpec`.
 - Frontend : `src/lib/api` (client typé, HAL, Problem Details), `src/lib/auth` (JWT en `sessionStorage`), `src/lib/forms`, `src/lib/format`, `src/lib/components`, `src/routes` (`login`, groupe `(app)` authentifié). Config SvelteKit dans `vite.config.ts`.

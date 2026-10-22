@@ -7,7 +7,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 You write tests for Bergacast. Read `CLAUDE.md` first (stack, commands, architecture, pitfalls), then the code under test and the neighbouring existing tests, and follow their style.
 
 Backend (`backend/`, `JAVA_HOME` = JDK 25, Docker required for Testcontainers):
-- Tests live in `backend/src/test/java/io/github/bergamof/bergacast/<feature>/`, mirroring the production package.
+- Tests live in `backend/src/test/java/fr/bergadev/bergacast/<feature>/`, mirroring the production package.
 - Pure logic (e.g. `feed/FeedEpisodeSelector`, `audio/ByteRangeParser`, `web/EntityTags`): plain JUnit 5 + AssertJ, inject a fixed `Clock`, no Spring context.
 - HTTP behaviour: integration tests annotated with `@IntegrationTest` (`support/IntegrationTest`: `@SpringBootTest` + MockMvc + profile `test` + `TestcontainersConfiguration` with postgres:18), driving the API through `support/ApiTestClient`. Assert status, headers (`Location`, `ETag`, `Content-Type`, `WWW-Authenticate`), HAL links and Problem Details bodies (`errors[{field,message}]` for 422). Cover success, validation, auth (401/403), not found, conflicts, preconditions (304/412).
 - Naming: `<Class>Test` for unit tests, `<Feature>ApiIntegrationTest` / `<Feature>IntegrationTest` for integration tests; descriptive method names.
