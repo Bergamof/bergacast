@@ -3,15 +3,19 @@ import { createFakeFetch, emptyResponse, jsonResponse } from '../testing/fake-fe
 import { ApiClient, withQuery } from './client';
 import { ApiError, NETWORK_ERROR_STATUS } from './problem';
 
-const ORIGIN = 'http://admin.example';
+const API_ORIGIN = 'https://api.example';
 
-function createClient(fetch: typeof globalThis.fetch, accessToken: string | null = 'jwt-token') {
+function createClient(
+	fetch: typeof globalThis.fetch,
+	accessToken: string | null = 'jwt-token',
+	{ apiOrigin }: { apiOrigin?: string } = { apiOrigin: API_ORIGIN }
+) {
 	const onUnauthorized = vi.fn();
 	const client = new ApiClient({
 		fetch,
 		getAccessToken: () => accessToken,
 		onUnauthorized,
-		origin: ORIGIN
+		apiOrigin
 	});
 	return { client, onUnauthorized };
 }
@@ -37,9 +41,27 @@ describe('ApiClient', () => {
 		expect(requests[0].headers.has('Authorization')).toBe(false);
 	});
 
-	it('requests only the path of absolute links, staying on the SPA origin', async () => {
+	it('sends the path of absolute links to the configured API origin', async () => {
 		const { fetch, requests } = createFakeFetch(jsonResponse(200, {}));
 		const { client } = createClient(fetch);
+
+		await client.get('http://internal-host:8080/api/v1/podcasts?page=1');
+
+		expect(requests[0].url).toBe('https://api.example/api/v1/podcasts?page=1');
+	});
+
+	it('sends relative hrefs to the configured API origin', async () => {
+		const { fetch, requests } = createFakeFetch(jsonResponse(200, {}));
+		const { client } = createClient(fetch);
+
+		await client.get('/api/v1');
+
+		expect(requests[0].url).toBe('https://api.example/api/v1');
+	});
+
+	it('stays on the page origin without a configured API origin', async () => {
+		const { fetch, requests } = createFakeFetch(jsonResponse(200, {}));
+		const { client } = createClient(fetch, 'jwt-token', {});
 
 		await client.get('http://internal-host:8080/api/v1/podcasts?page=1');
 

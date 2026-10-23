@@ -1,0 +1,29 @@
+# static-web-server settings of the admin SPA image (https://static-web-server.net/configuration/config-file/).
+# Root, port and fallback page are given by docker-entrypoint.sh.
+
+[general]
+log-level = "info"
+health = true
+compression = false
+compression-static = true
+directory-listing = false
+ignore-hidden-files = true
+security-headers = true
+# Explicit rules below instead of the default per-extension cache durations.
+cache-control-headers = false
+
+[advanced]
+
+# Everything revalidates by default: the index, client routes and the runtime configuration change on each deployment.
+[[advanced.headers]]
+source = "**"
+[advanced.headers.headers]
+Cache-Control = "no-cache"
+X-Content-Type-Options = "nosniff"
+Referrer-Policy = "no-referrer"
+
+# Fingerprinted build output never changes.
+[[advanced.headers]]
+source = "/_app/immutable/**"
+[advanced.headers.headers]
+Cache-Control = "public, max-age=31536000, immutable"

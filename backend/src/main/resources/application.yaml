@@ -22,7 +22,7 @@ spring:
       enabled: true
   web:
     resources:
-      # Only the admin SPA is served as static content (see AdminSpaConfiguration).
+      # No static content: the admin SPA is a separate image.
       add-mappings: false
   data:
     web:
@@ -30,6 +30,8 @@ spring:
         max-page-size: 100
 
 server:
+  # Serverless platforms (Scaleway Serverless Containers) give the port to listen on in PORT.
+  port: ${PORT:8080}
   forward-headers-strategy: framework
   error:
     include-stacktrace: never
@@ -63,6 +65,9 @@ bergacast:
   jwt:
     secret: ${BERGACAST_JWT_SECRET:}
     lifetime: 15m
+  cors:
+    # Comma-separated origins of the admin SPA, e.g. https://admin.example.com
+    allowed-origins: ${BERGACAST_CORS_ALLOWED_ORIGINS:}
   admin:
     username: ${BERGACAST_ADMIN_USERNAME:}
     password: ${BERGACAST_ADMIN_PASSWORD:}

@@ -15,7 +15,7 @@ import type {
 
 export const API_ENTRY_POINT = '/api/v1';
 export const DEFAULT_PAGE_SIZE = 20;
-/** Public Swagger UI, served by the backend at the root of the origin (outside the SPA base path). */
+/** Public Swagger UI, served by the backend at the root of its origin. */
 export const OPENAPI_DOCUMENTATION_PATH = '/swagger-ui.html';
 
 export interface PageRequest {

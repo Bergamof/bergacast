@@ -1,0 +1,9 @@
+# Only what the SPA build needs.
+node_modules
+.svelte-kit
+build
+coverage
+.env
+.env.*
+Dockerfile
+.dockerignore
