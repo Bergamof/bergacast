@@ -3,6 +3,7 @@ package fr.bergadev.bergacast.security;
 import fr.bergadev.bergacast.adminuser.AdminPrincipal;
 import fr.bergadev.bergacast.config.BergacastProperties;
 import fr.bergadev.bergacast.token.ApiTokenService;
+import fr.bergadev.bergacast.web.ApiHeaders;
 import fr.bergadev.bergacast.web.ApiPaths;
 import java.time.Duration;
 import java.util.List;
@@ -40,6 +41,7 @@ import org.springframework.security.web.access.intercept.RequestAuthorizationCon
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.filter.CorsFilter;
 
 /**
  * Stateless security: the API is protected by bearer tokens, everything else (feeds, audio, OpenAPI) is public.
@@ -70,7 +72,7 @@ class SecurityConfiguration {
         AuthenticationManager bearerAuthenticationManager = new BearerTokenAuthenticationManager(
                 new ApiTokenAuthenticationProvider(apiTokenService), jwtAuthenticationProvider(jwtDecoder));
         http.csrf(AbstractHttpConfigurer::disable)
-                .cors(cors -> cors.configurationSource(apiCorsConfigurationSource(properties.cors())))
+                .addFilter(apiCorsFilter(properties.cors(), problemHandler))
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
@@ -98,6 +100,13 @@ class SecurityConfiguration {
         return http.build();
     }
 
+    private static CorsFilter apiCorsFilter(
+            BergacastProperties.Cors settings, ProblemDetailsSecurityHandler problemHandler) {
+        CorsFilter filter = new CorsFilter(apiCorsConfigurationSource(settings));
+        filter.setCorsProcessor(new ProblemDetailsCorsProcessor(problemHandler));
+        return filter;
+    }
+
     private static CorsConfigurationSource apiCorsConfigurationSource(BergacastProperties.Cors settings) {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(settings.allowedOrigins());
@@ -112,7 +121,8 @@ class SecurityConfiguration {
                 HttpHeaders.CONTENT_TYPE,
                 HttpHeaders.ACCEPT,
                 HttpHeaders.IF_MATCH,
-                HttpHeaders.IF_NONE_MATCH));
+                HttpHeaders.IF_NONE_MATCH,
+                ApiHeaders.IDEMPOTENCY_KEY));
         configuration.setExposedHeaders(List.of(HttpHeaders.ETAG, HttpHeaders.LOCATION));
         configuration.setMaxAge(CORS_PREFLIGHT_CACHE);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

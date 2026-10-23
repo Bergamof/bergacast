@@ -68,6 +68,11 @@ step "CORS preflight from the admin SPA origin"
 request OPTIONS /api/v1/podcasts 200 -H "Origin: $CORS_ORIGIN" -H 'Access-Control-Request-Method: PATCH' \
     -H 'Access-Control-Request-Headers: authorization,content-type,if-match' >/dev/null
 [ "$(header Access-Control-Allow-Origin)" = "$CORS_ORIGIN" ] || fail "CORS origin not allowed"
+request OPTIONS "/api/v1/any-podcast/episodes" 200 -H "Origin: $CORS_ORIGIN" \
+    -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: authorization,idempotency-key' >/dev/null
+request OPTIONS /api/v1/podcasts 403 -H 'Origin: https://foreign.example' \
+    -H 'Access-Control-Request-Method: GET' >/dev/null
+[[ "$(header Content-Type)" == application/problem+json* ]] || fail "CORS rejection is not application/problem+json"
 
 step "Podcast creation"
 request POST /api/v1/podcasts 201 "${ADMIN[@]}" -H 'Content-Type: application/json' \
