@@ -31,8 +31,11 @@ export interface ApiClientOptions {
 	getAccessToken: () => string | null;
 	/** Called when the API rejects the token we sent (expired, revoked, secret rotated…). */
 	onUnauthorized: () => void;
-	/** Origin used to resolve relative hrefs; defaults to the current page origin. */
-	origin?: string;
+	/**
+	 * Origin serving the API (scheme, host and port) when it differs from the page origin. Without
+	 * it, requests stay on the page origin (development proxy).
+	 */
+	apiOrigin?: string;
 }
 
 interface EncodedBody {
@@ -79,13 +82,13 @@ export class ApiClient {
 	}
 
 	/**
-	 * Links built by the backend are absolute and depend on proxy headers; requesting only their
-	 * path keeps every call on the origin that served the SPA (same-origin, no CORS needed).
+	 * Links built by the backend are absolute and depend on its public URL and proxy headers; only
+	 * their path is kept and sent to the configured API origin, so every call reaches the same API.
 	 */
-	toRequestPath(href: string): string {
-		const origin = this.#options.origin ?? globalThis.location?.origin ?? 'http://localhost';
-		const url = new URL(href, origin);
-		return `${url.pathname}${url.search}`;
+	toRequestUrl(href: string): string {
+		const apiOrigin = this.#options.apiOrigin;
+		const url = new URL(href, apiOrigin ?? globalThis.location?.origin ?? 'http://localhost');
+		return `${apiOrigin ?? ''}${url.pathname}${url.search}`;
 	}
 
 	async request<T>(href: string, options: RequestOptions = {}): Promise<ApiResponse<T>> {
@@ -104,7 +107,7 @@ export class ApiClient {
 
 		let response: Response;
 		try {
-			response = await this.#options.fetch(this.toRequestPath(href), {
+			response = await this.#options.fetch(this.toRequestUrl(href), {
 				method: options.method ?? 'GET',
 				headers,
 				body

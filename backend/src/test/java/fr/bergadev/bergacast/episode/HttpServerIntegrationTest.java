@@ -24,7 +24,7 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 
-/** Exercises behaviours MockMvc cannot observe: Tomcat multipart streaming of large uploads, servlet forwards. */
+/** Exercises behaviours MockMvc cannot observe: Tomcat multipart streaming of large uploads. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Import(TestcontainersConfiguration.class)
@@ -93,13 +93,6 @@ class HttpServerIntegrationTest {
                 .toEntity(byte[].class);
         assertThat(range.getStatusCode()).isEqualTo(HttpStatus.PARTIAL_CONTENT);
         assertThat(range.getBody()).hasSize(AUDIO_SIZE - 1048576);
-    }
-
-    @Test
-    void servesTheSpaIndexAtTheAdminRoot() {
-        String index = client.get().uri("/admin/").retrieve().body(String.class);
-
-        assertThat(index).contains("Bergacast admin");
     }
 
     private static HttpEntity<?> part(Object body, MediaType contentType) {

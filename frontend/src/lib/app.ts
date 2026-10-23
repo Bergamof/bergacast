@@ -2,10 +2,11 @@ import { error, redirect } from '@sveltejs/kit';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { ApiClient } from './api/client';
-import { BergacastApi } from './api/bergacast-api';
+import { BergacastApi, OPENAPI_DOCUMENTATION_PATH } from './api/bergacast-api';
 import { ApiError } from './api/problem';
 import { EXPIRED_PARAMETER, REDIRECT_PARAMETER } from './auth/login-redirect';
 import { SessionStore } from './auth/session-store';
+import { apiOriginOf } from './runtime-config';
 
 /** Application-wide singletons, wired to the browser (the SPA never renders on a server). */
 export const sessionStore = new SessionStore(() => sessionStorage);
@@ -29,13 +30,19 @@ export async function logOut(options: { expired?: boolean } = {}): Promise<void>
 	await goto(loginPageHref({ returnTo, expired: options.expired }));
 }
 
+const apiOrigin = apiOriginOf(globalThis.bergacastConfig);
+
 export const api = new BergacastApi(
 	new ApiClient({
 		fetch: (input, init) => fetch(input, init),
 		getAccessToken: () => sessionStore.read()?.accessToken ?? null,
-		onUnauthorized: () => void logOut({ expired: true })
+		onUnauthorized: () => void logOut({ expired: true }),
+		apiOrigin
 	})
 );
+
+/** Swagger UI of the backend, which may be served from another origin than the SPA. */
+export const apiDocumentationHref = `${apiOrigin ?? ''}${OPENAPI_DOCUMENTATION_PATH}`;
 
 const SERVICE_UNAVAILABLE = 503;
 

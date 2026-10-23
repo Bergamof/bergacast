@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Production images, one per module, for Scaleway Serverless Containers (`linux/amd64`, port from `PORT`): backend
+  compiled into a GraalVM native executable on distroless (`backend/Dockerfile`), admin SPA served by
+  static-web-server (`frontend/Dockerfile`), with the API URL given at startup (`BERGACAST_API_URL`).
+- Image publishing to the Scaleway Container Registry (`rg.fr-par.scw.cloud/bergacast`): `edge` for each green
+  commit of `main`, semantic version tags and `latest` for `vX.Y.Z` tags (`.github/workflows/release.yml`).
+- CORS on the API for the admin SPA origins (`BERGACAST_CORS_ALLOWED_ORIGINS`).
+- CI jobs building both images, with an end-to-end smoke test of the native backend (`backend/scripts/smoke-test.sh`).
+
 - Podcast management through the REST API `/api/v1` (HAL, Problem Details RFC 9457, pagination, strong `ETag` /
   `If-Match`, JSON Merge Patch), with immutable slugs and reserved names.
 - Episode publishing by `multipart/form-data` upload (`metadata` JSON part + `audio` file) on
@@ -28,5 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions CI on pull requests (backend lint/tests/build, OpenAPI lint with Spectral, frontend lint/tests/build,
   Docker build) with a results report posted as a PR comment; weekly Dependabot updates.
 - Tool versions pinned in `.sdkmanrc` (Java 25) and `.nvmrc` (Node 24), npm 12.2.1 via `packageManager`.
+
+### Changed
+
+- The admin SPA is no longer embedded in the backend jar nor served under `/admin/`: it has its own image and is
+  served at the root of its own origin. Docker Compose runs `db`, `backend` and `frontend`.
 
 [Unreleased]: https://github.com/Bergamof/bergacast/commits/main

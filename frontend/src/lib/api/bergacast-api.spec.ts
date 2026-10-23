@@ -26,8 +26,7 @@ function createApi(...responses: Response[]) {
 	const client = new ApiClient({
 		fetch,
 		getAccessToken: () => 'jwt',
-		onUnauthorized: () => undefined,
-		origin: 'http://localhost:5173'
+		onUnauthorized: () => undefined
 	});
 	return { api: new BergacastApi(client), requests };
 }

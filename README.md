@@ -41,7 +41,7 @@ Dépôt : <https://github.com/Bergamof/bergacast> — licence [AGPL-3.0](LICENSE
 - **API REST** `/api/v1` : HAL, Problem Details (RFC 9457), pagination, `ETag`/`If-Match`, JSON Merge Patch.
 - **Deux types d’authentification** : jetons d’API par podcast (`bgc_…`, limités à la publication et à la lecture des
   épisodes de *ce* podcast) et JWT administrateur (15 minutes).
-- **Interface d’administration** (SPA SvelteKit sous `/admin/`) : podcasts, réglages du flux, épisodes, jetons d’API,
+- **Interface d’administration** (SPA SvelteKit, image dédiée) : podcasts, réglages du flux, épisodes, jetons d’API,
   administrateurs.
 - **Documentation OpenAPI** publique (Swagger UI) pour brancher facilement des outils externes.
 
@@ -52,12 +52,17 @@ Monorepo :
 | Dossier      | Contenu                                                                                                |
 |--------------|--------------------------------------------------------------------------------------------------------|
 | `backend/`   | Spring Boot 4.1 (Java 25, Gradle Kotlin DSL), package `fr.bergadev.bergacast`, découpé par fonctionnalité : `podcast`, `episode`, `audio`, `feed`, `token`, `adminuser`, `security`, `web`, `config`. Migrations Flyway dans `src/main/resources/db/migration`. |
-| `frontend/`  | SPA SvelteKit 3 / Svelte 5 (TypeScript, `adapter-static`), servie sous `/admin` (voir [`frontend/README.md`](frontend/README.md)). |
-| racine       | `Dockerfile`, `compose.yaml`, `.env.example`, `.sdkmanrc`, `.nvmrc`, `.spectral.yaml`, `.github/` (CI, Dependabot). |
+| `frontend/`  | SPA SvelteKit 3 / Svelte 5 (TypeScript, `adapter-static`), servie par static-web-server (voir [`frontend/README.md`](frontend/README.md)). |
+| racine       | `compose.yaml`, `.env.example`, `.sdkmanrc`, `.nvmrc`, `.spectral.yaml`, `.github/` (CI, Dependabot). |
 
-En production, une seule application Spring Boot sert tout : l’API (`/api/v1`), les flux (`/{slug}.xml`), l’audio
-(`/{slug}/episodes/{id}/audio.{ext}`), la documentation OpenAPI et la SPA (intégrée au jar par le `Dockerfile`, sous
-`/admin/` ; `/` redirige vers `/admin/`). PostgreSQL 18 est la seule dépendance externe.
+Chaque module produit sa propre image, déployée comme un conteneur indépendant (Scaleway Serverless Containers) :
+
+- **backend** (`backend/Dockerfile`) : exécutable natif GraalVM sur distroless ; sert l’API (`/api/v1`), les flux
+  (`/{slug}.xml`), l’audio (`/{slug}/episodes/{id}/audio.{ext}`) et la documentation OpenAPI ;
+- **frontend** (`frontend/Dockerfile`) : SPA statique servie par static-web-server à la racine de son domaine ; elle
+  appelle l’API du backend (autre origine, CORS) dont l’URL est donnée au démarrage du conteneur.
+
+PostgreSQL est la seule dépendance externe.
 
 ## Prérequis
 
@@ -216,13 +221,19 @@ L’application se configure par variables d’environnement (liées aux propri�
 |----------|--------|------|
 | `BERGACAST_JWT_SECRET` | *(aucun, obligatoire)* | Secret HMAC des JWT administrateur, **au moins 32 octets** ; l’application refuse de démarrer sinon. Générer avec `openssl rand -base64 48`. |
 | `BERGACAST_PUBLIC_BASE_URL` | `http://localhost:8080` | URL publique de base, utilisée pour les URL absolues (flux, audio, URL de publication). |
+| `BERGACAST_CORS_ALLOWED_ORIGINS` | *(vide : aucune)* | Origines (séparées par des virgules) autorisées à appeler l’API depuis un navigateur : l’URL publique de la SPA d’administration, par ex. `https://admin.example.com`. |
+| `PORT` | `8080` | Port d’écoute (fourni par la plateforme serverless). |
 | `BERGACAST_ADMIN_USERNAME` / `BERGACAST_ADMIN_PASSWORD` | *(vides)* | Administrateur créé au démarrage s’il n’en existe aucun (mot de passe ≥ 12 caractères). Non renseignés : simple avertissement dans les logs. |
 | `BERGACAST_MAX_UPLOAD_SIZE` | `500MB` | Taille maximale d’un upload (fichier et requête multipart). |
 | `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/bergacast` | URL JDBC de PostgreSQL 18. |
 | `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | `bergacast` / `bergacast` | Identifiants PostgreSQL. |
 
-Avec Docker Compose s’ajoutent `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` (base du conteneur `db`) et
-`BERGACAST_PORT` (port publié sur l’hôte, `8080` par défaut). Modèle : [`.env.example`](.env.example).
+L’image frontend ne prend que `BERGACAST_API_URL` (obligatoire : origine publique du backend, par ex.
+`https://api.example.com`, écrite au démarrage dans `/config.js`) et `PORT` (`8080` par défaut).
+
+Avec Docker Compose s’ajoutent `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` (base du conteneur `db`),
+`BERGACAST_ADMIN_URL` (URL de la SPA, autorisée en CORS), `BERGACAST_PORT` et `BERGACAST_ADMIN_PORT` (ports publiés
+sur l’hôte, `8080` et `8081` par défaut). Modèle : [`.env.example`](.env.example).
 
 ## Lancer en local (développement)
 
@@ -253,7 +264,7 @@ Avec Docker Compose s’ajoutent `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSW
    npm run dev
    ```
 
-   L’interface est servie sur <http://localhost:5173/admin> ; Vite redirige `/api`, `/v3` et `/swagger-ui` vers
+   L’interface est servie sur <http://localhost:5173> ; Vite redirige `/api`, `/v3` et `/swagger-ui` vers
    `http://localhost:8080`.
 
 Arrêt de la base : `docker rm -f bergacast-dev-db` (ajouter `docker volume rm bergacast-dev-db` pour effacer les
@@ -270,7 +281,9 @@ données).
 | `./gradlew test` | Tests unitaires et d’intégration (Testcontainers PostgreSQL 18 : **Docker requis**) + rapport JaCoCo. |
 | `./gradlew test --tests 'fr.bergadev.bergacast.feed.FeedEpisodeSelectorTest'` | Une seule classe de test. |
 | `./gradlew check` | Lint + tests. |
-| `./gradlew bootJar` | Jar exécutable dans `build/libs/` (sans la SPA, ajoutée par le `Dockerfile`). |
+| `./gradlew bootJar` | Jar exécutable (JVM) dans `build/libs/`. |
+| `./gradlew nativeCompile` | Exécutable natif `build/native/nativeCompile/bergacast` (**GraalVM 25 requis** comme `JAVA_HOME`, ~8 Go de RAM, plusieurs minutes ; sinon passer par l’image Docker). |
+| `scripts/smoke-test.sh` | Test de bout en bout d’un backend lancé (`BASE_URL`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `CORS_ORIGIN` ; requiert curl et jq), utilisé en CI sur l’image native. |
 | `./gradlew generateOpenApiSpec` | Écrit le document OpenAPI dans `build/openapi.json` (démarre l’application sur Testcontainers : **Docker requis**). |
 
 Rapports : `build/reports/tests/test/`, `build/reports/jacoco/test/`, `build/reports/checkstyle/`.
@@ -289,29 +302,54 @@ Rapports : `build/reports/tests/test/`, `build/reports/jacoco/test/`, `build/rep
 
 ## Docker
 
-L’image est construite en trois étapes : `node:24-alpine` (build de la SPA) → `eclipse-temurin:25-jdk` (`bootJar`
-avec la SPA intégrée sous `static/admin/`, puis extraction en couches) → `eclipse-temurin:25-jre-alpine` (exécution en
-utilisateur non root, uid 10001, healthcheck sur `/actuator/health`). Les tests ne sont pas lancés dans le build
-Docker : ils tournent en CI.
+Deux images, une par module, construites chacune depuis son dossier (contexte `backend/` ou `frontend/`) ; les tests
+ne sont pas lancés dans les builds Docker : ils tournent en CI.
+
+| Image | Étapes | Taille / mémoire |
+|-------|--------|------------------|
+| `bergacast-backend` | `ghcr.io/graalvm/native-image-community:25` (AOT Spring + `nativeCompile`) → `gcr.io/distroless/base-debian13:nonroot` (glibc seule, pas de shell, utilisateur `nonroot`) | ~ 190 Mo, ~ 110–120 Mo de RAM (tient dans 256 Mo, upload de 200 Mo compris), démarrage ~ 1 s |
+| `bergacast-frontend` | `node:24-alpine` (build statique, précompressé brotli/gzip) → `joseluisq/static-web-server:2.44.1-alpine` (utilisateur `sws`) | ~ 18 Mo, ~ 10 Mo de RAM |
 
 ```sh
 cp .env.example .env
 # Éditer .env : BERGACAST_JWT_SECRET (openssl rand -base64 48), BERGACAST_ADMIN_PASSWORD, POSTGRES_PASSWORD,
-# BERGACAST_PUBLIC_BASE_URL (URL publique réelle), éventuellement BERGACAST_PORT.
+# éventuellement BERGACAST_PORT / BERGACAST_ADMIN_PORT et les URL publiques.
 docker compose up -d --build
 ```
 
-L’application est alors disponible sur <http://localhost:8080> (ou le port `BERGACAST_PORT`), l’administration sur
-`/admin/`. Les données PostgreSQL sont dans le volume `db-data`.
+L’administration est alors sur <http://localhost:8081>, l’API, les flux et l’audio sur <http://localhost:8080>. Les
+données PostgreSQL sont dans le volume `db-data`. La compilation native du backend prend plusieurs minutes.
 
 ```sh
-docker compose logs -f app   # logs de l’application
-docker compose down          # arrêt (données conservées)
-docker compose down -v       # arrêt et suppression des données
+docker compose logs -f backend   # logs du backend
+docker compose down              # arrêt (données conservées)
+docker compose down -v           # arrêt et suppression des données
 ```
 
-En production, placer un reverse proxy HTTPS devant l’application (les en-têtes `X-Forwarded-*` sont pris en compte)
-et renseigner `BERGACAST_PUBLIC_BASE_URL` avec l’URL publique.
+## Production (Scaleway)
+
+Les images sont publiées par [`.github/workflows/release.yml`](.github/workflows/release.yml) dans le Container
+Registry Scaleway, namespace `bergacast` (région `fr-par`), pour `linux/amd64` (seule architecture des Serverless
+Containers) :
+
+| Déclencheur | Tags |
+|-------------|------|
+| Commit sur `main` dont la CI est verte | `edge`, `sha-<sha court>` |
+| Tag Git `vX.Y.Z` | `X.Y.Z`, `X.Y`, `latest`, `sha-<sha court>` |
+
+- `rg.fr-par.scw.cloud/bergacast/bergacast-backend`
+- `rg.fr-par.scw.cloud/bergacast/bergacast-frontend`
+
+Configuration GitHub requise : secret `SCW_SECRET_KEY` (clé d’API IAM ayant le droit d’écrire dans le registry). Le
+workflow peut aussi être lancé à la main (*Actions → Release images → Run workflow*).
+
+Déploiement (conteneurs serverless) :
+
+- **backend** : port `8080` (la plateforme fournit `PORT`), variables de la section [Configuration](#configuration) ;
+  `BERGACAST_PUBLIC_BASE_URL` = URL publique du conteneur backend, `BERGACAST_CORS_ALLOWED_ORIGINS` = URL publique du
+  conteneur frontend, `SPRING_DATASOURCE_*` = base PostgreSQL ; secrets (`BERGACAST_JWT_SECRET`, mots de passe) en
+  variables secrètes. Sonde de santé : `/actuator/health`.
+- **frontend** : `BERGACAST_API_URL` = URL publique du backend ; 128 Mo de mémoire suffisent. Sonde : `/health`.
 
 ## Utilisation par des outils automatisés
 
@@ -400,16 +438,17 @@ jour, réouverture, sortie de brouillon) et sur chaque push sur `main`. Les vers
 | `frontend-lint` | Prettier, ESLint, svelte-check |
 | `frontend-test` | Vitest + couverture |
 | `frontend-build` | Build Vite |
-| `docker-build` | Build de l’image (non publiée) |
+| `backend-image` | Build de l’image native (non publiée), démarrage contre PostgreSQL puis `backend/scripts/smoke-test.sh` |
+| `frontend-image` | Build de l’image (non publiée), vérification du service (`config.js`, repli SPA, cache, refus d’une URL d’API invalide) |
 
 Puis le job `report` (toujours exécuté sur une PR, même en cas d’échec) publie — ou met à jour — **un commentaire sur
 la PR** avec un tableau des résultats (statut et synthèse : violations, tests passés/échoués, couverture, taille du jar
-ou de l’image…) et le lien du run. Dependabot propose chaque semaine les mises à jour (GitHub Actions, Gradle, npm,
+ou des images, mémoire…) et le lien du run. Dependabot propose chaque semaine les mises à jour (GitHub Actions, Gradle, npm,
 Docker).
 
 **Protection de branche recommandée sur `main`** (*Settings → Rules → Rulesets* ou *Branches*) : exiger une pull
-request, exiger que la branche soit à jour, et rendre obligatoires les 8 vérifications : *Backend lint*, *Backend
-tests*, *Backend build*, *OpenAPI lint*, *Frontend lint*, *Frontend tests*, *Frontend build*, *Docker build* (le job
+request, exiger que la branche soit à jour, et rendre obligatoires les 9 vérifications : *Backend lint*, *Backend
+tests*, *Backend build*, *OpenAPI lint*, *Frontend lint*, *Frontend tests*, *Frontend build*, *Backend native image*, *Frontend image* (le job
 *PR report* ne doit pas être obligatoire : il rend compte, il ne juge pas).
 
 ## Licence

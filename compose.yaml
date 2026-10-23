@@ -1,4 +1,5 @@
-# Usage: cp .env.example .env, adjust the values, then `docker compose up -d --build`.
+# Local stack mirroring production (one image per module): cp .env.example .env, adjust the values, then
+# `docker compose up -d --build`. The admin SPA is on BERGACAST_ADMIN_PORT, the API, feeds and audio on BERGACAST_PORT.
 name: bergacast
 
 services:
@@ -19,15 +20,16 @@ services:
       retries: 10
       start_period: 10s
 
-  app:
-    build: .
-    image: bergacast:latest
+  backend:
+    build: ./backend
+    image: bergacast-backend:latest
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     environment:
       BERGACAST_PUBLIC_BASE_URL: ${BERGACAST_PUBLIC_BASE_URL:-http://localhost:8080}
+      BERGACAST_CORS_ALLOWED_ORIGINS: ${BERGACAST_ADMIN_URL:-http://localhost:8081}
       BERGACAST_ADMIN_USERNAME: ${BERGACAST_ADMIN_USERNAME:-}
       BERGACAST_ADMIN_PASSWORD: ${BERGACAST_ADMIN_PASSWORD:-}
       BERGACAST_JWT_SECRET: ${BERGACAST_JWT_SECRET:?BERGACAST_JWT_SECRET is required}
@@ -37,6 +39,15 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     ports:
       - "${BERGACAST_PORT:-8080}:8080"
+
+  frontend:
+    build: ./frontend
+    image: bergacast-frontend:latest
+    restart: unless-stopped
+    environment:
+      BERGACAST_API_URL: ${BERGACAST_PUBLIC_BASE_URL:-http://localhost:8080}
+    ports:
+      - "${BERGACAST_ADMIN_PORT:-8081}:8080"
 
 volumes:
   db-data:

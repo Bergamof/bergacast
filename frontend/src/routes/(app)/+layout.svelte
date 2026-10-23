@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { logOut } from '#lib/app.ts';
-	import { OPENAPI_DOCUMENTATION_PATH } from '#lib/api/bergacast-api.ts';
+	import { apiDocumentationHref, logOut } from '#lib/app.ts';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
@@ -41,7 +40,7 @@
 				{/each}
 				<li>
 					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- served by the backend, outside the SPA -->
-					<a href={OPENAPI_DOCUMENTATION_PATH} target="_blank" rel="noopener">Documentation API</a>
+					<a href={apiDocumentationHref} target="_blank" rel="noopener">Documentation API</a>
 				</li>
 			</ul>
 		</nav>

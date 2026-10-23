@@ -13,9 +13,9 @@ export default defineConfig({
 				runes: ({ filename }) =>
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
-			// The backend serves the SPA under /admin/ and forwards unknown /admin/** paths to index.html.
-			paths: { base: '/admin' },
-			adapter: adapter({ fallback: 'index.html' })
+			// Served at the root of its own origin; unknown paths fall back to index.html (client routing).
+			// Brotli/gzip variants are written next to each file and served as is by the image.
+			adapter: adapter({ fallback: 'index.html', precompress: true })
 		})
 	],
 	server: {

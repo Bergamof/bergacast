@@ -4,10 +4,13 @@ import fr.bergadev.bergacast.adminuser.AdminPrincipal;
 import fr.bergadev.bergacast.config.BergacastProperties;
 import fr.bergadev.bergacast.token.ApiTokenService;
 import fr.bergadev.bergacast.web.ApiPaths;
+import java.time.Duration;
+import java.util.List;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
@@ -34,13 +37,19 @@ import org.springframework.security.oauth2.server.resource.web.BearerTokenResolv
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 /**
- * Stateless security: the API is protected by bearer tokens, everything else (feeds, audio, SPA, OpenAPI) is public.
+ * Stateless security: the API is protected by bearer tokens, everything else (feeds, audio, OpenAPI) is public.
  *
  * <p>Two kinds of bearer tokens coexist: admin JWTs (HS256, issued by {@code POST /api/v1/access-tokens}) granting
  * {@code ROLE_ADMIN} on the whole API, and podcast API tokens ({@code bgc_...}) limited to listing, reading and
  * publishing the episodes of their podcast.
+ *
+ * <p>The admin SPA is served from its own origin: CORS is enabled on the API for the configured origins only. Tokens
+ * travel in the {@code Authorization} header, never in cookies, so credentials are not allowed cross-origin.
  */
 @Configuration(proxyBeanMethods = false)
 class SecurityConfiguration {
@@ -49,16 +58,19 @@ class SecurityConfiguration {
     private static final String SLUG_VARIABLE = "slug";
     private static final String HMAC_ALGORITHM = "HmacSHA256";
     private static final String API_PREFIX = "/api/";
+    private static final Duration CORS_PREFLIGHT_CACHE = Duration.ofHours(1);
 
     @Bean
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             JwtDecoder jwtDecoder,
             ApiTokenService apiTokenService,
-            ProblemDetailsSecurityHandler problemHandler) {
+            ProblemDetailsSecurityHandler problemHandler,
+            BergacastProperties properties) {
         AuthenticationManager bearerAuthenticationManager = new BearerTokenAuthenticationManager(
                 new ApiTokenAuthenticationProvider(apiTokenService), jwtAuthenticationProvider(jwtDecoder));
         http.csrf(AbstractHttpConfigurer::disable)
+                .cors(cors -> cors.configurationSource(apiCorsConfigurationSource(properties.cors())))
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
@@ -86,8 +98,30 @@ class SecurityConfiguration {
         return http.build();
     }
 
+    private static CorsConfigurationSource apiCorsConfigurationSource(BergacastProperties.Cors settings) {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(settings.allowedOrigins());
+        configuration.setAllowedMethods(List.of(
+                HttpMethod.GET.name(),
+                HttpMethod.HEAD.name(),
+                HttpMethod.POST.name(),
+                HttpMethod.PATCH.name(),
+                HttpMethod.DELETE.name()));
+        configuration.setAllowedHeaders(List.of(
+                HttpHeaders.AUTHORIZATION,
+                HttpHeaders.CONTENT_TYPE,
+                HttpHeaders.ACCEPT,
+                HttpHeaders.IF_MATCH,
+                HttpHeaders.IF_NONE_MATCH));
+        configuration.setExposedHeaders(List.of(HttpHeaders.ETAG, HttpHeaders.LOCATION));
+        configuration.setMaxAge(CORS_PREFLIGHT_CACHE);
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration(API_PREFIX + "**", configuration);
+        return source;
+    }
+
     /**
-     * Only API requests carry credentials: public resources (feeds, audio, SPA, OpenAPI) ignore any
+     * Only API requests carry credentials: public resources (feeds, audio, OpenAPI) ignore any
      * {@code Authorization} header, so that a stale or foreign token never breaks them.
      */
     private static BearerTokenResolver apiBearerTokenResolver() {

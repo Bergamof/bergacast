@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import fr.bergadev.bergacast.config.BergacastProperties;
 import java.net.URI;
 import java.time.Duration;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.DefaultApplicationArguments;
 
@@ -46,7 +47,8 @@ class InitialAdminUserCreatorTest {
         BergacastProperties properties = new BergacastProperties(
                 URI.create("http://localhost"),
                 new BergacastProperties.Jwt("0123456789abcdef0123456789abcdef", Duration.ofMinutes(15), "x"),
-                new BergacastProperties.InitialAdmin("admin", password));
+                new BergacastProperties.InitialAdmin("admin", password),
+                new BergacastProperties.Cors(List.of()));
         new InitialAdminUserCreator(adminUserService, properties).run(new DefaultApplicationArguments());
     }
 }
