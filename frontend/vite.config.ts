@@ -1,9 +1,14 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vitest/config';
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 
 const BACKEND_URL = 'http://localhost:8080';
 const BACKEND_PROXIED_PATHS = ['/api', '/v3', '/swagger-ui'];
+// Set by the release workflow in the image build (`npm pkg set version=…`), `0.0.0-dev` otherwise.
+const { version } = JSON.parse(readFileSync(new URL('package.json', import.meta.url), 'utf8')) as {
+	version: string;
+};
 
 export default defineConfig({
 	plugins: [
@@ -18,6 +23,9 @@ export default defineConfig({
 			adapter: adapter({ fallback: 'index.html', precompress: true })
 		})
 	],
+	define: {
+		__BERGACAST_VERSION__: JSON.stringify(version)
+	},
 	server: {
 		proxy: Object.fromEntries(BACKEND_PROXIED_PATHS.map((path) => [path, BACKEND_URL]))
 	},

@@ -328,22 +328,40 @@ docker compose down -v           # arrêt et suppression des données
 
 ## Production (Scaleway)
 
-Les images sont publiées par [`.github/workflows/release.yml`](.github/workflows/release.yml) dans le Container
-Registry Scaleway, namespace `bergacast` (région `fr-par`), pour `linux/amd64` (seule architecture des Serverless
-Containers) :
+### Versions et publication
 
-| Déclencheur | Tags |
-|-------------|------|
-| Commit sur `main` dont la CI est verte | `edge`, `sha-<sha court>` |
-| Tag Git `vX.Y.Z` | `X.Y.Z`, `X.Y`, `latest`, `sha-<sha court>` |
+Chaque merge sur `main` dont la CI est verte et qui modifie `backend/` ou `frontend/` produit une version, sans
+intervention ([`.github/workflows/release.yml`](.github/workflows/release.yml)) :
 
-- `rg.fr-par.scw.cloud/bergacast/bergacast-backend`
-- `rg.fr-par.scw.cloud/bergacast/bergacast-frontend`
+1. **Plan** ([`.github/scripts/release-plan.sh`](.github/scripts/release-plan.sh)) : modules modifiés depuis le
+   dernier tag `vX.Y.Z` (aucun → rien n’est publié) et prochaine version, déduite des
+   [Conventional Commits](https://www.conventionalcommits.org/fr/) qui touchent ces modules : `type!:` ou pied
+   `BREAKING CHANGE:` → majeure, `feat` → mineure, tout autre type → patch. Première version : `1.0.0`.
+2. **Publication** de l’image de chaque module modifié, construite avec cette version (argument Docker `VERSION`),
+   dans le Container Registry Scaleway, namespace `bergacast` (région `fr-par`), pour `linux/amd64` (seule
+   architecture des Serverless Containers), avec les tags `X.Y.Z`, `X.Y`, `X`, `latest` et `sha-<sha court>` :
+   - `rg.fr-par.scw.cloud/bergacast/bergacast-backend`
+   - `rg.fr-par.scw.cloud/bergacast/bergacast-frontend`
+3. **Tag `vX.Y.Z`** sur le commit et **release GitHub** (images publiées, changements groupés par type) : les releases
+   GitHub tiennent lieu de journal des modifications.
 
-Configuration GitHub requise : secret `SCW_SECRET_KEY` (clé d’API IAM ayant le droit d’écrire dans le registry). Le
-workflow peut aussi être lancé à la main (*Actions → Release images → Run workflow*).
+Une seule version pour le dépôt, appliquée aux seuls modules modifiés : un module inchangé garde sa version
+précédente. Les versions sont visibles dans le pied de page de la SPA (interface et serveur), à la racine de l’API
+(`GET /api/v1` → `version`) et dans `info.version` de l’OpenAPI. Dans le dépôt, `build.gradle.kts` et `package.json`
+restent en `0.0.0-dev` : la version n’existe que dans les tags Git et les images.
 
-Déploiement (conteneurs serverless) :
+Le titre de chaque PR doit donc suivre les Conventional Commits (job `pr-title`) : avec le merge squash (seul mode
+autorisé, titre du commit = titre de la PR), il devient le message du commit sur `main`. Dependabot préfixe ses PR
+par `build(deps)`, `build(deps-dev)` ou `ci(deps)`.
+
+Configuration GitHub requise : secret `SCW_SECRET_KEY` (clé d’API IAM ayant le droit d’écrire dans le registry). En
+cas d’échec, relancer le run : la version est recalculée à l’identique tant que le tag n’est pas posé.
+
+### Déploiement (conteneurs serverless)
+
+Configurer chaque conteneur sur un tag `X.Y.Z` (déploiement explicite, retour arrière possible) ou sur `latest`
+(dernière version du module, prise en compte au prochain redéploiement).
+
 
 - **backend** : port `8080` (la plateforme fournit `PORT`), variables de la section [Configuration](#configuration) ;
   `BERGACAST_PUBLIC_BASE_URL` = URL publique du conteneur backend, `BERGACAST_CORS_ALLOWED_ORIGINS` = URL publique du
@@ -426,11 +444,13 @@ Authentification administrateur : `POST /api/v1/access-tokens` avec `{"username"
 ## Intégration continue
 
 Le workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) s’exécute sur chaque pull request (création, mise à
-jour, réouverture, sortie de brouillon) et sur chaque push sur `main`. Les versions de Java et Node sont lues dans
+jour, réouverture, sortie de brouillon, modification du titre ou de la description) et sur chaque push sur `main`. Les versions de Java et Node sont lues dans
 `.sdkmanrc` et `.nvmrc`, la version de npm dans `packageManager`.
 
 | Job | Vérification |
 |-----|--------------|
+| `pr-title` | Titre de la PR au format Conventional Commits (`.github/scripts/check-pr-title.sh`, PR uniquement) |
+| `release-scripts` | ShellCheck et tests bats des scripts de release (`.github/scripts/tests`) |
 | `backend-lint` | Spotless + Checkstyle |
 | `backend-test` | Tests JUnit (Testcontainers PostgreSQL) + couverture JaCoCo |
 | `backend-build` | `bootJar` |
@@ -447,7 +467,7 @@ ou des images, mémoire…) et le lien du run. Dependabot propose chaque semaine
 Docker).
 
 **Protection de branche recommandée sur `main`** (*Settings → Rules → Rulesets* ou *Branches*) : exiger une pull
-request, exiger que la branche soit à jour, et rendre obligatoires les 9 vérifications : *Backend lint*, *Backend
+request, exiger que la branche soit à jour, et rendre obligatoires les 11 vérifications : *PR title*, *Release scripts*, *Backend lint*, *Backend
 tests*, *Backend build*, *OpenAPI lint*, *Frontend lint*, *Frontend tests*, *Frontend build*, *Backend native image*, *Frontend image* (le job
 *PR report* ne doit pas être obligatoire : il rend compte, il ne juge pas).
 

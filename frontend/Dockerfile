@@ -22,7 +22,9 @@ RUN --mount=type=cache,target=/root/.npm \
     npm ci --no-audit --no-fund
 
 COPY . ./
-RUN npm run build
+# Release version (vX.Y.Z without the v), set by the release workflow and shown by the SPA.
+ARG VERSION=0.0.0-dev
+RUN npm pkg set version="${VERSION}" && npm run build
 
 # ---------------------------------------------------------------------------
 # Runtime: static-web-server on Alpine (a shell is needed to write the runtime configuration)

@@ -20,8 +20,10 @@ RUN --mount=type=cache,target=/root/.gradle \
 
 COPY config/ config/
 COPY src/ src/
+# Release version (vX.Y.Z without the v), set by the release workflow.
+ARG VERSION=0.0.0-dev
 RUN --mount=type=cache,target=/root/.gradle \
-    ./gradlew nativeCompile
+    ./gradlew nativeCompile -PreleaseVersion="${VERSION}"
 
 # ---------------------------------------------------------------------------
 # Runtime: glibc, CA certificates and tzdata only, no shell

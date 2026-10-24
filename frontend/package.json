@@ -1,7 +1,7 @@
 {
 	"name": "bergacast-admin",
 	"private": true,
-	"version": "0.0.1",
+	"version": "0.0.0-dev",
 	"description": "Interface d’administration (SPA) de Bergacast",
 	"type": "module",
 	"engines": {

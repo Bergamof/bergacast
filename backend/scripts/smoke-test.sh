@@ -51,8 +51,8 @@ until curl -fsS "$BASE_URL/actuator/health" 2>/dev/null | jq -e '.status == "UP"
     sleep 1
 done
 
-step "API root (HAL)"
-request GET /api/v1 200 | jq -e '._links.podcasts.href' >/dev/null
+step "API root (HAL, server version from the build info)"
+request GET /api/v1 200 | jq -e '._links.podcasts.href and (.version | test("^[0-9]+\\.[0-9]+\\.[0-9]+"))' >/dev/null
 
 step "Admin login"
 ADMIN_TOKEN=$(request POST /api/v1/access-tokens 200 -H 'Content-Type: application/json' \

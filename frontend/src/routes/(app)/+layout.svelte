@@ -1,10 +1,14 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { apiDocumentationHref, logOut } from '#lib/app.ts';
+	import { api, apiDocumentationHref, logOut } from '#lib/app.ts';
+	import { spaVersion } from '#lib/version.ts';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
+
+	// Not awaited by the layout load: the footer must not delay or break the page.
+	const serverVersion = api.getServerVersion().catch(() => null);
 
 	const navigationLinks = [
 		{ href: resolve('/(app)/podcasts'), label: 'Podcasts' },
@@ -55,6 +59,15 @@
 	{@render children()}
 </main>
 
+<footer class="muted">
+	Interface {spaVersion} · Serveur
+	{#await serverVersion}
+		…
+	{:then version}
+		{version ?? 'indisponible'}
+	{/await}
+</footer>
+
 <style>
 	header {
 		background: var(--color-surface);
@@ -62,7 +75,8 @@
 	}
 
 	.header-content,
-	main {
+	main,
+	footer {
 		max-width: var(--content-width);
 		margin: 0 auto;
 		padding: var(--space-m);
@@ -101,6 +115,10 @@
 		display: flex;
 		gap: var(--space-s);
 		align-items: center;
+	}
+
+	footer {
+		font-size: 0.875rem;
 	}
 
 	.skip-link {

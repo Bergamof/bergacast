@@ -8,7 +8,8 @@ plugins {
 }
 
 group = "fr.bergadev"
-version = "0.1.0-SNAPSHOT"
+// Release version, given by the release workflow (computed from Conventional Commits, see .github/scripts).
+version = providers.gradleProperty("releaseVersion").getOrElse("0.0.0-dev")
 description = "Self-hosted podcast publishing"
 
 java {
@@ -49,6 +50,11 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-postgresql")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+springBoot {
+    // Exposes the version at runtime (BuildProperties). No build time: the output stays cacheable.
+    buildInfo { excludes = setOf("time") }
 }
 
 tasks.withType<JavaCompile>().configureEach {

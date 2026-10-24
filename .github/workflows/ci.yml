@@ -2,7 +2,8 @@ name: CI
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    # `edited`: the PR title becomes the squash commit message, from which the release version is computed.
+    types: [opened, synchronize, reopened, ready_for_review, edited]
   push:
     branches: [main]
 
@@ -24,6 +25,78 @@ env:
 # Every verification job publishes a one-line `summary` output (plus a few detailed ones), computed in a step
 # that runs `if: always()` so the outputs exist even when the verification fails. The `report` job gathers them.
 jobs:
+  pr-title:
+    name: PR title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Conventional Commits title
+        id: check
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: .github/scripts/check-pr-title.sh "$PR_TITLE"
+      - name: Summarize
+        id: summary
+        if: always()
+        env:
+          OUTCOME: ${{ steps.check.outcome }}
+        run: |
+          case "$OUTCOME" in
+            success) summary="Conventional Commits title" ;;
+            failure) summary="not a Conventional Commits title (<type>[(scope)][!]: <description>)" ;;
+            *) summary="not checked" ;;
+          esac
+          echo "$summary"
+          echo "summary=$summary" >> "$GITHUB_OUTPUT"
+
+  release-scripts:
+    name: Release scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install bats
+        run: sudo apt-get update --quiet && sudo apt-get install --yes --no-install-recommends bats
+      - name: ShellCheck
+        id: shellcheck
+        run: shellcheck --external-sources .github/scripts/*.sh .github/scripts/*.bash .github/scripts/tests/*.bash
+      - name: Bats tests
+        id: bats
+        if: ${{ !cancelled() }}
+        run: bats --tap .github/scripts/tests | tee "$RUNNER_TEMP/bats.tap"
+      - name: Summarize
+        id: summary
+        if: always()
+        env:
+          SHELLCHECK_OUTCOME: ${{ steps.shellcheck.outcome }}
+          TAP_FILE: ${{ runner.temp }}/bats.tap
+        run: |
+          case "$SHELLCHECK_OUTCOME" in
+            success) shellcheck_summary="ShellCheck: ok" ;;
+            failure) shellcheck_summary="ShellCheck: issues" ;;
+            *) shellcheck_summary="ShellCheck: not run" ;;
+          esac
+          if [ -f "$TAP_FILE" ]; then
+            passed=$(grep -c '^ok ' "$TAP_FILE" || true)
+            failed=$(grep -c '^not ok ' "$TAP_FILE" || true)
+            bats_summary="bats: ${passed} passed, ${failed} failed"
+          else
+            bats_summary="bats: not run"
+          fi
+          summary="$shellcheck_summary · $bats_summary"
+          echo "$summary"
+          echo "summary=$summary" >> "$GITHUB_OUTPUT"
+
   backend-lint:
     name: Backend lint
     runs-on: ubuntu-latest
@@ -605,6 +678,8 @@ jobs:
   report:
     name: PR report
     needs:
+      - pr-title
+      - release-scripts
       - backend-lint
       - backend-test
       - backend-build
@@ -630,6 +705,8 @@ jobs:
           script: |
             const marker = '<!-- bergacast-ci-report -->';
             const checks = [
+              ['pr-title', 'PR title (Conventional Commits)'],
+              ['release-scripts', 'Release scripts (ShellCheck, bats)'],
               ['backend-lint', 'Backend lint (Spotless, Checkstyle)'],
               ['backend-test', 'Backend tests'],
               ['backend-build', 'Backend build (bootJar)'],

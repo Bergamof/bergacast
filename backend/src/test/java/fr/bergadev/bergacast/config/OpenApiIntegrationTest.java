@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import fr.bergadev.bergacast.support.IntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.info.BuildProperties;
 import org.springframework.test.web.servlet.MockMvc;
 
 @IntegrationTest
@@ -16,11 +17,15 @@ class OpenApiIntegrationTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private BuildProperties buildProperties;
+
     @Test
     void publishesTheOpenApiDocumentWithoutAuthentication() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.openapi").isString())
+                .andExpect(jsonPath("$.info.version").value(buildProperties.getVersion()))
                 .andExpect(jsonPath("$.components.securitySchemes", hasKey("adminJwt")))
                 .andExpect(jsonPath("$.components.securitySchemes", hasKey("podcastToken")))
                 .andExpect(jsonPath("$.components.schemas", hasKey("Problem")))
