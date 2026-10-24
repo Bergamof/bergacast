@@ -5,3 +5,5 @@ bergacast:
   admin:
     username: admin
     password: admin-password-123
+  cors:
+    allowed-origins: https://admin.example.test

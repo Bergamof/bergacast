@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.info.BuildProperties;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -38,6 +39,9 @@ class SecurityIntegrationTest {
 
     @Autowired
     private JwtEncoder jwtEncoder;
+
+    @Autowired
+    private BuildProperties buildProperties;
 
     @Test
     void issuesAnAccessTokenForValidCredentials() throws Exception {
@@ -156,6 +160,7 @@ class SecurityIntegrationTest {
         mockMvc.perform(get("/api/v1").accept(MediaType.parseMediaType("application/hal+json")))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith("application/hal+json"))
+                .andExpect(jsonPath("$.version").value(buildProperties.getVersion()))
                 .andExpect(jsonPath("$._links.self.href").value(endsWith("/api/v1")))
                 .andExpect(jsonPath("$._links.podcasts.href").value(endsWith("/api/v1/podcasts")))
                 .andExpect(jsonPath("$._links.adminUsers.href").value(endsWith("/api/v1/admin-users")))

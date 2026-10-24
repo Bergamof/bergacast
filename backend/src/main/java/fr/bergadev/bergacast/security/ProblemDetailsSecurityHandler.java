@@ -50,8 +50,7 @@ class ProblemDetailsSecurityHandler implements AuthenticationEntryPoint, AccessD
     }
 
     /** Same members as the Problem Details rendered by Spring MVC for the other errors. */
-    private void writeProblem(
-            HttpServletRequest request, HttpServletResponse response, HttpStatus status, String detail)
+    void writeProblem(HttpServletRequest request, HttpServletResponse response, HttpStatus status, String detail)
             throws IOException {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);
         problem.setInstance(URI.create(request.getRequestURI()));

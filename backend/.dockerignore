@@ -1,0 +1,10 @@
+# Only what the native build needs.
+.gradle
+build
+bin
+out
+.idea
+*.iml
+.vscode
+Dockerfile
+.dockerignore

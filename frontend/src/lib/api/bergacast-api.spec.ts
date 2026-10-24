@@ -5,6 +5,7 @@ import { ApiClient } from './client';
 import type { Episode, Podcast } from './resources';
 
 const ROOT = {
+	version: '1.2.3',
 	_links: {
 		self: { href: 'http://localhost:5173/api/v1' },
 		podcasts: { href: 'http://localhost:5173/api/v1/podcasts{?page,size,sort}', templated: true },
@@ -26,8 +27,7 @@ function createApi(...responses: Response[]) {
 	const client = new ApiClient({
 		fetch,
 		getAccessToken: () => 'jwt',
-		onUnauthorized: () => undefined,
-		origin: 'http://localhost:5173'
+		onUnauthorized: () => undefined
 	});
 	return { api: new BergacastApi(client), requests };
 }
@@ -68,6 +68,34 @@ describe('BergacastApi', () => {
 
 		await expect(api.listAdminUsers()).rejects.toMatchObject({ status: 503 });
 		await expect(api.listAdminUsers()).resolves.toEqual([]);
+	});
+
+	it('gets the server version from the API root', async () => {
+		const { api, requests } = createApi(jsonResponse(200, ROOT));
+
+		await expect(api.getServerVersion()).resolves.toBe('1.2.3');
+		expect(requests.map((request) => request.url)).toEqual(['/api/v1']);
+	});
+
+	it('shares the API root between the server version and the links', async () => {
+		const { api, requests } = createApi(jsonResponse(200, ROOT), jsonResponse(200, {}));
+
+		await api.getServerVersion();
+		await api.listAdminUsers();
+		await api.getServerVersion();
+
+		expect(requests.map((request) => request.url)).toEqual(['/api/v1', '/api/v1/admin-users']);
+	});
+
+	it('retries the root discovery of the server version after a failure', async () => {
+		const { api, requests } = createApi(
+			jsonResponse(503, { title: 'Unavailable' }),
+			jsonResponse(200, ROOT)
+		);
+
+		await expect(api.getServerVersion()).rejects.toMatchObject({ status: 503 });
+		await expect(api.getServerVersion()).resolves.toBe('1.2.3');
+		expect(requests.map((request) => request.url)).toEqual(['/api/v1', '/api/v1']);
 	});
 
 	it('gets a podcast below the podcasts collection with its ETag', async () => {

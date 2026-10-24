@@ -1,5 +1,11 @@
 import type { HalResource } from './hal';
 
+/** Entry point of the API: server version and links to the top-level resources. */
+export interface ApiRoot extends HalResource {
+	/** Semantic version of the backend (`0.0.0-dev` outside of a release build). */
+	version: string;
+}
+
 export type EvictionCriterion = 'PUBLICATION_DATE' | 'ADDED_DATE';
 export type FeedSortCriterion = 'PUBLICATION_DATE' | 'ADDED_DATE';
 export type SortDirection = 'DESC' | 'ASC';

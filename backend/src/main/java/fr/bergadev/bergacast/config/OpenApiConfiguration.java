@@ -19,6 +19,7 @@ import io.swagger.v3.oas.models.servers.Server;
 import io.swagger.v3.oas.models.tags.Tag;
 import java.util.List;
 import org.springdoc.core.customizers.OpenApiCustomizer;
+import org.springframework.boot.info.BuildProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -33,11 +34,12 @@ class OpenApiConfiguration {
     private static final String DEFAULT_RESPONSE = "default";
 
     @Bean
-    OpenAPI bergacastOpenApi(BergacastProperties properties) {
+    OpenAPI bergacastOpenApi(BergacastProperties properties, BuildProperties buildProperties) {
         return new OpenAPI()
                 .info(new Info()
                         .title("Bergacast API")
-                        .version("v1")
+                        // Server version; the API version is the /api/v1 prefix.
+                        .version(buildProperties.getVersion())
                         .description("Self-hosted podcast publishing: administration API, episode publication by "
                                 + "automated tools, public RSS feeds and audio files. Errors are RFC 9457 Problem "
                                 + "Details.")

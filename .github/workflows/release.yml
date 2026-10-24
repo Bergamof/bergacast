@@ -1,0 +1,153 @@
+name: Release
+
+# Releases every commit of main verified by CI that changes a module (backend/, frontend/):
+# 1. plan: next version from the Conventional Commits since the last vX.Y.Z tag, modules changed since that tag
+#    (.github/scripts/release-plan.sh); nothing to release → stop;
+# 2. publish: image of each changed module, built with that version, pushed to the Scaleway Container Registry with
+#    the tags X.Y.Z, X.Y, X, latest and sha-<short sha>;
+# 3. tag: tag vX.Y.Z on the commit and GitHub release (.github/scripts/release-notes.sh), only once every image is
+#    published, so that a failed release is retried by a re-run or by the next one with the same version.
+# The tag is pushed with GITHUB_TOKEN, which triggers no workflow. Required configuration: secret SCW_SECRET_KEY (an
+# IAM API key allowed to push to the registry namespace).
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+# One release at a time: two merges in a row must not compute the same version.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  IMAGE_PREFIX: rg.fr-par.scw.cloud/bergacast/bergacast
+
+jobs:
+  plan:
+    name: Plan the release
+    # Only CI runs of pushes to main that succeeded (not pull requests targeting main).
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+      version: ${{ steps.plan.outputs.version }}
+      previous-tag: ${{ steps.plan.outputs.previous-tag }}
+      modules: ${{ steps.plan.outputs.modules }}
+      commit: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          # Full history and tags: the plan compares the commit with the last release tag.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Plan
+        id: plan
+        env:
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          .github/scripts/release-plan.sh "$COMMIT_SHA" | tee -a "$GITHUB_OUTPUT" >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    name: Publish ${{ matrix.module }} image
+    needs: plan
+    if: needs.plan.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(needs.plan.outputs.modules) }}
+    steps:
+      - name: Short commit
+        id: commit
+        env:
+          COMMIT_SHA: ${{ needs.plan.outputs.commit }}
+        run: echo "short=${COMMIT_SHA::7}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.commit }}
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: rg.fr-par.scw.cloud
+          username: nologin
+          password: ${{ secrets.SCW_SECRET_KEY }}
+      - name: Image tags and labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_PREFIX }}-${{ matrix.module }}
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.plan.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.plan.outputs.version }}
+            type=semver,pattern={{major}},value=${{ needs.plan.outputs.version }}
+            type=raw,value=latest
+            type=raw,value=sha-${{ steps.commit.outputs.short }}
+          # Other OCI labels (source, licenses, created…) come from the repository.
+          labels: |
+            org.opencontainers.image.revision=${{ needs.plan.outputs.commit }}
+            org.opencontainers.image.version=${{ needs.plan.outputs.version }}
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.module }}
+          # Scaleway Serverless Containers only run linux/amd64 images.
+          platforms: linux/amd64
+          build-args: VERSION=${{ needs.plan.outputs.version }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Same cache scope as the CI image jobs: the layers before the version (dependencies) are reused.
+          cache-from: type=gha,scope=${{ matrix.module }}-image
+          cache-to: type=gha,scope=${{ matrix.module }}-image,mode=max
+      - name: Summarize
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          {
+            echo "### bergacast-${{ matrix.module }}"
+            echo '```'
+            echo "$TAGS"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  tag:
+    name: Tag v${{ needs.plan.outputs.version }}
+    needs: [plan, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Release notes
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+          PREVIOUS_TAG: ${{ needs.plan.outputs.previous-tag }}
+          COMMIT_SHA: ${{ needs.plan.outputs.commit }}
+          MODULES: ${{ needs.plan.outputs.modules }}
+        run: |
+          mapfile -t modules < <(jq -r '.[]' <<<"$MODULES")
+          .github/scripts/release-notes.sh "$VERSION" "$PREVIOUS_TAG" "$COMMIT_SHA" "${modules[@]}" \
+            | tee "$RUNNER_TEMP/release-notes.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Tag and GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: v${{ needs.plan.outputs.version }}
+          COMMIT_SHA: ${{ needs.plan.outputs.commit }}
+        run: >-
+          gh release create "$TAG" --target "$COMMIT_SHA" --title "$TAG"
+          --notes-file "$RUNNER_TEMP/release-notes.md" --latest

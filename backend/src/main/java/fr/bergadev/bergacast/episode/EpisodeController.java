@@ -1,5 +1,6 @@
 package fr.bergadev.bergacast.episode;
 
+import fr.bergadev.bergacast.web.ApiHeaders;
 import fr.bergadev.bergacast.web.ApiLinks;
 import fr.bergadev.bergacast.web.ApiMediaTypes;
 import fr.bergadev.bergacast.web.ApiPaths;
@@ -47,7 +48,6 @@ import tools.jackson.databind.JsonNode;
 @Tag(name = "Episodes", description = "Episode publication and administration")
 class EpisodeController {
 
-    static final String IDEMPOTENCY_KEY = "Idempotency-Key";
     private static final int MAX_IDEMPOTENCY_KEY_LENGTH = 255;
     private static final String METADATA_PART = "metadata";
     private static final String AUDIO_PART = "audio";
@@ -110,7 +110,7 @@ class EpisodeController {
             @Parameter(hidden = true) @RequestPart(METADATA_PART) Part metadata,
             @Parameter(hidden = true) @RequestPart(AUDIO_PART) MultipartFile audio,
             @Parameter(description = "Makes retries safe: a key already used for this podcast replays the result")
-                    @RequestHeader(name = IDEMPOTENCY_KEY, required = false)
+                    @RequestHeader(name = ApiHeaders.IDEMPOTENCY_KEY, required = false)
                     @Size(max = MAX_IDEMPOTENCY_KEY_LENGTH)
                     @Nullable
                     String idempotencyKey) {

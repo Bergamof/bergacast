@@ -3,6 +3,7 @@ package fr.bergadev.bergacast.config;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
@@ -12,12 +13,14 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param publicBaseUrl absolute base URL used to build public links (feed, audio, publish endpoint)
  * @param jwt settings of the admin access tokens
  * @param admin optional initial administrator created when no administrator exists
+ * @param cors cross-origin access to the API, needed by the admin SPA served from another origin
  */
 @ConfigurationProperties("bergacast")
 public record BergacastProperties(
         @DefaultValue("http://localhost:8080") URI publicBaseUrl,
         Jwt jwt,
-        @DefaultValue InitialAdmin admin) {
+        @DefaultValue InitialAdmin admin,
+        @DefaultValue Cors cors) {
 
     public BergacastProperties {
         if (jwt == null) {
@@ -72,6 +75,14 @@ public record BergacastProperties(
         @Override
         public String toString() {
             return "InitialAdmin[username=" + username + ", password=<redacted>]";
+        }
+    }
+
+    /** @param allowedOrigins origins (scheme, host and port) allowed to call the API from a browser, none by default */
+    public record Cors(@DefaultValue List<String> allowedOrigins) {
+
+        public Cors {
+            allowedOrigins = List.copyOf(allowedOrigins);
         }
     }
 }

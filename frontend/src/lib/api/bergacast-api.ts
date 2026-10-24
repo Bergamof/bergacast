@@ -1,8 +1,9 @@
 import { withQuery, type ApiClient } from './client';
-import { parseCollection, requireLinkHref, type HalResource, type PagedCollection } from './hal';
+import { parseCollection, requireLinkHref, type PagedCollection } from './hal';
 import type {
 	AccessTokenResponse,
 	AdminUser,
+	ApiRoot,
 	ApiToken,
 	CreatedApiToken,
 	Episode,
@@ -15,7 +16,7 @@ import type {
 
 export const API_ENTRY_POINT = '/api/v1';
 export const DEFAULT_PAGE_SIZE = 20;
-/** Public Swagger UI, served by the backend at the root of the origin (outside the SPA base path). */
+/** Public Swagger UI, served by the backend at the root of its origin. */
 export const OPENAPI_DOCUMENTATION_PATH = '/swagger-ui.html';
 
 export interface PageRequest {
@@ -44,22 +45,31 @@ function pageQuery({ page, size = DEFAULT_PAGE_SIZE }: PageRequest): Record<stri
  */
 export class BergacastApi {
 	readonly #client: ApiClient;
-	#rootLinks: Promise<HalResource> | undefined;
+	#root: Promise<ApiRoot> | undefined;
 
 	constructor(client: ApiClient) {
 		this.#client = client;
 	}
 
-	async #rootLink(relation: string): Promise<string> {
-		this.#rootLinks ??= this.#client.get<HalResource>(API_ENTRY_POINT).then(
+	#discoverRoot(): Promise<ApiRoot> {
+		this.#root ??= this.#client.get<ApiRoot>(API_ENTRY_POINT).then(
 			(response) => response.body,
 			(error: unknown) => {
 				// Do not cache a failure: the next call should retry the discovery.
-				this.#rootLinks = undefined;
+				this.#root = undefined;
 				throw error;
 			}
 		);
-		return requireLinkHref(await this.#rootLinks, relation);
+		return this.#root;
+	}
+
+	async #rootLink(relation: string): Promise<string> {
+		return requireLinkHref(await this.#discoverRoot(), relation);
+	}
+
+	/** Semantic version of the running backend, advertised by the API root. */
+	async getServerVersion(): Promise<string> {
+		return (await this.#discoverRoot()).version;
 	}
 
 	async logIn(username: string, password: string): Promise<AccessTokenResponse> {

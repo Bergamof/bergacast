@@ -2,7 +2,8 @@ name: CI
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    # `edited`: the PR title becomes the squash commit message, from which the release version is computed.
+    types: [opened, synchronize, reopened, ready_for_review, edited]
   push:
     branches: [main]
 
@@ -24,6 +25,78 @@ env:
 # Every verification job publishes a one-line `summary` output (plus a few detailed ones), computed in a step
 # that runs `if: always()` so the outputs exist even when the verification fails. The `report` job gathers them.
 jobs:
+  pr-title:
+    name: PR title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Conventional Commits title
+        id: check
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: .github/scripts/check-pr-title.sh "$PR_TITLE"
+      - name: Summarize
+        id: summary
+        if: always()
+        env:
+          OUTCOME: ${{ steps.check.outcome }}
+        run: |
+          case "$OUTCOME" in
+            success) summary="Conventional Commits title" ;;
+            failure) summary="not a Conventional Commits title (<type>[(scope)][!]: <description>)" ;;
+            *) summary="not checked" ;;
+          esac
+          echo "$summary"
+          echo "summary=$summary" >> "$GITHUB_OUTPUT"
+
+  release-scripts:
+    name: Release scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install bats
+        run: sudo apt-get update --quiet && sudo apt-get install --yes --no-install-recommends bats
+      - name: ShellCheck
+        id: shellcheck
+        run: shellcheck --external-sources .github/scripts/*.sh .github/scripts/*.bash .github/scripts/tests/*.bash
+      - name: Bats tests
+        id: bats
+        if: ${{ !cancelled() }}
+        run: bats --tap .github/scripts/tests | tee "$RUNNER_TEMP/bats.tap"
+      - name: Summarize
+        id: summary
+        if: always()
+        env:
+          SHELLCHECK_OUTCOME: ${{ steps.shellcheck.outcome }}
+          TAP_FILE: ${{ runner.temp }}/bats.tap
+        run: |
+          case "$SHELLCHECK_OUTCOME" in
+            success) shellcheck_summary="ShellCheck: ok" ;;
+            failure) shellcheck_summary="ShellCheck: issues" ;;
+            *) shellcheck_summary="ShellCheck: not run" ;;
+          esac
+          if [ -f "$TAP_FILE" ]; then
+            passed=$(grep -c '^ok ' "$TAP_FILE" || true)
+            failed=$(grep -c '^not ok ' "$TAP_FILE" || true)
+            bats_summary="bats: ${passed} passed, ${failed} failed"
+          else
+            bats_summary="bats: not run"
+          fi
+          summary="$shellcheck_summary · $bats_summary"
+          echo "$summary"
+          echo "summary=$summary" >> "$GITHUB_OUTPUT"
+
   backend-lint:
     name: Backend lint
     runs-on: ubuntu-latest
@@ -446,15 +519,103 @@ jobs:
           echo "$summary"
           echo "summary=$summary" >> "$GITHUB_OUTPUT"
 
-  docker-build:
-    name: Docker build
+  backend-image:
+    name: Backend native image
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
       image-size-bytes: ${{ steps.summary.outputs.image-size-bytes }}
     env:
-      IMAGE: bergacast:ci
+      IMAGE: bergacast-backend:ci
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: smoke-test-password
+      CORS_ORIGIN: https://admin.example.test
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: bergacast
+          POSTGRES_USER: bergacast
+          POSTGRES_PASSWORD: bergacast
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bergacast -d bergacast"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@v4
+      - name: Build the native image (not pushed)
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: backend
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: ${{ env.IMAGE }}
+          cache-from: type=gha,scope=backend-image
+          cache-to: type=gha,scope=backend-image,mode=max
+      - name: Start the image against PostgreSQL
+        id: start
+        run: |
+          docker run -d --name backend --network host \
+            -e PORT=8080 \
+            -e SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/bergacast \
+            -e BERGACAST_JWT_SECRET="$(openssl rand -base64 48)" \
+            -e BERGACAST_ADMIN_USERNAME="$ADMIN_USERNAME" \
+            -e BERGACAST_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+            -e BERGACAST_CORS_ALLOWED_ORIGINS="$CORS_ORIGIN" \
+            -e BERGACAST_PUBLIC_BASE_URL=http://localhost:8080 \
+            "$IMAGE"
+      - name: Smoke test
+        id: smoke
+        env:
+          BASE_URL: http://localhost:8080
+        run: backend/scripts/smoke-test.sh
+      - name: Container logs
+        if: always() && steps.start.outcome == 'success'
+        run: docker logs backend
+      - name: Summarize
+        id: summary
+        if: always()
+        env:
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
+        run: |
+          bytes=""
+          if [ "$BUILD_OUTCOME" = "success" ] && bytes=$(docker image inspect --format '{{.Size}}' "$IMAGE" 2>/dev/null); then
+            summary="image size $(numfmt --to=iec-i --suffix=B "$bytes")"
+            case "$SMOKE_OUTCOME" in
+              success)
+                memory=$(docker stats --no-stream --format '{{.MemUsage}}' backend 2>/dev/null | cut -d/ -f1 | tr -d ' ')
+                summary="$summary · smoke test passed · memory after test ${memory:-unknown}" ;;
+              failure) summary="$summary · smoke test failed" ;;
+              *) summary="$summary · smoke test not run" ;;
+            esac
+          else
+            bytes=""
+            summary="image not built"
+          fi
+          echo "$summary"
+          {
+            echo "summary=$summary"
+            echo "image-size-bytes=$bytes"
+          } >> "$GITHUB_OUTPUT"
+
+  frontend-image:
+    name: Frontend image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+      image-size-bytes: ${{ steps.summary.outputs.image-size-bytes }}
+    env:
+      IMAGE: bergacast-frontend:ci
+      API_URL: https://api.example.test
     steps:
       - uses: actions/checkout@v7
         with:
@@ -464,20 +625,46 @@ jobs:
         id: build
         uses: docker/build-push-action@v7
         with:
-          context: .
+          context: frontend
+          platforms: linux/amd64
           push: false
           load: true
           tags: ${{ env.IMAGE }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=frontend-image
+          cache-to: type=gha,scope=frontend-image,mode=max
+      - name: Check the served SPA
+        id: smoke
+        run: |
+          docker run -d --name frontend -p 8080:9000 -e PORT=9000 -e BERGACAST_API_URL="$API_URL" "$IMAGE"
+          for _ in $(seq 1 30); do
+            curl -fsS -o /dev/null http://localhost:8080/health && break
+            sleep 1
+          done
+          curl -fsS http://localhost:8080/config.js | grep -F "\"$API_URL\""
+          curl -fsS http://localhost:8080/podcasts/demo | grep -F '<script src="/config.js"></script>'
+          curl -fsS -D - -o /dev/null http://localhost:8080/ | grep -i '^cache-control: no-cache'
+          # A configuration that is not a plain origin must stop the container.
+          if docker run --rm -e BERGACAST_API_URL='javascript:alert(1)' "$IMAGE"; then
+            echo "Invalid BERGACAST_API_URL accepted" >&2
+            exit 1
+          fi
       - name: Summarize
         id: summary
         if: always()
         env:
           BUILD_OUTCOME: ${{ steps.build.outcome }}
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
         run: |
+          bytes=""
           if [ "$BUILD_OUTCOME" = "success" ] && bytes=$(docker image inspect --format '{{.Size}}' "$IMAGE" 2>/dev/null); then
             summary="image size $(numfmt --to=iec-i --suffix=B "$bytes")"
+            case "$SMOKE_OUTCOME" in
+              success)
+                memory=$(docker stats --no-stream --format '{{.MemUsage}}' frontend 2>/dev/null | cut -d/ -f1 | tr -d ' ')
+                summary="$summary · serving checks passed · memory ${memory:-unknown}" ;;
+              failure) summary="$summary · serving checks failed" ;;
+              *) summary="$summary · serving checks not run" ;;
+            esac
           else
             bytes=""
             summary="image not built"
@@ -491,6 +678,8 @@ jobs:
   report:
     name: PR report
     needs:
+      - pr-title
+      - release-scripts
       - backend-lint
       - backend-test
       - backend-build
@@ -498,7 +687,8 @@ jobs:
       - frontend-lint
       - frontend-test
       - frontend-build
-      - docker-build
+      - backend-image
+      - frontend-image
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -515,6 +705,8 @@ jobs:
           script: |
             const marker = '<!-- bergacast-ci-report -->';
             const checks = [
+              ['pr-title', 'PR title (Conventional Commits)'],
+              ['release-scripts', 'Release scripts (ShellCheck, bats)'],
               ['backend-lint', 'Backend lint (Spotless, Checkstyle)'],
               ['backend-test', 'Backend tests'],
               ['backend-build', 'Backend build (bootJar)'],
@@ -522,7 +714,8 @@ jobs:
               ['frontend-lint', 'Frontend lint (Prettier, ESLint, svelte-check)'],
               ['frontend-test', 'Frontend tests'],
               ['frontend-build', 'Frontend build'],
-              ['docker-build', 'Docker build'],
+              ['backend-image', 'Backend native image (GraalVM, smoke test)'],
+              ['frontend-image', 'Frontend image (static-web-server)'],
             ];
             const icons = { success: '✅', failure: '❌', cancelled: '⚠️', skipped: '⚠️' };
             try {

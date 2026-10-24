@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { OPENAPI_DOCUMENTATION_PATH } from '../api/bergacast-api';
+	import { apiDocumentationHref } from '../app';
 	import type { Podcast } from '../api/resources';
 	import { buildPublishCurlExample } from '../publishing/curl-example';
 	import CopyableText from './CopyableText.svelte';
@@ -43,7 +43,7 @@
 	<CopyableText value={curlExample} label="Exemple de commande curl" multiline />
 	<p>
 		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- API documentation served by the backend, outside the SPA -->
-		<a href={OPENAPI_DOCUMENTATION_PATH} target="_blank" rel="noopener">
+		<a href={apiDocumentationHref} target="_blank" rel="noopener">
 			Documentation OpenAPI de l’API
 		</a>
 	</p>
