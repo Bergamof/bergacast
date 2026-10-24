@@ -76,6 +76,7 @@ Docker (racine) : `cp .env.example .env` (renseigner `BERGACAST_JWT_SECRET`, mot
 - 2026-10-22 — Flux XML : caractères interdits en XML 1.0 retirés (`feed/XmlCharacters`) pour qu’une métadonnée ne casse jamais le flux. Limite de requête multipart = limite fichier + 1 Mio (`config/MultipartConfiguration`). `Idempotency-Key` concurrente : violation d’unicité rattrapée → rejeu (`episode/EpisodePublication`). Jeton Bearer lu uniquement sous `/api/` (un en-tête invalide n’affecte pas flux/audio/doc).
 - 2026-10-22 — Problem Details partout, y compris erreurs de sécurité (`ProblemDetailsSecurityHandler`) et `/error` (`ProblemDetailsErrorController`) ; jamais de stack trace.
 - 2026-10-22 — CI : `setup-java` lit `.sdkmanrc` `25.0.4.1-tem` comme `25.0.4` (suffisant, même ligne Temurin).
+- 2026-10-24 — Frontend reste en TypeScript 6 : TS 7 refusé en peer par `@sveltejs/kit`, `svelte-check` et `typescript-eslint` ; Dependabot ignore les majeures de `typescript` (`.github/dependabot.yml`), à retirer quand ils l'acceptent.
 - 2026-10-22 — Limites acceptées : audio des épisodes futurs accessible si l’URL est connue ; une seule plage `Range`.
 ## Pièges et conventions spécifiques
 - Maven Central renvoie parfois HTTP 429 : réessayer (retries configurés dans `backend/gradle.properties`).
