@@ -3,7 +3,7 @@ Service auto-hébergé de publication de podcasts : des outils automatisés publ
 ## Stack
 - Backend (`backend/`) : Java 25, Spring Boot 4.1.1 (WebMVC, Security + OAuth2 resource server/Nimbus, Data JPA, Validation, HATEOAS, Actuator, Flyway), springdoc-openapi 3.1.1, PostgreSQL 18, Gradle 9.8.2 (wrapper, Kotlin DSL), GraalVM Native Build Tools 1.1.16 (`org.graalvm.buildtools.native`, image `bergacast`, `-march=compatibility`, `-H:+StaticExecutableWithDynamicLibC`).
 - Qualité backend : JUnit 5, Testcontainers 2.0.5 (via BOM Boot, image `postgres:18`), JaCoCo 0.8.15, Spotless 8.10.4 (palantir-java-format 2.102.0 pour Java, ktlint pour `*.gradle.kts`), Checkstyle 14.3.0 (`config/checkstyle/checkstyle.xml`, `maxWarnings = 0`), javac `-Xlint:all -Werror`.
-- Frontend (`frontend/`) : SvelteKit 3.1, Svelte 5.57 (runes), TypeScript 6, Vite 8, `adapter-static` (SPA à la racine, fallback `index.html`, `precompress`), Vitest 4 (+ couverture v8), ESLint 10, Prettier 3, svelte-check.
+- Frontend (`frontend/`) : SvelteKit 3.1, Svelte 5.57 (runes), TypeScript 6, Vite 8, `adapter-static` (SPA à la racine, fallback `index.html`, `precompress`), Vitest 5 (+ couverture v8), ESLint 10, Prettier 3, svelte-check.
 - Livraison : `backend/Dockerfile` (`ghcr.io/graalvm/native-image-community:25` → `gcr.io/distroless/base-debian13:nonroot`), `frontend/Dockerfile` (`node:24-alpine` → `joseluisq/static-web-server:2.44.1-alpine`), Docker Compose (`db` + `backend` + `frontend`), GitHub Actions (CI + publication), registry Scaleway `rg.fr-par.scw.cloud/bergacast/bergacast-{backend,frontend}`, Dependabot hebdomadaire.
 ## Environnement
 - Versions épinglées dans : `.sdkmanrc`, `.nvmrc` (+ `packageManager`/`engines` de frontend/package.json) (source de vérité, lue aussi par la CI)
@@ -84,6 +84,7 @@ Docker (racine) : `cp .env.example .env` (renseigner `BERGACAST_JWT_SECRET`, mot
 - 2026-10-22 — Problem Details partout, y compris erreurs de sécurité (`ProblemDetailsSecurityHandler`) et `/error` (`ProblemDetailsErrorController`) ; jamais de stack trace.
 - 2026-10-25 — Releases automatiques à chaque merge modifiant un module : une version SemVer pour le dépôt (depuis `1.0.0`, appli publiée directement), calculée depuis les Conventional Commits (titres de PR, merge squash seul autorisé, titre du commit = titre de PR), appliquée aux seuls modules modifiés. Version injectée au build (`VERSION` → `-PreleaseVersion`, `npm pkg set version`) et non commitée (`0.0.0-dev` dans le dépôt) : pas de commit de bot ni de jeton contournant la protection de `main`, tag = commit vérifié par la CI. Contrepartie : le build natif de release ne réutilise pas le cache de compilation de la CI. Releases GitHub = changelog (CHANGELOG.md figé avant `v1.0.0`). `edge`, tags manuels et `workflow_dispatch` supprimés.
 - 2026-10-22 — CI : `setup-java` lit `.sdkmanrc` `25.0.4.1-tem` comme `25.0.4` (suffisant, même ligne Temurin).
+- 2026-10-24 — Frontend reste en TypeScript 6 : TS 7 refusé en peer par `@sveltejs/kit`, `svelte-check` et `typescript-eslint` ; Dependabot ignore les majeures de `typescript` (`.github/dependabot.yml`), à retirer quand ils l'acceptent.
 - 2026-10-22 — Limites acceptées : audio des épisodes futurs accessible si l’URL est connue ; une seule plage `Range`.
 ## Pièges et conventions spécifiques
 - Natif : une réflexion manquante n’échoue qu’à l’exécution (`MissingReflectionRegistrationError`) → ajouter le hint dans `config/NativeImageHintsConfiguration` (+ test), reconstruire l’image, relancer `smoke-test.sh`. Avertissements Flyway « Unable to scan location … unsupported protocol: resource » au démarrage natif : bénins (les migrations sont trouvées par Spring Boot).
@@ -93,6 +94,7 @@ Docker (racine) : `cp .env.example .env` (renseigner `BERGACAST_JWT_SECRET`, mot
 - Testcontainers exige Docker, y compris pour `./gradlew generateOpenApiSpec` (démarre l’application).
 - Partie `metadata` de l’upload : lue brute (`episode/EpisodeMetadataReader`), acceptée sans type, `text/plain`, `application/octet-stream`, `application/json` ou `*+json` (outils type n8n/Zapier) ; JSON invalide → 400, validation → 422.
 - SvelteKit 3 : pas de `svelte.config.js` (config dans `vite.config.ts`) ; imports `#lib/*` (champ `imports` de package.json) avec extension explicite au lieu de `$lib` ; `resolve()` de `$app/paths` prend l’id de route avec groupe (`resolve('/(app)/podcasts')`).
+- `@vitest/coverage-v8` a `vitest` en peer exact : toujours les monter ensemble (groupe Dependabot `vitest`).
 - `engine-strict=true` : Node ≠ 24 ou npm ≠ 12.2.1 → `npm ci` échoue ; installer `npm install -g npm@12.2.1`.
 - Spotless formate aussi les `*.gradle.kts` (ktlint) : lancer `spotlessApply` après toute modif du build.
 - Checkstyle : `MagicNumber` actif en production, désactivé seulement dans les tests ; zéro avertissement toléré.
@@ -114,6 +116,7 @@ AGPL-3.0 — tout nouveau fichier et toute dépendance doivent rester compatible
 ## Git
 - Conventional Commits (anglais, impératif) ; branches `feat/…`, `fix/…`, `chore/…` depuis `main`.
 - Noms de branche parlants : kebab-case décrivant précisément le travail en cours (ex. `feat/user-signup-email-validation`) ; jamais `fix/bug`, `wip`, `test` ou identifiant aléatoire. Préfixe imposé par l'outil (ex. `claude/`) conservé, mais suite parlante. Renommer si le périmètre change, avant push/PR.
+- Autorisation permanente d'Adrien : quand l'outil impose une branche au nom non parlant (ex. `claude/intelligent-planck-nfgb33`), l'agent la renomme en `claude/<suite-parlante>` et pousse/ouvre la PR sur ce nouveau nom sans demander ; idem pour créer une branche `claude/<suite-parlante>` dédiée à une PR séparée. Jamais pousser sur `main` ni sur une branche d'autrui.
 - Titre de PR = futur message du commit squash sur `main`, source de la version : Conventional Commits obligatoires (`feat` → mineure, `!`/`BREAKING CHANGE` → majeure). Le journal des modifications est la release GitHub générée ; `CHANGELOG.md` n'est plus tenu après `v1.0.0`.
 - Avant chaque commit : lint + tests au vert.
 ## Maintenance de ce fichier (obligatoire)
