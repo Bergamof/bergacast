@@ -104,6 +104,7 @@ AGPL-3.0 — tout nouveau fichier et toute dépendance doivent rester compatible
 ## Git
 - Conventional Commits (anglais, impératif) ; branches `feat/…`, `fix/…`, `chore/…` depuis `main`.
 - Noms de branche parlants : kebab-case décrivant précisément le travail en cours (ex. `feat/user-signup-email-validation`) ; jamais `fix/bug`, `wip`, `test` ou identifiant aléatoire. Préfixe imposé par l'outil (ex. `claude/`) conservé, mais suite parlante. Renommer si le périmètre change, avant push/PR.
+- Autorisation permanente d'Adrien : quand l'outil impose une branche au nom non parlant (ex. `claude/intelligent-planck-nfgb33`), l'agent la renomme en `claude/<suite-parlante>` et pousse/ouvre la PR sur ce nouveau nom sans demander ; idem pour créer une branche `claude/<suite-parlante>` dédiée à une PR séparée. Jamais pousser sur `main` ni sur une branche d'autrui.
 - Mettre à jour `CHANGELOG.md` (Keep a Changelog) pour tout changement notable.
 - Avant chaque commit : lint + tests au vert.
 ## Maintenance de ce fichier (obligatoire)
