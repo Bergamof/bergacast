@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Frontend tests run on Vitest 5 (`vitest` and `@vitest/coverage-v8` 5.0.5); Dependabot now groups `vitest` and
+  `@vitest/*` updates, whose exact peer dependency made separate bumps fail `npm ci`.
+
 ### Added
 
 - Podcast management through the REST API `/api/v1` (HAL, Problem Details RFC 9457, pagination, strong `ETag` /

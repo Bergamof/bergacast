@@ -12,6 +12,12 @@ updates:
     directory: /frontend
     schedule:
       interval: weekly
+    groups:
+      # @vitest/* packages pin vitest as an exact peer dependency: bumping them separately breaks `npm ci`.
+      vitest:
+        patterns:
+          - vitest
+          - "@vitest/*"
     ignore:
       # TypeScript 7 not yet supported by @sveltejs/kit, svelte-check and typescript-eslint (peer dependencies).
       # Remove once they accept it.
