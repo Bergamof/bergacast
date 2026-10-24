@@ -3,7 +3,7 @@ Service auto-hébergé de publication de podcasts : des outils automatisés publ
 ## Stack
 - Backend (`backend/`) : Java 25, Spring Boot 4.1.1 (WebMVC, Security + OAuth2 resource server/Nimbus, Data JPA, Validation, HATEOAS, Actuator, Flyway), springdoc-openapi 3.1.1, PostgreSQL 18, Gradle 9.8.2 (wrapper, Kotlin DSL).
 - Qualité backend : JUnit 5, Testcontainers 2.0.5 (via BOM Boot, image `postgres:18`), JaCoCo 0.8.15, Spotless 8.10.4 (palantir-java-format 2.102.0 pour Java, ktlint pour `*.gradle.kts`), Checkstyle 14.3.0 (`config/checkstyle/checkstyle.xml`, `maxWarnings = 0`), javac `-Xlint:all -Werror`.
-- Frontend (`frontend/`) : SvelteKit 3.1, Svelte 5.57 (runes), TypeScript 6, Vite 8, `adapter-static` (SPA, `paths.base = '/admin'`, fallback `index.html`), Vitest 4 (+ couverture v8), ESLint 10, Prettier 3, svelte-check.
+- Frontend (`frontend/`) : SvelteKit 3.1, Svelte 5.57 (runes), TypeScript 6, Vite 8, `adapter-static` (SPA, `paths.base = '/admin'`, fallback `index.html`), Vitest 5 (+ couverture v8), ESLint 10, Prettier 3, svelte-check.
 - Livraison : Docker multi-étapes, Docker Compose (`db` postgres:18 + `app`), GitHub Actions, Dependabot hebdomadaire.
 ## Environnement
 - Versions épinglées dans : `.sdkmanrc`, `.nvmrc` (+ `packageManager`/`engines` de frontend/package.json) (source de vérité, lue aussi par la CI)
@@ -83,6 +83,7 @@ Docker (racine) : `cp .env.example .env` (renseigner `BERGACAST_JWT_SECRET`, mot
 - Testcontainers exige Docker, y compris pour `./gradlew generateOpenApiSpec` (démarre l’application).
 - Partie `metadata` de l’upload : lue brute (`episode/EpisodeMetadataReader`), acceptée sans type, `text/plain`, `application/octet-stream`, `application/json` ou `*+json` (outils type n8n/Zapier) ; JSON invalide → 400, validation → 422.
 - SvelteKit 3 : pas de `svelte.config.js` (config dans `vite.config.ts`) ; imports `#lib/*` (champ `imports` de package.json) avec extension explicite au lieu de `$lib` ; `resolve()` de `$app/paths` prend l’id de route avec groupe (`resolve('/(app)/podcasts')`).
+- `@vitest/coverage-v8` a `vitest` en peer exact : toujours les monter ensemble (groupe Dependabot `vitest`).
 - `engine-strict=true` : Node ≠ 24 ou npm ≠ 12.2.1 → `npm ci` échoue ; installer `npm install -g npm@12.2.1`.
 - Spotless formate aussi les `*.gradle.kts` (ktlint) : lancer `spotlessApply` après toute modif du build.
 - Checkstyle : `MagicNumber` actif en production, désactivé seulement dans les tests ; zéro avertissement toléré.
