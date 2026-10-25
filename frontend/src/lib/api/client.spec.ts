@@ -117,6 +117,29 @@ describe('ApiClient', () => {
 		expect(requests[0].headers.get('Idempotency-Key')).toBe('k1');
 	});
 
+	it('puts a blob as is with its own content type and If-Match', async () => {
+		const { fetch, requests } = createFakeFetch(jsonResponse(201, {}));
+		const { client } = createClient(fetch);
+		const blob = new Blob(['png'], { type: 'image/png' });
+
+		await client.putBlob('/api/v1/podcasts/demo/image', blob, '"abc"');
+
+		expect(requests[0].method).toBe('PUT');
+		expect(requests[0].body).toBe(blob);
+		expect(requests[0].headers.get('Content-Type')).toBe('image/png');
+		expect(requests[0].headers.get('If-Match')).toBe('"abc"');
+	});
+
+	it('lets the browser choose the content type of an untyped blob', async () => {
+		const { fetch, requests } = createFakeFetch(jsonResponse(200, {}));
+		const { client } = createClient(fetch);
+
+		await client.putBlob('/api/v1/podcasts/demo/image', new Blob(['raw']));
+
+		expect(requests[0].headers.has('Content-Type')).toBe(false);
+		expect(requests[0].headers.has('If-Match')).toBe(false);
+	});
+
 	it('accepts empty 204 responses', async () => {
 		const { fetch, requests } = createFakeFetch(emptyResponse(204));
 		const { client } = createClient(fetch);

@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import Pagination from '#lib/components/Pagination.svelte';
 	import { formatDateTime } from '#lib/format/date-time.ts';
+	import { imagePreviewUrl } from '#lib/forms/podcast-image.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -35,8 +36,24 @@
 				{#each data.podcasts.items as podcast (podcast.id)}
 					<tr>
 						<td>
-							<a href={resolve('/(app)/podcasts/[slug]', { slug: podcast.slug })}>{podcast.title}</a
-							>
+							<div class="title">
+								{#if podcast.image}
+									<img
+										class="thumbnail"
+										src={imagePreviewUrl(podcast.image)}
+										alt="Couverture de « {podcast.title} »"
+										width="40"
+										height="40"
+										loading="lazy"
+										decoding="async"
+									/>
+								{:else}
+									<span class="thumbnail placeholder" aria-hidden="true"></span>
+								{/if}
+								<a href={resolve('/(app)/podcasts/[slug]', { slug: podcast.slug })}>
+									{podcast.title}
+								</a>
+							</div>
 						</td>
 						<td><code>{podcast.slug}</code></td>
 						<td>{podcast.language}</td>
@@ -53,3 +70,25 @@
 	</div>
 	<Pagination page={data.podcasts.page} url={page.url} />
 {/if}
+
+<style>
+	.title {
+		display: flex;
+		gap: var(--space-s);
+		align-items: center;
+	}
+
+	.thumbnail {
+		flex: none;
+		width: 2.5rem;
+		height: 2.5rem;
+		object-fit: cover;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
+	}
+
+	.placeholder {
+		display: block;
+		background: var(--color-background);
+	}
+</style>

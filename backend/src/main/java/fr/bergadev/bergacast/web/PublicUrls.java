@@ -30,4 +30,8 @@ public class PublicUrls {
     public URI audio(String podcastSlug, UUID episodeId, String fileExtension) {
         return URI.create(baseUrl + "/" + podcastSlug + "/episodes/" + episodeId + "/audio." + fileExtension);
     }
+
+    public URI podcastImage(String podcastSlug, String fileExtension) {
+        return URI.create(baseUrl + "/" + podcastSlug + "/image." + fileExtension);
+    }
 }

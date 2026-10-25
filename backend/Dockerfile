@@ -25,12 +25,21 @@ ARG VERSION=0.0.0-dev
 RUN --mount=type=cache,target=/root/.gradle \
     ./gradlew nativeCompile -PreleaseVersion="${VERSION}"
 
+# The executable and the JDK libraries it loads at runtime, which native-image emits next to it: AWT and ImageIO
+# (cover image resizing) call into JNI libraries (libawt, libawt_headless, libjavajpeg, liblcms), which link against
+# the libjava/libjvm shims. They only need glibc. Left out on purpose: libawt_xawt (X11, unused in headless mode),
+# libfontmanager (FreeType, no text is drawn) and libmanagement_ext (JMX extensions, unused).
+RUN mkdir /dist \
+    && cd build/native/nativeCompile \
+    && cp bergacast libawt.so libawt_headless.so libjavajpeg.so liblcms.so libjava.so libjvm.so /dist/
+
 # ---------------------------------------------------------------------------
 # Runtime: glibc, CA certificates and tzdata only, no shell
 # ---------------------------------------------------------------------------
 FROM gcr.io/distroless/base-debian13:nonroot AS runtime
 
-COPY --from=build /workspace/build/native/nativeCompile/bergacast /app/bergacast
+# Native-image looks for the JDK libraries in the directory of the executable.
+COPY --from=build /dist/ /app/
 
 USER nonroot:nonroot
 # Overridden by the platform through PORT (Scaleway Serverless Containers).

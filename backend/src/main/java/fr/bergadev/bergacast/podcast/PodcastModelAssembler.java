@@ -12,24 +12,27 @@ import org.springframework.stereotype.Component;
 
 /** Converts podcasts to their HAL representation. */
 @Component
-class PodcastModelAssembler
-        implements RepresentationModelAssembler<PodcastWithEpisodeCount, EntityModel<PodcastResponse>> {
+class PodcastModelAssembler implements RepresentationModelAssembler<PodcastOverview, EntityModel<PodcastResponse>> {
 
     static final LinkRelation EPISODES = LinkRelation.of("episodes");
     static final LinkRelation API_TOKENS = LinkRelation.of("apiTokens");
     static final LinkRelation FEED = LinkRelation.of("feed");
+    static final LinkRelation IMAGE = LinkRelation.of("image");
 
     private final PublicUrls publicUrls;
+    private final PodcastImageModelAssembler imageAssembler;
 
-    PodcastModelAssembler(PublicUrls publicUrls) {
+    PodcastModelAssembler(PublicUrls publicUrls, PodcastImageModelAssembler imageAssembler) {
         this.publicUrls = publicUrls;
+        this.imageAssembler = imageAssembler;
     }
 
     @Override
-    public EntityModel<PodcastResponse> toModel(PodcastWithEpisodeCount podcastWithCount) {
-        Podcast podcast = podcastWithCount.podcast();
+    public EntityModel<PodcastResponse> toModel(PodcastOverview overview) {
+        Podcast podcast = overview.podcast();
         String slug = podcast.getSlug();
         PodcastDetails details = podcast.getDetails();
+        PodcastImageMetadata image = overview.image();
         PodcastResponse response = new PodcastResponse(
                 podcast.getId(),
                 slug,
@@ -42,11 +45,12 @@ class PodcastModelAssembler
                 details.category(),
                 details.explicit(),
                 details.imageUrl(),
+                image == null ? null : imageAssembler.toResponse(slug, image),
                 details.websiteUrl(),
                 podcast.getFeedSettings(),
                 publicUrls.feed(slug),
                 publicUrls.publish(slug),
-                podcastWithCount.episodeCount(),
+                overview.episodeCount(),
                 podcast.getCreatedAt(),
                 podcast.getUpdatedAt());
         return EntityModel.of(
@@ -54,6 +58,8 @@ class PodcastModelAssembler
                 ApiLinks.link(IanaLinkRelations.SELF, ApiPaths.PODCAST, slug),
                 ApiLinks.link(EPISODES, ApiPaths.EPISODES, slug),
                 ApiLinks.link(API_TOKENS, ApiPaths.PODCAST_API_TOKENS, slug),
-                Link.of(publicUrls.feed(slug).toString(), FEED));
+                Link.of(publicUrls.feed(slug).toString(), FEED),
+                // Always present: the cover image resource, where the first image is uploaded too.
+                ApiLinks.link(IMAGE, ApiPaths.PODCAST_IMAGE, slug));
     }
 }

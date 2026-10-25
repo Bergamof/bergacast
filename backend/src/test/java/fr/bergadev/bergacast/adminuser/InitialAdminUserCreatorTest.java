@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.DefaultApplicationArguments;
+import org.springframework.util.unit.DataSize;
 
 class InitialAdminUserCreatorTest {
 
@@ -48,7 +49,8 @@ class InitialAdminUserCreatorTest {
                 URI.create("http://localhost"),
                 new BergacastProperties.Jwt("0123456789abcdef0123456789abcdef", Duration.ofMinutes(15), "x"),
                 new BergacastProperties.InitialAdmin("admin", password),
-                new BergacastProperties.Cors(List.of()));
+                new BergacastProperties.Cors(List.of()),
+                DataSize.ofMegabytes(20));
         new InitialAdminUserCreator(adminUserService, properties).run(new DefaultApplicationArguments());
     }
 }

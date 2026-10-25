@@ -1,5 +1,6 @@
 package fr.bergadev.bergacast.podcast;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.net.URI;
 import java.time.Instant;
 import java.util.UUID;
@@ -20,6 +21,7 @@ import org.springframework.hateoas.server.core.Relation;
  * @param category Apple Podcasts category
  * @param explicit whether the podcast contains explicit content
  * @param imageUrl URL of the cover art
+ * @param image uploaded cover image, which takes precedence over {@code imageUrl} in the feed
  * @param websiteUrl URL of the website
  * @param feed feed settings
  * @param feedUrl absolute public URL of the RSS feed
@@ -41,6 +43,14 @@ public record PodcastResponse(
         @Nullable String category,
         boolean explicit,
         @Nullable String imageUrl,
+
+        @Schema(
+                description = "Uploaded cover image, null when none was uploaded (it is uploaded with PUT at the URL "
+                        + "of the image link, always present). When present, the feed advertises it (itunes:image) "
+                        + "instead of imageUrl.")
+        @Nullable
+        PodcastImageResponse image,
+
         @Nullable String websiteUrl,
         FeedSettings feed,
         URI feedUrl,

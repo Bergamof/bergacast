@@ -50,6 +50,18 @@ class CorsIntegrationTest {
     }
 
     @Test
+    void allowsImageUploadsWithPut() throws Exception {
+        mockMvc.perform(options("/api/v1/podcasts/{slug}/image", "any-podcast")
+                        .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "PUT")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "authorization,content-type,if-match"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS, containsString("PUT")))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, containsString("content-type")));
+    }
+
+    @Test
     void allowsTheIdempotencyKeyOfEpisodeUploads() throws Exception {
         mockMvc.perform(options("/api/v1/{slug}/episodes", "any-podcast")
                         .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)

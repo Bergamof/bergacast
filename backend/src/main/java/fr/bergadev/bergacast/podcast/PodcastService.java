@@ -9,6 +9,7 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
@@ -25,11 +26,17 @@ public class PodcastService {
     private static final String SLUG_FIELD = "slug";
 
     private final PodcastRepository podcastRepository;
+    private final PodcastImageRepository imageRepository;
     private final JsonMergePatch jsonMergePatch;
     private final Clock clock;
 
-    PodcastService(PodcastRepository podcastRepository, JsonMergePatch jsonMergePatch, Clock clock) {
+    PodcastService(
+            PodcastRepository podcastRepository,
+            PodcastImageRepository imageRepository,
+            JsonMergePatch jsonMergePatch,
+            Clock clock) {
         this.podcastRepository = podcastRepository;
+        this.imageRepository = imageRepository;
         this.jsonMergePatch = jsonMergePatch;
         this.clock = clock;
     }
@@ -47,23 +54,25 @@ public class PodcastService {
     }
 
     @Transactional(readOnly = true)
-    public Page<PodcastWithEpisodeCount> list(Pageable pageable) {
+    public Page<PodcastOverview> list(Pageable pageable) {
         Page<Podcast> podcasts = podcastRepository.findAll(pageable);
         Map<UUID, Long> counts = countEpisodes(podcasts.getContent());
-        return podcasts.map(podcast -> new PodcastWithEpisodeCount(podcast, counts.getOrDefault(podcast.getId(), 0L)));
+        Map<UUID, PodcastImageMetadata> images = imagesOf(podcasts.getContent());
+        return podcasts.map(podcast ->
+                new PodcastOverview(podcast, counts.getOrDefault(podcast.getId(), 0L), images.get(podcast.getId())));
     }
 
     @Transactional(readOnly = true)
-    public PodcastWithEpisodeCount get(String slug) {
-        return withEpisodeCount(getBySlug(slug));
+    public PodcastOverview get(String slug) {
+        return overviewOf(getBySlug(slug));
     }
 
-    public PodcastWithEpisodeCount create(PodcastInput input) {
+    public PodcastOverview create(PodcastInput input) {
         if (podcastRepository.existsBySlug(input.slug())) {
             throw new ConflictException("The slug '" + input.slug() + "' is already used by another podcast");
         }
         Podcast podcast = new Podcast(input.slug(), input.toDetails(), input.toFeedSettings(), clock.instant());
-        return new PodcastWithEpisodeCount(podcastRepository.saveAndFlush(podcast), 0);
+        return new PodcastOverview(podcastRepository.saveAndFlush(podcast), 0, null);
     }
 
     /**
@@ -71,8 +80,8 @@ public class PodcastService {
      *
      * @param ifMatch optional {@code If-Match} header value, checked against the current entity tag
      */
-    public PodcastWithEpisodeCount patch(String slug, JsonNode patch, @Nullable String ifMatch) {
-        PodcastWithEpisodeCount current = get(slug);
+    public PodcastOverview patch(String slug, JsonNode patch, @Nullable String ifMatch) {
+        PodcastOverview current = get(slug);
         EntityTags.requireIfMatch(ifMatch, current.entityTag());
         Podcast podcast = current.podcast();
         PodcastInput patched = jsonMergePatch.apply(PodcastInput.from(podcast), patch, PodcastInput.class);
@@ -80,17 +89,29 @@ public class PodcastService {
             throw new UnprocessableContentException(SLUG_FIELD, "cannot be changed once the podcast is created");
         }
         podcast.update(patched.toDetails(), patched.toFeedSettings(), clock.instant());
-        return new PodcastWithEpisodeCount(podcastRepository.saveAndFlush(podcast), current.episodeCount());
+        return new PodcastOverview(podcastRepository.saveAndFlush(podcast), current.episodeCount(), current.image());
     }
 
-    /** Deletes a podcast with its episodes, audio content and API tokens (database cascades and triggers). */
+    /** Deletes a podcast with its episodes, audio content, image and API tokens (database cascades and triggers). */
     public void delete(String slug) {
         podcastRepository.delete(getBySlug(slug));
     }
 
-    private PodcastWithEpisodeCount withEpisodeCount(Podcast podcast) {
-        return new PodcastWithEpisodeCount(
-                podcast, countEpisodes(List.of(podcast)).getOrDefault(podcast.getId(), 0L));
+    private PodcastOverview overviewOf(Podcast podcast) {
+        return new PodcastOverview(
+                podcast,
+                countEpisodes(List.of(podcast)).getOrDefault(podcast.getId(), 0L),
+                imageRepository.findMetadata(podcast.getId()).orElse(null));
+    }
+
+    /** Metadata only: the image contents of a page of podcasts are never loaded. */
+    private Map<UUID, PodcastImageMetadata> imagesOf(List<Podcast> podcasts) {
+        if (podcasts.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> ids = podcasts.stream().map(Podcast::getId).toList();
+        return imageRepository.findAllMetadata(ids).stream()
+                .collect(Collectors.toMap(PodcastImageMetadata::podcastId, Function.identity()));
     }
 
     private Map<UUID, Long> countEpisodes(List<Podcast> podcasts) {
