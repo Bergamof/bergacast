@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** Entry point of the REST API, advertising the server version and the top-level resources (HATEOAS). */
 @RestController
-@Tag(name = "Root", description = "Entry point of the API")
+@Tag(name = "Root")
 public class RootController {
 
     private final ApiRootResponse root;
@@ -28,7 +28,8 @@ public class RootController {
     @Operation(
             operationId = "getApiRoot",
             summary = "Get the server version and the top-level resources",
-            description = "Public. Returns the version of the server and links to the API resources.")
+            description = "Public. Returns the version of the server and links to the top-level resources "
+                    + "(podcasts, adminUsers, accessTokens), from which clients can navigate the API.")
     public EntityModel<ApiRootResponse> root() {
         return EntityModel.of(root)
                 .add(ApiLinks.link(IanaLinkRelations.SELF, ApiPaths.BASE))

@@ -1,5 +1,6 @@
 package fr.bergadev.bergacast.feed;
 
+import fr.bergadev.bergacast.web.EntityTagged;
 import fr.bergadev.bergacast.web.Sha256;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -16,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** Public RSS feed of a podcast. */
 @RestController
-@Tag(name = "Public feed", description = "Public RSS feeds and audio files")
+@Tag(name = "Public feed")
 class FeedController {
 
     static final String RSS_XML_VALUE = "application/rss+xml;charset=UTF-8";
@@ -34,12 +35,20 @@ class FeedController {
     @Operation(
             operationId = "getPodcastFeed",
             summary = "Get the RSS feed of a podcast",
-            description = "Public. RSS 2.0 with Apple Podcasts extensions. Supports If-None-Match.")
+            description = "Public. RSS 2.0 feed with Apple Podcasts (itunes) extensions, the URL to submit to podcast "
+                    + "directories. Lists the published episodes selected and ordered by the feed settings of the "
+                    + "podcast, each with its audio file as enclosure. Always up to date (scheduled episodes appear "
+                    + "at their publication date); cacheable for 5 minutes, and supports conditional requests with "
+                    + "If-None-Match.")
     @ApiResponse(
             responseCode = "200",
             description = "The feed",
             content = @Content(mediaType = RSS_XML_VALUE, schema = @Schema(type = "string")))
-    @ApiResponse(responseCode = "304", description = "Not modified", content = @Content)
+    @ApiResponse(
+            responseCode = "304",
+            description = "Not modified since the ETag sent in If-None-Match",
+            content = @Content)
+    @EntityTagged
     ResponseEntity<byte[]> feed(@PathVariable String slug) {
         byte[] document = feedService.render(slug);
         return ResponseEntity.ok()

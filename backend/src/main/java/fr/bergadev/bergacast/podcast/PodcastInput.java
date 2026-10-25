@@ -1,5 +1,6 @@
 package fr.bergadev.bergacast.podcast;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -9,47 +10,100 @@ import java.util.Objects;
 import org.hibernate.validator.constraints.URL;
 import org.jspecify.annotations.Nullable;
 
-/**
- * Writable state of a podcast, used as the body of a creation and as the target of a JSON Merge Patch.
- *
- * @param slug URL identifier, immutable once the podcast is created
- * @param title channel title
- * @param description channel description
- * @param author {@code itunes:author}
- * @param ownerName name in {@code itunes:owner}
- * @param ownerEmail email in {@code itunes:owner}
- * @param language BCP 47 language tag of the content, e.g. {@code fr} or {@code en-US}
- * @param category Apple Podcasts category
- * @param explicit whether the podcast contains explicit content (default {@code false})
- * @param imageUrl URL of the cover art
- * @param websiteUrl URL of the podcast website, used as the channel link
- * @param feed feed settings
- */
+/** Writable state of a podcast, used as the body of a creation and as the target of a JSON Merge Patch. */
+@Schema(
+        description = "Writable state of a podcast: body of a creation, or target of a JSON Merge Patch. Most fields "
+                + "are published in the channel of the RSS feed.")
 public record PodcastInput(
-        @NotBlank @Size(max = Slugs.MAX_LENGTH) @Pattern(regexp = Slugs.PATTERN) @NotReservedSlug
+        @Schema(
+                description = "URL identifier of the podcast, used in the feed URL (`/{slug}.xml`), the audio "
+                        + "URLs and the publication URL. Lowercase letters, digits and single hyphens; some "
+                        + "names used by the application (api, admin, podcasts...) are reserved. Immutable "
+                        + "once the podcast is created.",
+                example = "my-podcast")
+        @NotBlank
+        @Size(max = Slugs.MAX_LENGTH)
+        @Pattern(regexp = Slugs.PATTERN)
+        @NotReservedSlug
         String slug,
 
-        @NotBlank @Size(max = PodcastInput.MAX_TEXT_LENGTH) String title,
-        @NotBlank String description,
-        @Size(max = PodcastInput.MAX_TEXT_LENGTH) @Nullable String author,
-        @Size(max = PodcastInput.MAX_TEXT_LENGTH) @Nullable String ownerName,
+        @Schema(description = "Title of the podcast (channel `title`).", example = "My Podcast")
+        @NotBlank
+        @Size(max = PodcastInput.MAX_TEXT_LENGTH)
+        String title,
 
-        @Email @Size(max = PodcastInput.MAX_TEXT_LENGTH) @Nullable
+        @Schema(
+                description = "Description of the podcast (channel `description`).",
+                example = "Conversations about self-hosting, open source and the open web.")
+        @NotBlank
+        String description,
+
+        @Schema(description = "Author shown by podcast apps (`itunes:author`).", example = "Jane Doe", nullable = true)
+        @Size(max = PodcastInput.MAX_TEXT_LENGTH)
+        @Nullable
+        String author,
+
+        @Schema(description = "Name of the owner (`itunes:owner`).", example = "Jane Doe", nullable = true)
+        @Size(max = PodcastInput.MAX_TEXT_LENGTH)
+        @Nullable
+        String ownerName,
+
+        @Schema(
+                description =
+                        "Contact email of the owner (`itunes:owner`), used by directories to verify " + "ownership.",
+                example = "jane@example.com",
+                nullable = true)
+        @Email
+        @Size(max = PodcastInput.MAX_TEXT_LENGTH)
+        @Nullable
         String ownerEmail,
 
-        @NotBlank @Pattern(regexp = PodcastInput.LANGUAGE_TAG_PATTERN)
+        @Schema(description = "BCP 47 language tag of the content (channel `language`).", example = "en-US")
+        @NotBlank
+        @Pattern(regexp = PodcastInput.LANGUAGE_TAG_PATTERN)
         String language,
 
-        @Size(max = PodcastInput.MAX_TEXT_LENGTH) @Nullable String category,
-        @Nullable Boolean explicit,
+        @Schema(description = "Apple Podcasts category (`itunes:category`).", example = "Technology", nullable = true)
+        @Size(max = PodcastInput.MAX_TEXT_LENGTH)
+        @Nullable
+        String category,
 
-        @URL @Size(max = PodcastInput.MAX_URL_LENGTH) @Nullable
+        @Schema(
+                description = "Whether the podcast contains explicit content (`itunes:explicit`). Absent or "
+                        + "null means false.",
+                defaultValue = "false",
+                example = "false",
+                nullable = true)
+        @Nullable
+        Boolean explicit,
+
+        @Schema(
+                description = "URL of the cover art (`itunes:image`); Apple Podcasts expects a square JPEG or "
+                        + "PNG of 1400 to 3000 pixels.",
+                example = "https://example.com/cover.jpg",
+                nullable = true)
+        @URL
+        @Size(max = PodcastInput.MAX_URL_LENGTH)
+        @Nullable
         String imageUrl,
 
-        @URL @Size(max = PodcastInput.MAX_URL_LENGTH) @Nullable
+        @Schema(
+                description = "URL of the podcast website (channel `link`). Defaults to the public base URL "
+                        + "of the server.",
+                example = "https://example.com",
+                nullable = true)
+        @URL
+        @Size(max = PodcastInput.MAX_URL_LENGTH)
+        @Nullable
         String websiteUrl,
 
-        @Valid @Nullable FeedSettingsInput feed) {
+        @Schema(
+                description = "Rules selecting and ordering the episodes of the feed. Absent or null: all published "
+                        + "episodes, newest first.",
+                nullable = true)
+        @Valid
+        @Nullable
+        FeedSettingsInput feed) {
 
     static final int MAX_TEXT_LENGTH = 255;
     static final int MAX_URL_LENGTH = 2048;
