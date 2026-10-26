@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Administration of the API tokens of a podcast. */
 @RestController
 @RequestMapping(produces = {MediaTypes.HAL_JSON_VALUE, MediaType.APPLICATION_JSON_VALUE})
-@Tag(name = "API tokens", description = "Tokens allowing automated tools to publish episodes (admin only)")
+@Tag(name = "API tokens")
 @SecurityRequirement(name = SecuritySchemes.ADMIN_JWT)
 class ApiTokenController {
 
@@ -44,7 +44,8 @@ class ApiTokenController {
     @Operation(
             operationId = "listApiTokens",
             summary = "List the API tokens of a podcast",
-            description = "Plain token values are never returned after their creation.")
+            description = "Lists the API tokens of the podcast, with their prefix and last use. Plain token values "
+                    + "are never returned after their creation.")
     CollectionModel<EntityModel<ApiTokenResponse>> list(@PathVariable String slug) {
         List<EntityModel<ApiTokenResponse>> tokens = apiTokenService.list(slug).stream()
                 .map(apiToken -> toModel(slug, apiToken, null))
@@ -59,9 +60,11 @@ class ApiTokenController {
     @Operation(
             operationId = "createApiToken",
             summary = "Create an API token",
-            description = "The plain token is only returned in this response: store it safely.")
-    @ApiResponse(responseCode = "201", description = "Token created")
-    @ApiResponse(responseCode = "422", description = "Invalid content", content = @Content)
+            description = "Creates a long-lived token allowing an automated tool to list, read and publish the "
+                    + "episodes of this podcast, sent as `Authorization: Bearer bgc_…`. The plain token is only "
+                    + "returned in this response (token member): store it safely. Only its SHA-256 hash is kept.")
+    @ApiResponse(responseCode = "201", description = "Token created, with its plain value")
+    @ApiResponse(responseCode = "422", description = "Invalid content, listed in errors", content = @Content)
     ResponseEntity<EntityModel<ApiTokenResponse>> create(
             @PathVariable String slug, @Valid @RequestBody CreateApiTokenRequest request) {
         CreatedApiToken created = apiTokenService.create(slug, request.name());
@@ -74,7 +77,7 @@ class ApiTokenController {
     @Operation(
             operationId = "deleteApiToken",
             summary = "Revoke an API token",
-            description = "The token stops working immediately.")
+            description = "Deletes the token: requests using it are rejected with 401 immediately.")
     @ApiResponse(responseCode = "204", description = "Token revoked")
     ResponseEntity<Void> delete(@PathVariable String slug, @PathVariable UUID tokenId) {
         apiTokenService.delete(slug, tokenId);

@@ -27,7 +27,7 @@ import org.springframework.web.context.request.ServletWebRequest;
  * clients revalidate it with its entity tag.
  */
 @RestController
-@Tag(name = "Public feed", description = "Public RSS feeds and audio files")
+@Tag(name = "Public feed")
 class PodcastImageDownloadController {
 
     static final String IMAGE_PATH = "/{slug}/image.{extension}";

@@ -3,6 +3,7 @@ package fr.bergadev.bergacast.podcast;
 import fr.bergadev.bergacast.web.ApiLinks;
 import fr.bergadev.bergacast.web.ApiMediaTypes;
 import fr.bergadev.bergacast.web.ApiPaths;
+import fr.bergadev.bergacast.web.EntityTagged;
 import fr.bergadev.bergacast.web.PagedModels;
 import fr.bergadev.bergacast.web.SecuritySchemes;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,7 +38,7 @@ import tools.jackson.databind.JsonNode;
 /** Administration of podcasts. */
 @RestController
 @RequestMapping(produces = {MediaTypes.HAL_JSON_VALUE, MediaType.APPLICATION_JSON_VALUE})
-@Tag(name = "Podcasts", description = "Podcast administration (admin only)")
+@Tag(name = "Podcasts")
 @SecurityRequirement(name = SecuritySchemes.ADMIN_JWT)
 class PodcastController {
 
@@ -55,7 +56,11 @@ class PodcastController {
     }
 
     @GetMapping(ApiPaths.PODCASTS)
-    @Operation(operationId = "listPodcasts", summary = "List podcasts", description = "Sortable by slug, createdAt.")
+    @Operation(
+            operationId = "listPodcasts",
+            summary = "List podcasts",
+            description = "Lists the podcasts with their episode count. Sorted by slug by default; sortable by slug, "
+                    + "createdAt or updatedAt.")
     PagedModel<EntityModel<PodcastResponse>> list(@ParameterObject @PageableDefault(sort = "slug") Pageable pageable) {
         return PagedModels.of(podcastService.list(pageable), pagedAssembler, assembler, PodcastResponse.class);
     }
@@ -64,10 +69,13 @@ class PodcastController {
     @Operation(
             operationId = "createPodcast",
             summary = "Create a podcast",
-            description = "The slug is immutable; missing feed settings take their default values.")
+            description = "Creates a podcast, whose RSS feed is immediately available at feedUrl (empty until the "
+                    + "first episode). The slug cannot be changed afterwards. Absent optional fields take their "
+                    + "default: explicit false, all feed settings as documented in FeedSettingsInput.")
     @ApiResponse(responseCode = "201", description = "Podcast created")
-    @ApiResponse(responseCode = "409", description = "Slug already used", content = @Content)
-    @ApiResponse(responseCode = "422", description = "Invalid content", content = @Content)
+    @ApiResponse(responseCode = "409", description = "The slug is already used by another podcast", content = @Content)
+    @ApiResponse(responseCode = "422", description = "Invalid content, listed in errors", content = @Content)
+    @EntityTagged
     ResponseEntity<EntityModel<PodcastResponse>> create(@Valid @RequestBody PodcastInput input) {
         PodcastOverview created = podcastService.create(input);
         return ResponseEntity.created(
@@ -77,9 +85,17 @@ class PodcastController {
     }
 
     @GetMapping(ApiPaths.PODCAST)
-    @Operation(operationId = "getPodcast", summary = "Get a podcast", description = "Supports If-None-Match.")
+    @Operation(
+            operationId = "getPodcast",
+            summary = "Get a podcast",
+            description = "Returns the podcast with its feed settings, public URLs and episode count. Supports "
+                    + "conditional requests with If-None-Match.")
     @ApiResponse(responseCode = "200", description = "The podcast")
-    @ApiResponse(responseCode = "304", description = "Not modified", content = @Content)
+    @ApiResponse(
+            responseCode = "304",
+            description = "Not modified since the ETag sent in If-None-Match",
+            content = @Content)
+    @EntityTagged
     ResponseEntity<EntityModel<PodcastResponse>> get(@PathVariable String slug) {
         PodcastOverview podcast = podcastService.get(slug);
         return ResponseEntity.ok().eTag(podcast.entityTag()).body(assembler.toModel(podcast));
@@ -89,7 +105,15 @@ class PodcastController {
     @Operation(
             operationId = "updatePodcast",
             summary = "Update a podcast",
-            description = "JSON Merge Patch (RFC 7396). The slug cannot be changed. Supports If-Match.",
+            description = """
+                    JSON Merge Patch (RFC 7396) of the podcast: an absent member is left unchanged, a `null` \
+                    member is cleared, and `feed` is merged member by member.
+
+                    Rules differ slightly from a creation: `slug` cannot be changed (it may be sent unchanged); \
+                    `title`, `description` and `language` cannot be set to `null`; `explicit` set to `null` \
+                    becomes false; `feed` set to `null`, or one of its members, resets it to its default.
+
+                    Send the ETag in `If-Match` to avoid overwriting a concurrent change.""",
             requestBody =
                     @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             required = true,
@@ -98,8 +122,15 @@ class PodcastController {
                                             mediaType = ApiMediaTypes.MERGE_PATCH_JSON_VALUE,
                                             schema = @Schema(implementation = PodcastInput.class))))
     @ApiResponse(responseCode = "200", description = "Podcast updated")
-    @ApiResponse(responseCode = "412", description = "If-Match does not match", content = @Content)
-    @ApiResponse(responseCode = "422", description = "Invalid content", content = @Content)
+    @ApiResponse(
+            responseCode = "412",
+            description = "If-Match does not match the current ETag: the podcast has changed",
+            content = @Content)
+    @ApiResponse(
+            responseCode = "422",
+            description = "Invalid patched content (including a changed slug), listed in errors",
+            content = @Content)
+    @EntityTagged
     ResponseEntity<EntityModel<PodcastResponse>> update(
             @PathVariable String slug,
             @RequestHeader(name = HttpHeaders.IF_MATCH, required = false) @Nullable String ifMatch,
@@ -112,7 +143,8 @@ class PodcastController {
     @Operation(
             operationId = "deletePodcast",
             summary = "Delete a podcast",
-            description = "Also deletes its episodes, their audio content and its API tokens.")
+            description = "Deletes the podcast with its episodes, their audio files and its API tokens: its feed and "
+                    + "audio URLs stop working. Cannot be undone.")
     @ApiResponse(responseCode = "204", description = "Podcast deleted")
     ResponseEntity<Void> delete(@PathVariable String slug) {
         podcastService.delete(slug);

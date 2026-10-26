@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
  * OAuth 2 token endpoint.
  */
 @RestController
-@Tag(name = "Access tokens", description = "Administrator login")
+@Tag(name = "Access tokens")
 class AccessTokenController {
 
     private final AdminAccessTokenIssuer issuer;
@@ -34,9 +34,15 @@ class AccessTokenController {
     @Operation(
             operationId = "createAccessToken",
             summary = "Log in as an administrator",
-            description = "Public. Exchanges credentials for a short-lived JWT to send as 'Authorization: Bearer'.")
-    @ApiResponse(responseCode = "200", description = "Access token issued")
-    @ApiResponse(responseCode = "401", description = "Invalid credentials", content = @Content)
+            description = "Public. Exchanges the credentials of an administrator for a short-lived JWT, to send as "
+                    + "`Authorization: Bearer <accessToken>` until it expires (expiresIn), then log in again. "
+                    + "Answers 200 rather than 201: like an OAuth 2 token endpoint, the token is not a resource.")
+    @ApiResponse(responseCode = "200", description = "Access token issued (never cached: Cache-Control no-store)")
+    @ApiResponse(responseCode = "401", description = "Unknown username or wrong password", content = @Content)
+    @ApiResponse(
+            responseCode = "422",
+            description = "Missing username or password, listed in errors",
+            content = @Content)
     ResponseEntity<AccessTokenResponse> create(@Valid @RequestBody AccessTokenRequest credentials) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(issuer.issue(credentials));
     }

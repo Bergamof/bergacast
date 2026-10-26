@@ -35,7 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Administration of the cover image of a podcast, a singleton sub-resource of the podcast. */
 @RestController
 @RequestMapping(produces = {MediaTypes.HAL_JSON_VALUE, MediaType.APPLICATION_JSON_VALUE})
-@Tag(name = "Podcasts", description = "Podcast administration (admin only)")
+@Tag(name = "Podcasts")
 @SecurityRequirement(name = SecuritySchemes.ADMIN_JWT)
 class PodcastImageController {
 
