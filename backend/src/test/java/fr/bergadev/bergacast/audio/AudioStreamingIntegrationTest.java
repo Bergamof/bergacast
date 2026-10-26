@@ -11,6 +11,7 @@ import fr.bergadev.bergacast.support.IntegrationTest;
 import java.io.ByteArrayOutputStream;
 import java.util.Random;
 import java.util.UUID;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,7 +35,10 @@ class AudioStreamingIntegrationTest {
     private MockMvc mockMvc;
 
     @Autowired
-    private HikariDataSource dataSource;
+    private DataSource dataSource;
+
+    /** The Hikari pool, behind the data source that tracks connections for the request log. */
+    private HikariDataSource pool;
 
     private final byte[] audio = new byte[AUDIO_SIZE];
     private String slug;
@@ -42,6 +46,7 @@ class AudioStreamingIntegrationTest {
 
     @BeforeEach
     void publishEpisode() throws Exception {
+        pool = dataSource.unwrap(HikariDataSource.class);
         new Random(7).nextBytes(audio);
         slug = ApiTestClient.uniqueSlug("streaming");
         api.createPodcast(slug);
@@ -91,7 +96,7 @@ class AudioStreamingIntegrationTest {
         public void write(byte[] bytes) {
             assertThat(TransactionSynchronizationManager.isActualTransactionActive())
                     .isFalse();
-            assertThat(dataSource.getHikariPoolMXBean().getActiveConnections()).isZero();
+            assertThat(pool.getHikariPoolMXBean().getActiveConnections()).isZero();
             writes++;
             super.write(bytes, 0, bytes.length);
         }
