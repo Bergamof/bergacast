@@ -65,6 +65,8 @@ bergacast:
   jwt:
     secret: ${BERGACAST_JWT_SECRET:}
     lifetime: 15m
+  # Largest podcast cover image accepted for upload (images larger than 3000 px are then downscaled).
+  max-image-upload-size: ${BERGACAST_MAX_IMAGE_UPLOAD_SIZE:20MB}
   cors:
     # Comma-separated origins of the admin SPA, e.g. https://admin.example.com
     allowed-origins: ${BERGACAST_CORS_ALLOWED_ORIGINS:}

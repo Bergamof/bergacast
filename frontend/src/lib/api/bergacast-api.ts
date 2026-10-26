@@ -9,6 +9,7 @@ import type {
 	Episode,
 	EpisodeMetadata,
 	Podcast,
+	PodcastImageResource,
 	PodcastInput,
 	UploadMetadata,
 	Versioned
@@ -109,6 +110,29 @@ export class BergacastApi {
 
 	async deletePodcast(podcast: Podcast): Promise<void> {
 		await this.#client.delete(requireLinkHref(podcast, 'self'));
+	}
+
+	#podcastImageHref(podcast: Podcast): string {
+		return `${requireLinkHref(podcast, 'self')}/image`;
+	}
+
+	/**
+	 * Creates or replaces the cover image of a podcast with the raw file. When an image is already
+	 * stored, its SHA-256 (the image ETag) is sent in `If-Match` so that a concurrent replacement
+	 * is not silently overwritten.
+	 */
+	async uploadPodcastImage(podcast: Podcast, file: File): Promise<Versioned<PodcastImageResource>> {
+		const ifMatch = podcast.image ? `"${podcast.image.sha256}"` : null;
+		const response = await this.#client.putBlob<PodcastImageResource>(
+			this.#podcastImageHref(podcast),
+			file,
+			ifMatch
+		);
+		return { resource: response.body, etag: response.etag };
+	}
+
+	async deletePodcastImage(podcast: Podcast): Promise<void> {
+		await this.#client.delete(this.#podcastImageHref(podcast));
 	}
 
 	async listEpisodes(

@@ -26,7 +26,13 @@ class OpenApiDocumentationIntegrationTest {
     private static final Set<String> UNDOCUMENTED_SCHEMAS = Set.of("Link");
 
     private static final Set<String> PUBLIC_OPERATIONS = Set.of(
-            "getApiRoot", "createAccessToken", "getPodcastFeed", "downloadEpisodeAudio", "downloadEpisodeAudio_1");
+            "getApiRoot",
+            "createAccessToken",
+            "getPodcastFeed",
+            "downloadEpisodeAudio",
+            "downloadEpisodeAudio_1",
+            "downloadPodcastImage",
+            "downloadPodcastImage_1");
 
     @Autowired
     private MockMvc mockMvc;
@@ -105,7 +111,9 @@ class OpenApiDocumentationIntegrationTest {
                         operation.get("operationId").asString(),
                         operation.get("responses").get("201").get("headers")));
 
-        assertThat(created).containsOnlyKeys("createPodcast", "publishEpisode", "createApiToken", "createAdminUser");
+        assertThat(created)
+                .containsOnlyKeys(
+                        "createPodcast", "publishEpisode", "putPodcastImage", "createApiToken", "createAdminUser");
         assertThat(created.values())
                 .allSatisfy(headers -> assertThat(headers.has("Location")).isTrue());
     }
@@ -121,6 +129,10 @@ class OpenApiDocumentationIntegrationTest {
         assertThat(responseHeaders("updateEpisode", "200")).contains("ETag");
         assertThat(responseHeaders("getPodcastFeed", "200")).contains("ETag");
         assertThat(responseHeaders("downloadEpisodeAudio", "206")).contains("ETag", "Content-Range");
+        assertThat(responseHeaders("putPodcastImage", "201")).contains("ETag");
+        assertThat(responseHeaders("putPodcastImage", "200")).contains("ETag");
+        assertThat(responseHeaders("getPodcastImage", "200")).contains("ETag");
+        assertThat(responseHeaders("downloadPodcastImage", "200")).contains("ETag");
         assertThat(responseHeaders("createApiToken", "201")).doesNotContain("ETag");
     }
 
@@ -129,6 +141,8 @@ class OpenApiDocumentationIntegrationTest {
         assertThat(parameterNames("getEpisode")).contains("If-None-Match");
         assertThat(parameterNames("getPodcastFeed")).contains("If-None-Match");
         assertThat(parameterNames("updateEpisode")).contains("If-Match");
+        assertThat(parameterNames("putPodcastImage")).contains("If-Match");
+        assertThat(parameterNames("getPodcastImage")).contains("If-None-Match");
         assertThat(parameterNames("createPodcast")).doesNotContain("If-None-Match", "If-Match");
     }
 

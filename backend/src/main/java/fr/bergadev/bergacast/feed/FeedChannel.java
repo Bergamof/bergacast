@@ -15,7 +15,7 @@ import org.jspecify.annotations.Nullable;
  * @param author {@code itunes:author}
  * @param ownerName name in {@code itunes:owner}
  * @param ownerEmail email in {@code itunes:owner}
- * @param imageUrl {@code itunes:image}
+ * @param imageUrl {@code itunes:image}: the uploaded cover image, or else the external image URL
  * @param category {@code itunes:category}
  * @param explicit {@code itunes:explicit}
  * @param selfUrl public URL of the feed itself ({@code atom:link rel="self"})

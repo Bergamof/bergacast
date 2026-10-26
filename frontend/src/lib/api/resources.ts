@@ -36,8 +36,25 @@ export interface PodcastInput {
 	feed: FeedSettings;
 }
 
+/** Cover image uploaded for a podcast (it takes priority over `imageUrl` in the feed). */
+export interface PodcastImage {
+	mimeType: string;
+	/** Dimensions in pixels, after the server downscaled the image if needed. */
+	width: number;
+	height: number;
+	sizeBytes: number;
+	sha256: string;
+	/** Public, cacheable URL of the image, served by the backend. */
+	url: string;
+}
+
+/** Representation of the image sub-resource (`…/podcasts/{slug}/image`). */
+export interface PodcastImageResource extends PodcastImage, HalResource {}
+
 export interface Podcast extends PodcastInput, HalResource {
 	id: string;
+	/** `null` when no image has been uploaded. */
+	image: PodcastImage | null;
 	feedUrl: string;
 	publishUrl: string;
 	episodeCount: number;

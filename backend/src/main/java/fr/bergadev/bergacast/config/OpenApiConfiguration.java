@@ -62,8 +62,9 @@ class OpenApiConfiguration {
                                         + "Public."),
                         new Tag()
                                 .name("Podcasts")
-                                .description("Podcasts: channel metadata of the RSS feed and feed settings. "
-                                        + "Administrators only."),
+                                .description(
+                                        "Podcasts: channel metadata of the RSS feed, cover image and feed settings. "
+                                                + "Administrators only."),
                         new Tag()
                                 .name("Episodes")
                                 .description("Episode publication by automated tools (podcast API token or "
@@ -75,8 +76,9 @@ class OpenApiConfiguration {
                         new Tag().name("Admin users").description("Administrators of Bergacast. Administrators only."),
                         new Tag()
                                 .name("Public feed")
-                                .description("RSS feeds and audio files, for podcast apps and directories. No "
-                                        + "authentication.")))
+                                .description(
+                                        "RSS feeds, audio files and cover images, for podcast apps and directories. No "
+                                                + "authentication.")))
                 .components(new Components()
                         .addSecuritySchemes(
                                 SecuritySchemes.ADMIN_JWT,

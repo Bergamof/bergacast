@@ -2,7 +2,7 @@
 # End-to-end smoke test of a running Bergacast backend, used on the native image where reflection or resources
 # missing from the AOT hints only fail at runtime. Exercises every feature through HTTP: health, login, CORS,
 # HAL/JSON, merge patch, ETag/If-Match, Problem Details, multipart upload into large objects, RSS feed, Range
-# requests, OpenAPI and Swagger UI.
+# requests, cover image upload with downscaling (ImageIO/AWT native libraries), OpenAPI and Swagger UI.
 #
 # Usage: BASE_URL=http://localhost:8080 ADMIN_USERNAME=admin ADMIN_PASSWORD=... CORS_ORIGIN=https://admin.example \
 #        backend/scripts/smoke-test.sh
@@ -19,6 +19,7 @@ for tool in curl jq sha256sum head; do
     command -v "$tool" >/dev/null || { echo "Missing required tool: $tool" >&2; exit 1; }
 done
 
+FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fixtures"
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 SLUG="smoke-$(date +%s)"
@@ -70,6 +71,8 @@ request OPTIONS /api/v1/podcasts 200 -H "Origin: $CORS_ORIGIN" -H 'Access-Contro
 [ "$(header Access-Control-Allow-Origin)" = "$CORS_ORIGIN" ] || fail "CORS origin not allowed"
 request OPTIONS "/api/v1/any-podcast/episodes" 200 -H "Origin: $CORS_ORIGIN" \
     -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: authorization,idempotency-key' >/dev/null
+request OPTIONS "/api/v1/podcasts/any-podcast/image" 200 -H "Origin: $CORS_ORIGIN" \
+    -H 'Access-Control-Request-Method: PUT' -H 'Access-Control-Request-Headers: authorization,content-type,if-match' >/dev/null
 request OPTIONS /api/v1/podcasts 403 -H 'Origin: https://foreign.example' \
     -H 'Access-Control-Request-Method: GET' >/dev/null
 [[ "$(header Content-Type)" == application/problem+json* ]] || fail "CORS rejection is not application/problem+json"
@@ -127,6 +130,43 @@ curl -fsS "$BASE_URL$AUDIO_PATH" -o "$WORK_DIR/downloaded"
 [ "$(sha256sum "$WORK_DIR/downloaded" | cut -d' ' -f1)" = "$AUDIO_SHA256" ] || fail "downloaded audio differs"
 RANGE_LENGTH=$(request GET "$AUDIO_PATH" 206 -H 'Range: bytes=1048576-' | wc -c)
 [ "$RANGE_LENGTH" -eq $((AUDIO_SIZE - 1048576)) ] || fail "unexpected range length $RANGE_LENGTH"
+
+step "Cover image upload: a 4000x2000 PNG is downscaled to 3000x1500 (AWT/ImageIO native code)"
+IMAGE=$(request PUT "/api/v1/podcasts/$SLUG/image" 201 "${ADMIN[@]}" -H 'Content-Type: image/png' \
+    --data-binary "@$FIXTURES_DIR/cover-4000x2000.png")
+printf '%s' "$IMAGE" | jq -e '.mimeType == "image/png" and .width == 3000 and .height == 1500' >/dev/null ||
+    fail "unexpected image metadata: $IMAGE"
+IMAGE_ETAG=$(header ETag)
+IMAGE_URL=$(printf '%s' "$IMAGE" | jq -er '.url')
+IMAGE_PATH=$(path_of "$IMAGE_URL")
+[ "$IMAGE_ETAG" = "\"$(printf '%s' "$IMAGE" | jq -er '.sha256')\"" ] || fail "image ETag is not its SHA-256"
+
+step "Public cover image (GET, HEAD, If-None-Match)"
+curl -fsS -D "$WORK_DIR/headers" "$BASE_URL$IMAGE_PATH" -o "$WORK_DIR/image.png"
+[[ "$(header Content-Type)" == image/png* ]] || fail "image is not served as image/png"
+[ "$(sha256sum "$WORK_DIR/image.png" | cut -d' ' -f1)" = "$(printf '%s' "$IMAGE" | jq -er '.sha256')" ] ||
+    fail "served image differs from the stored one"
+request HEAD "$IMAGE_PATH" 200 -I >/dev/null
+request GET "$IMAGE_PATH" 304 -H "If-None-Match: $IMAGE_ETAG" >/dev/null
+
+step "Feed and podcast advertise the uploaded image"
+request GET "/$SLUG.xml" 200 | grep -qF "<itunes:image href=\"$IMAGE_URL\"" || fail "image missing from the feed"
+request GET "/api/v1/podcasts/$SLUG" 200 "${ADMIN[@]}" |
+    jq -e '.image.width == 3000 and ._links.image.href' >/dev/null || fail "image missing from the podcast"
+
+step "Cover image replacement: a 3200x160 JPEG is downscaled to 3000x150 (If-Match)"
+request PUT "/api/v1/podcasts/$SLUG/image" 422 "${ADMIN[@]}" -H 'Content-Type: image/jpeg' \
+    --data-binary "@$FIXTURES_DIR/cover-4000x2000.png" | jq -e '.errors | length == 1' >/dev/null
+request PUT "/api/v1/podcasts/$SLUG/image" 200 "${ADMIN[@]}" -H 'Content-Type: image/jpeg' \
+    -H "If-Match: $IMAGE_ETAG" --data-binary "@$FIXTURES_DIR/cover-3200x160.jpg" |
+    jq -e '.mimeType == "image/jpeg" and .width == 3000 and .height == 150' >/dev/null ||
+    fail "unexpected JPEG image metadata"
+request GET "/$SLUG/image.jpg" 200 >/dev/null
+[[ "$(header Content-Type)" == image/jpeg* ]] || fail "image is not served as image/jpeg"
+
+step "Cover image deletion"
+request DELETE "/api/v1/podcasts/$SLUG/image" 204 "${ADMIN[@]}" >/dev/null
+request GET "/$SLUG/image.jpg" 404 >/dev/null
 
 step "OpenAPI document and Swagger UI"
 request GET /v3/api-docs 200 | jq -e '.openapi and (.paths | length > 0)' >/dev/null

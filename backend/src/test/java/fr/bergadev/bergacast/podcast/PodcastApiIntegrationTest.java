@@ -69,7 +69,9 @@ class PodcastApiIntegrationTest {
                 .andExpect(jsonPath("$._links.episodes.href").value(endsWith("/api/v1/" + slug + "/episodes")))
                 .andExpect(
                         jsonPath("$._links.apiTokens.href").value(endsWith("/api/v1/podcasts/" + slug + "/api-tokens")))
-                .andExpect(jsonPath("$._links.feed.href").value("https://podcasts.example.test/" + slug + ".xml"));
+                .andExpect(jsonPath("$._links.feed.href").value("https://podcasts.example.test/" + slug + ".xml"))
+                .andExpect(jsonPath("$.image").isEmpty())
+                .andExpect(jsonPath("$._links.image.href").value(endsWith("/api/v1/podcasts/" + slug + "/image")));
     }
 
     @Test

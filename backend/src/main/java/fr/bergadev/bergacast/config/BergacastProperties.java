@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
+import org.springframework.util.unit.DataSize;
 
 /**
  * Application settings bound from {@code bergacast.*} (see {@code application.yaml} for the environment variables).
@@ -14,17 +15,26 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param jwt settings of the admin access tokens
  * @param admin optional initial administrator created when no administrator exists
  * @param cors cross-origin access to the API, needed by the admin SPA served from another origin
+ * @param maxImageUploadSize largest podcast cover image accepted for upload, before any downscaling
  */
 @ConfigurationProperties("bergacast")
 public record BergacastProperties(
         @DefaultValue("http://localhost:8080") URI publicBaseUrl,
         Jwt jwt,
         @DefaultValue InitialAdmin admin,
-        @DefaultValue Cors cors) {
+        @DefaultValue Cors cors,
+        @DefaultValue("20MB") DataSize maxImageUploadSize) {
+
+    /** Uploaded images are held in a byte array, hence an upper bound below 2 GiB. */
+    public static final DataSize MAX_IMAGE_UPLOAD_SIZE_LIMIT = DataSize.ofGigabytes(1);
 
     public BergacastProperties {
         if (jwt == null) {
             throw new IllegalArgumentException("bergacast.jwt.secret (BERGACAST_JWT_SECRET) is required");
+        }
+        if (maxImageUploadSize.toBytes() <= 0 || maxImageUploadSize.compareTo(MAX_IMAGE_UPLOAD_SIZE_LIMIT) > 0) {
+            throw new IllegalArgumentException("bergacast.max-image-upload-size (BERGACAST_MAX_IMAGE_UPLOAD_SIZE) must "
+                    + "be positive and at most " + MAX_IMAGE_UPLOAD_SIZE_LIMIT);
         }
         publicBaseUrl = URI.create(withoutTrailingSlash(publicBaseUrl.toString()));
     }

@@ -57,6 +57,14 @@ public class Podcast {
         this.updatedAt = now;
     }
 
+    /**
+     * Records a change of data stored apart from the podcast but part of its representation (its cover image), so
+     * that its version, hence its entity tag, changes too.
+     */
+    void markUpdated(Instant now) {
+        this.updatedAt = now;
+    }
+
     public UUID getId() {
         return id;
     }

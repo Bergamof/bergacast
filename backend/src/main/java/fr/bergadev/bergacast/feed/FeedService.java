@@ -6,12 +6,14 @@ import fr.bergadev.bergacast.episode.EpisodeMetadata;
 import fr.bergadev.bergacast.episode.EpisodeService;
 import fr.bergadev.bergacast.podcast.Podcast;
 import fr.bergadev.bergacast.podcast.PodcastDetails;
+import fr.bergadev.bergacast.podcast.PodcastImageService;
 import fr.bergadev.bergacast.podcast.PodcastService;
 import fr.bergadev.bergacast.web.PublicUrls;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
 import java.util.stream.Stream;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class FeedService {
 
     private final PodcastService podcastService;
+    private final PodcastImageService podcastImageService;
     private final EpisodeService episodeService;
     private final FeedEpisodeSelector selector;
     private final RssFeedWriter writer;
@@ -28,11 +31,13 @@ public class FeedService {
 
     FeedService(
             PodcastService podcastService,
+            PodcastImageService podcastImageService,
             EpisodeService episodeService,
             FeedEpisodeSelector selector,
             RssFeedWriter writer,
             PublicUrls publicUrls) {
         this.podcastService = podcastService;
+        this.podcastImageService = podcastImageService;
         this.episodeService = episodeService;
         this.selector = selector;
         this.writer = writer;
@@ -61,10 +66,20 @@ public class FeedService {
                 details.author(),
                 details.ownerName(),
                 details.ownerEmail(),
-                details.imageUrl(),
+                imageUrl(podcast),
                 details.category(),
                 details.explicit(),
                 publicUrls.feed(podcast.getSlug()));
+    }
+
+    /** The uploaded image takes precedence over the external image URL. */
+    private @Nullable String imageUrl(Podcast podcast) {
+        return podcastImageService
+                .find(podcast)
+                .map(image -> publicUrls
+                        .podcastImage(podcast.getSlug(), image.format().fileExtension())
+                        .toString())
+                .orElse(podcast.getDetails().imageUrl());
     }
 
     /**

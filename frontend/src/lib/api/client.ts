@@ -15,12 +15,14 @@ export interface ApiResponse<T> {
 }
 
 export interface RequestOptions {
-	method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+	method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 	/** Sent as `application/json`. */
 	json?: unknown;
 	/** Sent as `application/merge-patch+json` (RFC 7396). */
 	mergePatch?: unknown;
 	formData?: FormData;
+	/** Sent as is (e.g. a file), with its own media type as `Content-Type`. */
+	blob?: Blob;
 	ifMatch?: string | null;
 	headers?: Record<string, string>;
 }
@@ -47,6 +49,9 @@ function encodeBody(options: RequestOptions): EncodedBody {
 	if (options.formData !== undefined) {
 		// The browser must set the multipart boundary itself, so no explicit Content-Type.
 		return { body: options.formData };
+	}
+	if (options.blob !== undefined) {
+		return { body: options.blob, contentType: options.blob.type || undefined };
 	}
 	if (options.mergePatch !== undefined) {
 		return { body: JSON.stringify(options.mergePatch), contentType: MERGE_PATCH_JSON };
@@ -150,6 +155,11 @@ export class ApiClient {
 		headers: Record<string, string> = {}
 	): Promise<ApiResponse<T>> {
 		return this.request<T>(href, { method: 'POST', formData, headers });
+	}
+
+	/** Replaces the resource at `href` with the raw content of `blob`. */
+	putBlob<T>(href: string, blob: Blob, ifMatch: string | null = null): Promise<ApiResponse<T>> {
+		return this.request<T>(href, { method: 'PUT', blob, ifMatch });
 	}
 
 	patch<T>(

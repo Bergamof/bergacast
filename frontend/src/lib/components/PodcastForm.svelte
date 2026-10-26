@@ -118,7 +118,12 @@
 					<input {...attributes} type="email" bind:value={values.ownerEmail} autocomplete="email" />
 				{/snippet}
 			</FormField>
-			<FormField id="imageUrl" label="URL de l’image (couverture)" error={errors.imageUrl}>
+			<FormField
+				id="imageUrl"
+				label="URL de l’image (couverture)"
+				hint="Utilisée dans le flux seulement si aucune image n’a été envoyée."
+				error={errors.imageUrl}
+			>
 				{#snippet control(attributes)}
 					<input {...attributes} type="url" bind:value={values.imageUrl} />
 				{/snippet}

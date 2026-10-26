@@ -4,6 +4,7 @@
 	import { api } from '#lib/app.ts';
 	import ConfirmButton from '#lib/components/ConfirmButton.svelte';
 	import PodcastForm from '#lib/components/PodcastForm.svelte';
+	import PodcastImageForm from '#lib/components/PodcastImageForm.svelte';
 	import PublishingInfo from '#lib/components/PublishingInfo.svelte';
 	import {
 		podcastFormValues,
@@ -23,6 +24,17 @@
 		await api.updatePodcast(data.podcast, toPodcastPatch(values));
 		await invalidate(LoadDependency.podcast);
 		savedMessage = 'Modifications enregistrées.';
+	}
+
+	// The image changes the podcast version (ETag): reload it before any further update.
+	async function uploadImage(file: File): Promise<void> {
+		await api.uploadPodcastImage(podcast, file);
+		await invalidate(LoadDependency.podcast);
+	}
+
+	async function deleteImage(): Promise<void> {
+		await api.deletePodcastImage(podcast);
+		await invalidate(LoadDependency.podcast);
 	}
 
 	async function deletePodcast(): Promise<void> {
@@ -53,6 +65,16 @@
 			onSubmit={savePodcast}
 		/>
 	{/key}
+</section>
+
+<section class="card" aria-labelledby="image-title">
+	<h2 id="image-title">Image de couverture</h2>
+	<PodcastImageForm
+		image={podcast.image}
+		podcastTitle={podcast.title}
+		onUpload={uploadImage}
+		onDelete={deleteImage}
+	/>
 </section>
 
 <section class="card" aria-labelledby="danger-title">

@@ -50,11 +50,20 @@ public record PodcastResponse(
         boolean explicit,
 
         @Schema(
-                description = "URL of the cover art (`itunes:image`).",
+                description = "External URL of the cover art, advertised in the feed (`itunes:image`) only when no "
+                        + "image was uploaded.",
                 example = "https://example.com/cover.jpg",
                 nullable = true)
         @Nullable
         String imageUrl,
+
+        @Schema(
+                description = "Uploaded cover image, null when none was uploaded (it is uploaded with PUT at the URL "
+                        + "of the image link, always present). When present, the feed advertises it (`itunes:image`) "
+                        + "instead of imageUrl.",
+                nullable = true)
+        @Nullable
+        PodcastImageResponse image,
 
         @Schema(
                 description = "URL of the podcast website (channel `link`).",

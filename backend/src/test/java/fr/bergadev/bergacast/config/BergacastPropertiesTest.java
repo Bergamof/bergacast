@@ -8,14 +8,18 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.util.unit.DataSize;
 
 class BergacastPropertiesTest {
 
     private static final String SECRET = "0123456789abcdef0123456789abcdef";
+    private static final DataSize IMAGE_LIMIT = DataSize.ofMegabytes(20);
 
     @Test
     void requiresAJwtSecret() {
-        assertThatThrownBy(() -> new BergacastProperties(URI.create("http://localhost"), null, null, null))
+        assertThatThrownBy(() -> new BergacastProperties(URI.create("http://localhost"), null, null, null, IMAGE_LIMIT))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("BERGACAST_JWT_SECRET");
     }
@@ -33,7 +37,8 @@ class BergacastPropertiesTest {
                 URI.create("https://example.test/"),
                 new BergacastProperties.Jwt(SECRET, Duration.ofMinutes(15), "x"),
                 new BergacastProperties.InitialAdmin(null, null),
-                new BergacastProperties.Cors(List.of()));
+                new BergacastProperties.Cors(List.of()),
+                IMAGE_LIMIT);
 
         assertThat(properties.publicBaseUrl()).hasToString("https://example.test");
         assertThat(properties.admin().isConfigured()).isFalse();
@@ -50,5 +55,18 @@ class BergacastPropertiesTest {
         assertThat(cors.allowedOrigins()).containsExactly("https://admin.example.test");
         assertThatThrownBy(() -> cors.allowedOrigins().add("https://other.example.test"))
                 .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"0B", "2GB"})
+    void requiresAnImageUploadLimitBetweenOneByteAndOneGigabyte(String limit) {
+        assertThatThrownBy(() -> new BergacastProperties(
+                        URI.create("http://localhost"),
+                        new BergacastProperties.Jwt(SECRET, Duration.ofMinutes(15), "x"),
+                        new BergacastProperties.InitialAdmin(null, null),
+                        new BergacastProperties.Cors(List.of()),
+                        DataSize.parse(limit)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("BERGACAST_MAX_IMAGE_UPLOAD_SIZE");
     }
 }

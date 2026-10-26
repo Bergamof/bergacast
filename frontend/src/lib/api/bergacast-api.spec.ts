@@ -130,6 +130,47 @@ describe('BergacastApi', () => {
 		expect(updated.etag).toBe('"2"');
 	});
 
+	it('uploads a podcast image as the raw file below the podcast', async () => {
+		const image = { mimeType: 'image/png', width: 1400, height: 1400, sha256: 'new' };
+		const { api, requests } = createApi(jsonResponse(201, image, { ETag: '"new"' }));
+		const file = new File(['png'], 'cover.png', { type: 'image/png' });
+
+		const uploaded = await api.uploadPodcastImage({ ...podcast, image: null }, file);
+
+		expect(requests[0]).toMatchObject({ url: '/api/v1/podcasts/demo/image', method: 'PUT' });
+		expect(requests[0].body).toBe(file);
+		expect(requests[0].headers.get('Content-Type')).toBe('image/png');
+		expect(requests[0].headers.has('If-Match')).toBe(false);
+		expect(uploaded).toEqual({ resource: image, etag: '"new"' });
+	});
+
+	it('replaces a podcast image only if it is still the one displayed', async () => {
+		const { api, requests } = createApi(jsonResponse(200, {}));
+		const current = { ...podcast, image: { sha256: 'old' } } as Podcast;
+
+		await api.uploadPodcastImage(current, new File(['jpg'], 'c.jpg', { type: 'image/jpeg' }));
+
+		expect(requests[0].headers.get('If-Match')).toBe('"old"');
+	});
+
+	it('reports a rejected podcast image as problem details', async () => {
+		const { api } = createApi(
+			jsonResponse(413, { title: 'Image trop volumineuse' }, {}, 'application/problem+json')
+		);
+
+		await expect(
+			api.uploadPodcastImage(podcast, new File(['x'], 'c.png', { type: 'image/png' }))
+		).rejects.toMatchObject({ status: 413, problem: { title: 'Image trop volumineuse' } });
+	});
+
+	it('deletes a podcast image below the podcast', async () => {
+		const { api, requests } = createApi(emptyResponse(204));
+
+		await api.deletePodcastImage(podcast);
+
+		expect(requests[0]).toMatchObject({ url: '/api/v1/podcasts/demo/image', method: 'DELETE' });
+	});
+
 	it('deletes a podcast through its self link', async () => {
 		const { api, requests } = createApi(emptyResponse(204));
 

@@ -35,4 +35,16 @@ public final class EntityTags {
                     "The resource has been modified: If-Match does not match the current ETag " + currentEntityTag);
         }
     }
+
+    /**
+     * Ensures that no {@code If-Match} header targets a resource that does not exist: no tag, not even {@code *},
+     * matches a missing representation.
+     *
+     * @throws PreconditionFailedException when the header is present
+     */
+    public static void requireIfMatchOnMissingResource(@Nullable String ifMatchHeader) {
+        if (ifMatchHeader != null && !ifMatchHeader.isBlank()) {
+            throw new PreconditionFailedException("The resource does not exist: If-Match cannot match");
+        }
+    }
 }

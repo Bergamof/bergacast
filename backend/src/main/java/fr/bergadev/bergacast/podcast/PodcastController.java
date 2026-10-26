@@ -44,12 +44,12 @@ class PodcastController {
 
     private final PodcastService podcastService;
     private final PodcastModelAssembler assembler;
-    private final PagedResourcesAssembler<PodcastWithEpisodeCount> pagedAssembler;
+    private final PagedResourcesAssembler<PodcastOverview> pagedAssembler;
 
     PodcastController(
             PodcastService podcastService,
             PodcastModelAssembler assembler,
-            PagedResourcesAssembler<PodcastWithEpisodeCount> pagedAssembler) {
+            PagedResourcesAssembler<PodcastOverview> pagedAssembler) {
         this.podcastService = podcastService;
         this.assembler = assembler;
         this.pagedAssembler = pagedAssembler;
@@ -77,7 +77,7 @@ class PodcastController {
     @ApiResponse(responseCode = "422", description = "Invalid content, listed in errors", content = @Content)
     @EntityTagged
     ResponseEntity<EntityModel<PodcastResponse>> create(@Valid @RequestBody PodcastInput input) {
-        PodcastWithEpisodeCount created = podcastService.create(input);
+        PodcastOverview created = podcastService.create(input);
         return ResponseEntity.created(
                         ApiLinks.uri(ApiPaths.PODCAST, created.podcast().getSlug()))
                 .eTag(created.entityTag())
@@ -97,7 +97,7 @@ class PodcastController {
             content = @Content)
     @EntityTagged
     ResponseEntity<EntityModel<PodcastResponse>> get(@PathVariable String slug) {
-        PodcastWithEpisodeCount podcast = podcastService.get(slug);
+        PodcastOverview podcast = podcastService.get(slug);
         return ResponseEntity.ok().eTag(podcast.entityTag()).body(assembler.toModel(podcast));
     }
 
@@ -135,7 +135,7 @@ class PodcastController {
             @PathVariable String slug,
             @RequestHeader(name = HttpHeaders.IF_MATCH, required = false) @Nullable String ifMatch,
             @RequestBody JsonNode patch) {
-        PodcastWithEpisodeCount updated = podcastService.patch(slug, patch, ifMatch);
+        PodcastOverview updated = podcastService.patch(slug, patch, ifMatch);
         return ResponseEntity.ok().eTag(updated.entityTag()).body(assembler.toModel(updated));
     }
 

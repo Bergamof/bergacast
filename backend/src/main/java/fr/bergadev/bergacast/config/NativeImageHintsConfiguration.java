@@ -16,10 +16,10 @@ import org.springframework.context.annotation.ImportRuntimeHints;
 /**
  * Reflection needed by the GraalVM native image that Spring AOT and the libraries' own metadata do not register. The
  * entries come from the native-image tracing agent run with {@code backend/scripts/smoke-test.sh}, minus what Spring
- * AOT already generates.
+ * AOT already generates. The JNI metadata of image processing (AWT, ImageIO) is in {@link ImageProcessingHints}.
  */
 @Configuration(proxyBeanMethods = false)
-@ImportRuntimeHints(NativeImageHintsConfiguration.Hints.class)
+@ImportRuntimeHints({NativeImageHintsConfiguration.Hints.class, ImageProcessingHints.class})
 class NativeImageHintsConfiguration {
 
     static class Hints implements RuntimeHintsRegistrar {
