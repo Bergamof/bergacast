@@ -6,11 +6,12 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:bergacast}
     password: ${SPRING_DATASOURCE_PASSWORD:bergacast}
     # Serverless: no connection kept open "just in case", so that an idle database (Serverless SQL) can pause.
+    # Bound to HikariConfig's setters as is: durations are in milliseconds (30 s, 10 min).
     hikari:
       minimum-idle: 0
-      idle-timeout: 30s
+      idle-timeout: 30000
       maximum-pool-size: 5
-      max-lifetime: 10m
+      max-lifetime: 600000
   jpa:
     open-in-view: false
     hibernate:
