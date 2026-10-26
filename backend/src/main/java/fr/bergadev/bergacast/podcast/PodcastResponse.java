@@ -76,7 +76,8 @@ public record PodcastResponse(
         FeedSettings feed,
 
         @Schema(
-                description = "Absolute public URL of the RSS feed, to submit to podcast directories.",
+                description =
+                        "Absolute public URL of the RSS feed, to add to podcast apps (not listed in directories).",
                 example = "https://podcasts.example.com/my-podcast.xml")
         URI feedUrl,
 

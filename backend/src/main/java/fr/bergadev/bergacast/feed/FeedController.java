@@ -35,11 +35,12 @@ class FeedController {
     @Operation(
             operationId = "getPodcastFeed",
             summary = "Get the RSS feed of a podcast",
-            description = "Public. RSS 2.0 feed with Apple Podcasts (itunes) extensions, the URL to submit to podcast "
-                    + "directories. Lists the published episodes selected and ordered by the feed settings of the "
-                    + "podcast, each with its audio file as enclosure. Always up to date (scheduled episodes appear "
-                    + "at their publication date); cacheable for 5 minutes, and supports conditional requests with "
-                    + "If-None-Match.")
+            description = "Public. RSS 2.0 feed with Apple Podcasts (itunes) extensions, the URL to add to "
+                    + "podcast apps; it asks Apple and Google not to list the podcast in their directories "
+                    + "(itunes:block, googleplay:block). Lists the published episodes selected and ordered by the "
+                    + "feed settings of the podcast, each with its audio file as enclosure. Always up to date "
+                    + "(scheduled episodes appear at their publication date); cacheable for 5 minutes, and supports "
+                    + "conditional requests with If-None-Match.")
     @ApiResponse(
             responseCode = "200",
             description = "The feed",

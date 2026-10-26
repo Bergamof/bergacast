@@ -98,6 +98,12 @@ class RssFeedWriterTest {
     }
 
     @Test
+    void asksAppleAndGoogleNotToListThePodcastInTheirDirectories() throws Exception {
+        assertThat(text("/rss/channel/itunes:block")).isEqualTo("Yes");
+        assertThat(text("/rss/channel/googleplay:block")).isEqualTo("yes");
+    }
+
+    @Test
     void rendersItemsInTheGivenOrder() throws Exception {
         assertThat(text("/rss/channel/item[1]/guid")).isEqualTo("guid-1");
         assertThat(text("/rss/channel/item[2]/guid")).isEqualTo("guid-2");
@@ -215,6 +221,7 @@ class RssFeedWriterTest {
         public String getNamespaceURI(String prefix) {
             return switch (prefix) {
                 case "itunes" -> RssFeedWriter.ITUNES_NAMESPACE;
+                case "googleplay" -> RssFeedWriter.GOOGLE_PLAY_NAMESPACE;
                 case "atom" -> RssFeedWriter.ATOM_NAMESPACE;
                 default -> "";
             };
