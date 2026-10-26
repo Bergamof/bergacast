@@ -366,7 +366,8 @@ Configurer chaque conteneur sur un tag `X.Y.Z` (déploiement explicite, retour a
 - **backend** : port `8080` (la plateforme fournit `PORT`), variables de la section [Configuration](#configuration) ;
   `BERGACAST_PUBLIC_BASE_URL` = URL publique du conteneur backend, `BERGACAST_CORS_ALLOWED_ORIGINS` = URL publique du
   conteneur frontend, `SPRING_DATASOURCE_*` = base PostgreSQL ; secrets (`BERGACAST_JWT_SECRET`, mots de passe) en
-  variables secrètes. Sonde de santé : `/actuator/health`.
+  variables secrètes. Sonde de santé : `/actuator/health/liveness` (n’interroge pas la base). Le pool de
+  connexions ne garde aucune connexion inactive (fermée après 30 s) : une base serverless peut se mettre en pause.
 - **frontend** : `BERGACAST_API_URL` = URL publique du backend ; 128 Mo de mémoire suffisent. Sonde : `/health`.
 
 ## Utilisation par des outils automatisés
