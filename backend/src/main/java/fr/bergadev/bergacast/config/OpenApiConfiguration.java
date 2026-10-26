@@ -51,34 +51,7 @@ class OpenApiConfiguration {
                         .contact(new Contact().name("Bergacast").url("https://github.com/Bergamof/bergacast"))
                         .license(new License().name("AGPL-3.0-only").url("https://www.gnu.org/licenses/agpl-3.0")))
                 .servers(List.of(new Server().url(properties.publicBaseUrl().toString())))
-                .tags(List.of(
-                        new Tag()
-                                .name("Root")
-                                .description("Entry point: server version and links to the top-level resources. "
-                                        + "Public."),
-                        new Tag()
-                                .name("Access tokens")
-                                .description("Administrator login: credentials exchanged for a short-lived JWT. "
-                                        + "Public."),
-                        new Tag()
-                                .name("Podcasts")
-                                .description(
-                                        "Podcasts: channel metadata of the RSS feed, cover image and feed settings. "
-                                                + "Administrators only."),
-                        new Tag()
-                                .name("Episodes")
-                                .description("Episode publication by automated tools (podcast API token or "
-                                        + "administrator) and episode administration (administrators only)."),
-                        new Tag()
-                                .name("API tokens")
-                                .description("Long-lived `bgc_…` tokens allowing an automated tool to publish the "
-                                        + "episodes of one podcast. Administrators only."),
-                        new Tag().name("Admin users").description("Administrators of Bergacast. Administrators only."),
-                        new Tag()
-                                .name("Public feed")
-                                .description(
-                                        "RSS feeds, audio files and cover images, for podcast apps and directories. No "
-                                                + "authentication.")))
+                .tags(tags())
                 .components(new Components()
                         .addSecuritySchemes(
                                 SecuritySchemes.ADMIN_JWT,
@@ -99,6 +72,36 @@ class OpenApiConfiguration {
                                         .description("Podcast API token (bgc_…) created by an administrator, "
                                                 + "limited to listing, reading and publishing the episodes of its "
                                                 + "podcast. Long-lived until revoked.")));
+    }
+
+    private static List<Tag> tags() {
+        return List.of(
+                new Tag()
+                        .name("Root")
+                        .description("Entry point: server version and links to the top-level resources. " + "Public."),
+                new Tag()
+                        .name("Access tokens")
+                        .description("Administrator login: credentials exchanged for a short-lived JWT. " + "Public."),
+                new Tag()
+                        .name("Podcasts")
+                        .description("Podcasts: channel metadata of the RSS feed, cover image and feed settings. "
+                                + "Administrators only."),
+                new Tag()
+                        .name("Episodes")
+                        .description("Episode publication by automated tools (podcast API token or "
+                                + "administrator) and episode administration (administrators only)."),
+                new Tag()
+                        .name("API tokens")
+                        .description("Long-lived `bgc_…` tokens allowing an automated tool to publish the "
+                                + "episodes of one podcast. Administrators only."),
+                new Tag().name("Admin users").description("Administrators of Bergacast. Administrators only."),
+                new Tag()
+                        .name("Robots")
+                        .description("Crawling rules keeping search engines away from the server. Public."),
+                new Tag()
+                        .name("Public feed")
+                        .description(
+                                "RSS feeds, audio files and cover images, for podcast apps. No " + "authentication."));
     }
 
     /** Documents the conventions shared by all operations (authentication errors, headers, Problem Details...). */

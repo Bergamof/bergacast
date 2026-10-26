@@ -5,6 +5,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,7 +19,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * Logs one line per HTTP request: method, path (without query string), status, duration, whether it used the
  * database and the user agent, e.g. {@code GET /sitemap.xml 404 3ms db=yes ua="Googlebot/2.1"}. Neither headers,
  * bodies nor client addresses are logged. First filter of the chain, so that requests rejected by Spring Security or
- * CORS are logged as well.
+ * CORS are logged as well. The liveness and readiness probes of the platform are not logged: they come every few
+ * seconds and never use the database.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
@@ -27,6 +29,12 @@ class RequestLogFilter extends OncePerRequestFilter {
     static final int MAX_USER_AGENT_LENGTH = 200;
     private static final Logger LOGGER = LoggerFactory.getLogger(RequestLogFilter.class);
     private static final String NO_USER_AGENT = "-";
+    private static final Set<String> PROBE_PATHS = Set.of("/actuator/health/liveness", "/actuator/health/readiness");
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        return PROBE_PATHS.contains(request.getRequestURI());
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)

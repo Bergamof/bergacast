@@ -88,7 +88,7 @@ public class RssFeedWriter {
 
     /** Asks Apple Podcasts and Google (YouTube Music) to keep the podcast out of their directories. */
     private static void writeDirectoryBlocks(XMLStreamWriter xml) throws XMLStreamException {
-        itunesElement(xml, "block", "Yes");
+        itunesElement(xml, "block", "yes");
         xml.writeStartElement(GOOGLE_PLAY, "block", GOOGLE_PLAY_NAMESPACE);
         xml.writeCharacters("yes");
         xml.writeEndElement();

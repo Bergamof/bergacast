@@ -168,6 +168,10 @@ step "Cover image deletion"
 request DELETE "/api/v1/podcasts/$SLUG/image" 204 "${ADMIN[@]}" >/dev/null
 request GET "/$SLUG/image.jpg" 404 >/dev/null
 
+step "Robots kept away (robots.txt, X-Robots-Tag)"
+request GET /robots.txt 200 | grep -qx 'Disallow: /' || fail "robots.txt does not disallow crawling"
+[ "$(header X-Robots-Tag)" = "noindex, nofollow" ] || fail "X-Robots-Tag missing"
+
 step "OpenAPI document and Swagger UI"
 request GET /v3/api-docs 200 | jq -e '.openapi and (.paths | length > 0)' >/dev/null
 request GET /swagger-ui/index.html 200 >/dev/null
