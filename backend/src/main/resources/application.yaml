@@ -5,6 +5,12 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/bergacast}
     username: ${SPRING_DATASOURCE_USERNAME:bergacast}
     password: ${SPRING_DATASOURCE_PASSWORD:bergacast}
+    # Serverless: no connection kept open "just in case", so that an idle database (Serverless SQL) can pause.
+    hikari:
+      minimum-idle: 0
+      idle-timeout: 30s
+      maximum-pool-size: 5
+      max-lifetime: 10m
   jpa:
     open-in-view: false
     hibernate:
