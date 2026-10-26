@@ -33,7 +33,7 @@ class OpenApiConfiguration {
             2. Create a podcast: `POST /api/v1/podcasts`.
             3. Create an API token for the publishing tool: `POST /api/v1/podcasts/{slug}/api-tokens`.
             4. Publish episodes with that token: `POST /api/v1/{slug}/episodes`.
-            5. Submit the feed URL `/{slug}.xml` to podcast directories.
+            5. Add the feed URL `/{slug}.xml` to a podcast app (feeds ask Apple and Google not to list them).
 
             **Conventions**: representations are HAL (`_links`, `_embedded`); errors are RFC 9457 Problem Details; \
             updates are JSON Merge Patch (RFC 7396: an absent member is left unchanged, `null` clears it); entities \

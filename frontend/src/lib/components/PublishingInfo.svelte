@@ -18,7 +18,10 @@
 	<h2 id="publishing-title">Diffusion et publication</h2>
 
 	<h3>Flux RSS public</h3>
-	<p class="muted">L’adresse à donner aux applications d’écoute et annuaires de podcasts.</p>
+	<p class="muted">
+		L’adresse à ajouter dans une application d’écoute. Le flux demande à Apple et Google de ne pas
+		référencer le podcast dans leurs annuaires.
+	</p>
 	<CopyableText value={podcast.feedUrl} label="URL du flux RSS" />
 	<p>
 		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- public feed served by the backend, outside the SPA -->

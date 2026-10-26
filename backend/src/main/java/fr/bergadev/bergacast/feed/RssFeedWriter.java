@@ -11,13 +11,19 @@ import javax.xml.stream.XMLStreamWriter;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
-/** Renders a podcast feed as RSS 2.0 with the Apple Podcasts ({@code itunes:}) and Atom extensions. */
+/**
+ * Renders a podcast feed as RSS 2.0 with the Apple Podcasts ({@code itunes:}), Google Play ({@code googleplay:}) and
+ * Atom extensions. Every feed asks Apple and Google not to list it in their directories ({@code block} tags): the
+ * podcasts are meant for the subscribers who know their feed URL only.
+ */
 @Component
 public class RssFeedWriter {
 
     static final String ITUNES_NAMESPACE = "http://www.itunes.com/dtds/podcast-1.0.dtd";
+    static final String GOOGLE_PLAY_NAMESPACE = "http://www.google.com/schemas/play-podcasts/1.0";
     static final String ATOM_NAMESPACE = "http://www.w3.org/2005/Atom";
     private static final String ITUNES = "itunes";
+    private static final String GOOGLE_PLAY = "googleplay";
     private static final String ATOM = "atom";
     private static final String RSS_VERSION = "2.0";
     private static final String ENCODING = StandardCharsets.UTF_8.name();
@@ -34,6 +40,7 @@ public class RssFeedWriter {
             xml.writeStartElement("rss");
             attribute(xml, "version", RSS_VERSION);
             xml.writeNamespace(ITUNES, ITUNES_NAMESPACE);
+            xml.writeNamespace(GOOGLE_PLAY, GOOGLE_PLAY_NAMESPACE);
             xml.writeNamespace(ATOM, ATOM_NAMESPACE);
             xml.writeStartElement("channel");
             writeChannel(xml, channel);
@@ -76,6 +83,15 @@ public class RssFeedWriter {
             attribute(xml, "text", channel.category());
         }
         itunesElement(xml, "explicit", Boolean.toString(channel.explicit()));
+        writeDirectoryBlocks(xml);
+    }
+
+    /** Asks Apple Podcasts and Google (YouTube Music) to keep the podcast out of their directories. */
+    private static void writeDirectoryBlocks(XMLStreamWriter xml) throws XMLStreamException {
+        itunesElement(xml, "block", "Yes");
+        xml.writeStartElement(GOOGLE_PLAY, "block", GOOGLE_PLAY_NAMESPACE);
+        xml.writeCharacters("yes");
+        xml.writeEndElement();
     }
 
     private static void writeItem(XMLStreamWriter xml, FeedItem item) throws XMLStreamException {
