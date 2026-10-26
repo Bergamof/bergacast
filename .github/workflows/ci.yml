@@ -643,6 +643,8 @@ jobs:
           curl -fsS http://localhost:8080/config.js | grep -F "\"$API_URL\""
           curl -fsS http://localhost:8080/podcasts/demo | grep -F '<script src="/config.js"></script>'
           curl -fsS -D - -o /dev/null http://localhost:8080/ | grep -i '^cache-control: no-cache'
+          curl -fsS -D - -o /dev/null http://localhost:8080/ | grep -i '^x-robots-tag: noindex, nofollow'
+          curl -fsS http://localhost:8080/robots.txt | grep -qx 'Disallow: /'
           # A configuration that is not a plain origin must stop the container.
           if docker run --rm -e BERGACAST_API_URL='javascript:alert(1)' "$IMAGE"; then
             echo "Invalid BERGACAST_API_URL accepted" >&2

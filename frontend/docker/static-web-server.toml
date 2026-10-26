@@ -15,12 +15,14 @@ cache-control-headers = false
 [advanced]
 
 # Everything revalidates by default: the index, client routes and the runtime configuration change on each deployment.
+# The administration is never indexed by search engines (robots.txt disallows crawling as well).
 [[advanced.headers]]
 source = "**"
 [advanced.headers.headers]
 Cache-Control = "no-cache"
 X-Content-Type-Options = "nosniff"
 Referrer-Policy = "no-referrer"
+X-Robots-Tag = "noindex, nofollow"
 
 # Fingerprinted build output never changes.
 [[advanced.headers]]

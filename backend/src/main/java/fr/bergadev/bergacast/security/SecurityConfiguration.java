@@ -5,6 +5,7 @@ import fr.bergadev.bergacast.config.BergacastProperties;
 import fr.bergadev.bergacast.token.ApiTokenService;
 import fr.bergadev.bergacast.web.ApiHeaders;
 import fr.bergadev.bergacast.web.ApiPaths;
+import fr.bergadev.bergacast.web.RobotsController;
 import java.time.Duration;
 import java.util.List;
 import javax.crypto.SecretKey;
@@ -38,6 +39,7 @@ import org.springframework.security.oauth2.server.resource.web.BearerTokenResolv
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
+import org.springframework.security.web.header.writers.StaticHeadersWriter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -77,6 +79,8 @@ class SecurityConfiguration {
                 .formLogin(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
                 .requestCache(AbstractHttpConfigurer::disable)
+                .headers(headers -> headers.addHeaderWriter(
+                        new StaticHeadersWriter(RobotsController.X_ROBOTS_TAG, RobotsController.NO_INDEX)))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(requests -> requests.requestMatchers(HttpMethod.GET, ApiPaths.BASE)
                         .permitAll()

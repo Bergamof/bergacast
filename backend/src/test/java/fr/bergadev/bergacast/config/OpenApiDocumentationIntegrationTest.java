@@ -29,6 +29,7 @@ class OpenApiDocumentationIntegrationTest {
             "getApiRoot",
             "createAccessToken",
             "getPodcastFeed",
+            "getRobotsTxt",
             "downloadEpisodeAudio",
             "downloadEpisodeAudio_1",
             "downloadPodcastImage",

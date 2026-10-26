@@ -61,6 +61,25 @@ class RequestLogFilterTest {
     }
 
     @Test
+    void doesNotLogThePlatformProbes(CapturedOutput output) throws Exception {
+        for (String probe : new String[] {"/actuator/health/liveness", "/actuator/health/readiness"}) {
+            filter.doFilter(new MockHttpServletRequest("GET", probe), new MockHttpServletResponse(), (req, res) -> {});
+        }
+
+        assertThat(output).doesNotContain("/actuator/health");
+    }
+
+    @Test
+    void logsTheAggregateHealthEndpointWhichChecksTheDatabase(CapturedOutput output) throws Exception {
+        filter.doFilter(
+                new MockHttpServletRequest("GET", "/actuator/health"),
+                new MockHttpServletResponse(),
+                (req, res) -> ConnectionUsage.recordConnectionBorrowed());
+
+        assertThat(output).containsPattern("GET /actuator/health 200 \\d+ms db=yes");
+    }
+
+    @Test
     void stripsControlCharactersAndQuotesFromTheUserAgent() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader(HttpHeaders.USER_AGENT, "bot\"\t\u0000/1.0");

@@ -99,7 +99,7 @@ class RssFeedWriterTest {
 
     @Test
     void asksAppleAndGoogleNotToListThePodcastInTheirDirectories() throws Exception {
-        assertThat(text("/rss/channel/itunes:block")).isEqualTo("Yes");
+        assertThat(text("/rss/channel/itunes:block")).isEqualTo("yes");
         assertThat(text("/rss/channel/googleplay:block")).isEqualTo("yes");
     }
 

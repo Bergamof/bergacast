@@ -408,6 +408,7 @@ Lister les épisodes : `GET /api/v1/{slug}/episodes?page=0&size=20&sort=publicat
 | URL | Contenu |
 |-----|---------|
 | `/{slug}.xml` | Flux RSS 2.0 (+ iTunes) à ajouter par son URL dans une application d’écoute ; il demande à Apple et Google de ne pas référencer le podcast dans leurs annuaires (`itunes:block`, `googleplay:block`). `Cache-Control: public, max-age=300`, `ETag`/`If-None-Match`. |
+| `/robots.txt` | Interdit l’exploration par les robots (`Disallow: /`) ; toutes les réponses portent `X-Robots-Tag: noindex, nofollow` (la SPA aussi). |
 | `/{slug}/episodes/{episodeId}/audio.{ext}` | Fichier audio (`GET`/`HEAD`, une seule plage `Range`, cache immuable d’un an). |
 
 Les URL absolues (dans le flux et dans les réponses de l’API : `feedUrl`, `publishUrl`, `audio.url`) sont construites
