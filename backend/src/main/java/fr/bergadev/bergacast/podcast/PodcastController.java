@@ -6,6 +6,7 @@ import fr.bergadev.bergacast.web.ApiPaths;
 import fr.bergadev.bergacast.web.EntityTagged;
 import fr.bergadev.bergacast.web.PagedModels;
 import fr.bergadev.bergacast.web.SecuritySchemes;
+import fr.bergadev.bergacast.web.StorageResponses;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -76,6 +77,10 @@ class PodcastController {
     @ApiResponse(responseCode = "409", description = "The slug is already used by another podcast", content = @Content)
     @ApiResponse(responseCode = "422", description = "Invalid content, listed in errors", content = @Content)
     @EntityTagged
+    @ApiResponse(
+            responseCode = StorageResponses.UNAVAILABLE,
+            description = StorageResponses.FEED_NOT_WRITTEN,
+            content = @Content)
     ResponseEntity<EntityModel<PodcastResponse>> create(@Valid @RequestBody PodcastInput input) {
         PodcastOverview created = podcastService.create(input);
         return ResponseEntity.created(
@@ -131,6 +136,10 @@ class PodcastController {
             description = "Invalid patched content (including a changed slug), listed in errors",
             content = @Content)
     @EntityTagged
+    @ApiResponse(
+            responseCode = StorageResponses.UNAVAILABLE,
+            description = StorageResponses.FEED_NOT_WRITTEN,
+            content = @Content)
     ResponseEntity<EntityModel<PodcastResponse>> update(
             @PathVariable String slug,
             @RequestHeader(name = HttpHeaders.IF_MATCH, required = false) @Nullable String ifMatch,

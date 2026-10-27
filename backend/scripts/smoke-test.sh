@@ -136,8 +136,9 @@ request GET "$MEDIA_URL/$SLUG.xml" 200 | grep -q '<title>First episode</title>' 
 [[ "$(header Content-Type)" == application/rss+xml* ]] || fail "feed is not stored as application/rss+xml"
 
 step "Feed written again on demand"
-request POST "/api/v1/podcasts/$SLUG/feed-publications" 201 "${ADMIN[@]}" | jq -e '.episodeCount == 1' >/dev/null
-[ "$(header Location)" = "$MEDIA_URL/$SLUG.xml" ] || fail "unexpected feed publication Location"
+request POST "/api/v1/podcasts/$SLUG/feed-publications" 200 "${ADMIN[@]}" |
+    jq -e --arg url "$MEDIA_URL/$SLUG.xml" '.episodeCount == 1 and .feedUrl == $url' >/dev/null ||
+    fail "unexpected feed publication"
 
 step "Former feed and audio URLs redirected to the object storage"
 request GET "/$SLUG.xml" 301 >/dev/null

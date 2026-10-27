@@ -64,8 +64,8 @@ class FeedPublicationApiIntegrationTest {
         Instant before = Instant.now();
 
         MvcResult result = mockMvc.perform(publishFeed(slug).header(HttpHeaders.AUTHORIZATION, admin))
-                .andExpect(status().isCreated())
-                .andExpect(header().string(HttpHeaders.LOCATION, feedUrl))
+                .andExpect(status().isOk())
+                .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
                 .andExpect(content().contentTypeCompatibleWith("application/hal+json"))
                 .andExpect(jsonPath("$.feedUrl").value(feedUrl))
                 .andExpect(jsonPath("$.episodeCount").value(1))
@@ -93,7 +93,7 @@ class FeedPublicationApiIntegrationTest {
         assertThat(feedText()).doesNotContain("<title>Scheduled</title>");
 
         mockMvc.perform(publishFeed(slug).header(HttpHeaders.AUTHORIZATION, admin))
-                .andExpect(status().isCreated())
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.episodeCount").value(1));
 
         assertThat(feedText()).contains("<title>Scheduled</title>");

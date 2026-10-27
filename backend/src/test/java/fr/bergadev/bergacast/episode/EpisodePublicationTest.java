@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -14,6 +15,7 @@ import static org.mockito.Mockito.when;
 import fr.bergadev.bergacast.audio.AudioFile;
 import fr.bergadev.bergacast.audio.AudioUploads;
 import fr.bergadev.bergacast.feed.FeedPublicationException;
+import fr.bergadev.bergacast.podcast.PodcastFeedChanged;
 import fr.bergadev.bergacast.storage.ObjectStorageException;
 import java.sql.SQLException;
 import java.time.Clock;
@@ -27,6 +29,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.stubbing.OngoingStubbing;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
@@ -44,8 +47,9 @@ class EpisodePublicationTest {
     private final EpisodeService episodeService = mock(EpisodeService.class);
     private final AudioUploads audioUploads = mock(AudioUploads.class);
     private final AudioFile audioFile = mock(AudioFile.class);
+    private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     private final EpisodePublication publication =
-            new EpisodePublication(episodeService, audioUploads, Clock.fixed(NOW, ZoneOffset.UTC));
+            new EpisodePublication(episodeService, audioUploads, events, Clock.fixed(NOW, ZoneOffset.UTC));
 
     @BeforeEach
     void uploadSucceeds() {
@@ -64,6 +68,8 @@ class EpisodePublicationTest {
         verify(episodeService).publish(SLUG, uploadedId.getValue(), METADATA, audioFile, NOW, KEY);
         assertThat(published.getId()).isEqualTo(uploadedId.getValue());
         verify(audioUploads, never()).discard(anyString(), any(UUID.class), anyString());
+        // The feed is written by the service once the episode is committed, not here.
+        verifyNoInteractions(events);
     }
 
     @Test
@@ -73,6 +79,7 @@ class EpisodePublicationTest {
 
         assertThat(publication.publish(SLUG, INPUT, AUDIO, KEY)).isSameAs(publishedMeanwhile);
         verifyAudioDiscarded();
+        verify(events).publishEvent(new PodcastFeedChanged(SLUG));
     }
 
     @Test
@@ -83,6 +90,17 @@ class EpisodePublicationTest {
         assertThat(publication.publish(SLUG, INPUT, AUDIO, KEY)).isSameAs(previous);
         verifyNoInteractions(audioUploads);
         verify(episodeService, never()).publish(any(), any(), any(), any(), any(), any());
+        // The request it repeats may have failed only on the feed (503): the retry writes it again.
+        verify(events).publishEvent(new PodcastFeedChanged(SLUG));
+    }
+
+    @Test
+    void reportsAFeedThatStillCannotBeWrittenOnReplay() {
+        when(episodeService.prepare(SLUG, METADATA, KEY)).thenReturn(Optional.of(mock(Episode.class)));
+        FeedPublicationException feedNotWritten = mock(FeedPublicationException.class);
+        doThrow(feedNotWritten).when(events).publishEvent(new PodcastFeedChanged(SLUG));
+
+        assertThatThrownBy(() -> publication.publish(SLUG, INPUT, AUDIO, KEY)).isSameAs(feedNotWritten);
     }
 
     @Test
@@ -120,6 +138,7 @@ class EpisodePublicationTest {
 
         assertThat(publication.publish(SLUG, INPUT, AUDIO, KEY)).isSameAs(winner);
         verifyAudioDiscarded();
+        verify(events).publishEvent(new PodcastFeedChanged(SLUG));
     }
 
     @Test

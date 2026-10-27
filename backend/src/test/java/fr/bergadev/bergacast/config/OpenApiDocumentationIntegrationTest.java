@@ -115,12 +115,7 @@ class OpenApiDocumentationIntegrationTest {
 
         assertThat(created)
                 .containsOnlyKeys(
-                        "createPodcast",
-                        "publishEpisode",
-                        "putPodcastImage",
-                        "publishPodcastFeed",
-                        "createApiToken",
-                        "createAdminUser");
+                        "createPodcast", "publishEpisode", "putPodcastImage", "createApiToken", "createAdminUser");
         assertThat(created.values())
                 .allSatisfy(headers -> assertThat(headers.has("Location")).isTrue());
     }
@@ -165,8 +160,27 @@ class OpenApiDocumentationIntegrationTest {
         JsonNode publish = operation("publishPodcastFeed");
 
         assertThat(publish.get("tags").valueStream().map(JsonNode::asString)).containsExactly("Feeds");
-        assertThat(publish.get("responses").propertyNames()).contains("201", "401", "403", "404", "503");
+        assertThat(publish.get("responses").propertyNames()).contains("200", "401", "403", "404", "503");
+        assertThat(publish.get("responses").propertyNames()).doesNotContain("201");
         assertThat(publish.has("requestBody")).isFalse();
+    }
+
+    @Test
+    void documentsTheStorageFailureOfEveryOperationWritingTheFeed() {
+        assertThat(Stream.of(
+                        "createPodcast",
+                        "updatePodcast",
+                        "putPodcastImage",
+                        "deletePodcastImage",
+                        "publishEpisode",
+                        "updateEpisode",
+                        "deleteEpisode"))
+                .allSatisfy(operationId -> assertThat(operation(operationId)
+                                .get("responses")
+                                .get("503")
+                                .get("description")
+                                .asString())
+                        .contains("feed-publications"));
     }
 
     @Test

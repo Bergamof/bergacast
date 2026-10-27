@@ -42,19 +42,18 @@ class FeedPublicationController {
             description = "Writes the RSS feed of the podcast to the object storage from the current data, as is "
                     + "done automatically after each change of the podcast, its image or its episodes. Useful to "
                     + "list an episode scheduled in the future once its publication date has passed (the feed is a "
-                    + "snapshot written on change), or after a failed write (503). No body. The Location header is "
-                    + "the public URL of the written feed.")
-    @ApiResponse(responseCode = "201", description = "Feed written")
+                    + "snapshot written on change), or after a failed write (503). No body. Answers 200, not 201: the "
+                    + "publication is not an addressable resource, the feed URL is in the body (feedUrl, feed link).")
+    @ApiResponse(responseCode = "200", description = "Feed written")
     @ApiResponse(
             responseCode = "503",
             description = "The object storage is unavailable: the feed was not written",
             content = @Content)
     ResponseEntity<EntityModel<FeedPublicationResponse>> publish(@PathVariable String slug) {
         FeedPublication publication = feedPublisher.publish(slug);
-        return ResponseEntity.created(publication.feedUrl())
-                .body(EntityModel.of(
-                        FeedPublicationResponse.of(publication),
-                        ApiLinks.link(PODCAST, ApiPaths.PODCAST, slug),
-                        Link.of(publication.feedUrl().toString(), FEED)));
+        return ResponseEntity.ok(EntityModel.of(
+                FeedPublicationResponse.of(publication),
+                ApiLinks.link(PODCAST, ApiPaths.PODCAST, slug),
+                Link.of(publication.feedUrl().toString(), FEED)));
     }
 }
