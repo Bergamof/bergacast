@@ -100,9 +100,6 @@ class OpenApiConfiguration {
                                 + "episodes of one podcast. Administrators only."),
                 new Tag().name("Admin users").description("Administrators of Bergacast. Administrators only."),
                 new Tag()
-                        .name("Robots")
-                        .description("Crawling rules keeping search engines away from the server. Public."),
-                new Tag()
                         .name("Public feed")
                         .description("Former URLs of the RSS feeds, audio files and cover images on this server, "
                                 + "permanently redirected to the object storage that now serves them. No "

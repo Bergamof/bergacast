@@ -29,8 +29,12 @@ spring:
       enabled: true
   web:
     resources:
-      # No static content: the admin SPA is a separate image.
-      add-mappings: false
+      # Only robots.txt: the admin SPA is a separate image, the media are on the object storage.
+      static-locations: classpath:/static/
+      cache:
+        cachecontrol:
+          max-age: 1d
+          cache-public: true
   data:
     web:
       pageable:

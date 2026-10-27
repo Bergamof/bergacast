@@ -192,7 +192,6 @@ request GET "$MEDIA_URL/$SLUG/image.jpg" 404 >/dev/null
 step "Robots kept away (robots.txt, X-Robots-Tag)"
 request GET /robots.txt 200 | grep -qx 'Disallow: /' || fail "robots.txt does not disallow crawling"
 [ "$(header X-Robots-Tag)" = "noindex, nofollow" ] || fail "X-Robots-Tag missing"
-request GET "$MEDIA_URL/robots.txt" 200 | grep -qx 'Disallow: /' || fail "robots.txt missing from the storage"
 
 step "OpenAPI document and Swagger UI"
 request GET /v3/api-docs 200 | jq -e '.openapi and (.paths | length > 0)' >/dev/null

@@ -413,8 +413,12 @@ Configurer chaque conteneur sur un tag `X.Y.Z` (déploiement explicite, retour a
    }
    ```
 
-3. `BERGACAST_MEDIA_BASE_URL` = `https://s3.fr-par.scw.cloud/MON-BUCKET`, ou l’URL d’un domaine Edge Services
-   (CDN) placé devant le bucket. Le backend écrit `robots.txt` (`Disallow: /`) à la racine du bucket au démarrage.
+3. `BERGACAST_MEDIA_BASE_URL` = `https://s3.fr-par.scw.cloud/MON-BUCKET`, ou l’URL d’un domaine dédié : domaine
+   Edge Services (CDN) placé devant le bucket, ou `https://MON-BUCKET.s3.fr-par.scw.cloud`. Les robots ne lisent
+   `robots.txt` qu’à la racine d’un domaine : avec un domaine dédié, y déposer une fois un `robots.txt`
+   (`User-agent: *` / `Disallow: /`, type `text/plain`) ; avec l’URL path-style, la racine appartient à Scaleway et
+   aucun `robots.txt` n’est possible (les flux portent de toute façon `itunes:block`/`googleplay:block`, et l’audio
+   n’est lié que depuis eux).
 
 ### Migration des médias stockés en base
 
@@ -477,9 +481,8 @@ Sur le stockage objet, relatives à `BERGACAST_MEDIA_BASE_URL` (la clé de l’o
 | `/{slug}.xml` | Flux RSS 2.0 (+ iTunes) à ajouter par son URL dans une application d’écoute ; il demande à Apple et Google de ne pas référencer le podcast dans leurs annuaires (`itunes:block`, `googleplay:block`). `Cache-Control: public, max-age=300`. |
 | `/{slug}/image.{jpg\|png}` | Image de couverture envoyée (`Cache-Control: public, max-age=300`). |
 | `/{slug}/episodes/{episodeId}/audio.{ext}` | Fichier audio (cache immuable d’un an). |
-| `/robots.txt` | Interdit l’exploration par les robots (`Disallow: /`). |
 
-Sur le backend (`BERGACAST_PUBLIC_BASE_URL`) : `/robots.txt` (`Disallow: /`, toutes les réponses portent
+Sur le backend (`BERGACAST_PUBLIC_BASE_URL`) : `/robots.txt` (fichier statique, `Disallow: /`, toutes les réponses portent
 `X-Robots-Tag: noindex, nofollow`, la SPA aussi) ; les anciennes URL des flux, images et audios sont redirigées
 (`301`) vers le même chemin sur le stockage, sans interroger la base.
 

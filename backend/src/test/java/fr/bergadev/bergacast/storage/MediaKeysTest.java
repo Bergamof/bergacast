@@ -36,10 +36,4 @@ class MediaKeysTest {
         assertThat(MediaKeys.feed("my-podcast")).doesNotStartWith(folder);
         assertThat(MediaKeys.podcastImage("my-podcast-2", "jpg")).doesNotStartWith(folder);
     }
-
-    /** Keys are the paths of the former URLs served by the backend, which now redirects them to the storage. */
-    @Test
-    void namesRobotsTxtLikeTheOneOfTheBackend() {
-        assertThat(MediaKeys.ROBOTS_TXT).isEqualTo("robots.txt");
-    }
 }

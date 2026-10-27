@@ -8,9 +8,6 @@ import java.util.UUID;
  */
 public final class MediaKeys {
 
-    /** Asks search engines not to index the bucket, see {@code web/RobotsController}. */
-    public static final String ROBOTS_TXT = "robots.txt";
-
     private MediaKeys() {}
 
     /** RSS feed of a podcast, e.g. {@code my-podcast.xml}. */

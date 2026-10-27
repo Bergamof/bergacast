@@ -28,7 +28,6 @@ class OpenApiDocumentationIntegrationTest {
     private static final Set<String> PUBLIC_OPERATIONS = Set.of(
             "getApiRoot",
             "createAccessToken",
-            "getRobotsTxt",
             "redirectPodcastFeed",
             "redirectPodcastFeed_1",
             "redirectEpisodeAudio",
