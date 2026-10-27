@@ -5,7 +5,6 @@ import static fr.bergadev.bergacast.support.ApiTestClient.uploadRequest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.endsWith;
-import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -15,8 +14,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import fr.bergadev.bergacast.storage.MediaKeys;
 import fr.bergadev.bergacast.support.ApiTestClient;
 import fr.bergadev.bergacast.support.IntegrationTest;
+import fr.bergadev.bergacast.support.StoredObjects;
+import fr.bergadev.bergacast.support.StoredObjects.StoredObject;
 import fr.bergadev.bergacast.web.Sha256;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,6 +46,9 @@ class EpisodeApiIntegrationTest {
 
     @Autowired
     private ApiTestClient api;
+
+    @Autowired
+    private StoredObjects storedObjects;
 
     private String slug;
     private String token;
@@ -83,14 +88,32 @@ class EpisodeApiIntegrationTest {
                 .andExpect(jsonPath("$.audio.url").value(endsWith("/audio.mp3")))
                 .andExpect(jsonPath("$._links.self.href").isString())
                 .andExpect(jsonPath("$._links.podcast.href").value(endsWith("/api/v1/podcasts/" + slug)))
-                .andExpect(jsonPath("$._links.audio.href")
-                        .value(startsWith("https://podcasts.example.test/" + slug + "/episodes/")))
                 .andReturn();
         JsonNode episode = api.json(result);
-        assertThat(result.getResponse().getHeader(HttpHeaders.LOCATION))
-                .endsWith("/episodes/" + episode.get("id").asString());
-        assertThat(api.largeObjectExists(api.audioOidOfEpisode(episode.get("id").asString())))
-                .isTrue();
+        String id = episode.get("id").asString();
+        String audioUrl = "https://media.example.test/" + slug + "/episodes/" + id + "/audio.mp3";
+        assertThat(result.getResponse().getHeader(HttpHeaders.LOCATION)).endsWith("/episodes/" + id);
+        assertThat(episode.get("audio").get("url").asString()).isEqualTo(audioUrl);
+        assertThat(episode.get("_links").get("audio").get("href").asString()).isEqualTo(audioUrl);
+        StoredObject audio = storedObjects.get(ApiTestClient.audioKeyOf(episode));
+        assertThat(audio.content()).isEqualTo(AUDIO);
+        assertThat(audio.contentType()).isEqualTo("audio/mpeg");
+        assertThat(audio.cacheControl()).isEqualTo("max-age=31536000, public, immutable");
+    }
+
+    @Test
+    void namesTheAudioObjectAfterTheDeclaredAudioType() throws Exception {
+        JsonNode episode = api.json(mockMvc.perform(multipart("/api/v1/{slug}/episodes", slug)
+                        .part(ApiTestClient.metadataPart(MediaType.APPLICATION_JSON_VALUE, "{\"title\":\"Ogg\"}"))
+                        .file(new MockMultipartFile("audio", "episode.bin", "audio/ogg;codecs=opus", AUDIO))
+                        .header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.audio.mimeType").value("audio/ogg"))
+                .andReturn());
+
+        String audioKey = ApiTestClient.audioKeyOf(episode);
+        assertThat(audioKey).endsWith("/audio.ogg");
+        assertThat(storedObjects.get(audioKey).contentType()).isEqualTo("audio/ogg");
     }
 
     @Test
@@ -121,6 +144,8 @@ class EpisodeApiIntegrationTest {
         assertThat(api.json(retry).get("id")).isEqualTo(api.json(first).get("id"));
         mockMvc.perform(get("/api/v1/{slug}/episodes", slug).header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(jsonPath("$.page.totalElements").value(1));
+        assertThat(storedObjects.keys(MediaKeys.podcastFolder(slug)))
+                .containsExactly(ApiTestClient.audioKeyOf(api.json(first)));
     }
 
     @ParameterizedTest(name = "metadata sent as {0}")
@@ -155,13 +180,14 @@ class EpisodeApiIntegrationTest {
     }
 
     @Test
-    void rejectsADuplicateGuid() throws Exception {
-        api.publishEpisode(slug, token, "{\"title\":\"A\",\"guid\":\"same\"}", AUDIO);
+    void rejectsADuplicateGuidWithoutUploadingTheAudio() throws Exception {
+        JsonNode first = api.publishEpisode(slug, token, "{\"title\":\"A\",\"guid\":\"same\"}", AUDIO);
 
         mockMvc.perform(uploadRequest(slug, "{\"title\":\"B\",\"guid\":\"same\"}", AUDIO, "audio/mpeg")
                         .header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(status().isConflict())
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
+        assertThat(storedObjects.keys(MediaKeys.podcastFolder(slug))).containsExactly(ApiTestClient.audioKeyOf(first));
     }
 
     @Test
@@ -171,6 +197,7 @@ class EpisodeApiIntegrationTest {
                 .andExpect(status().isUnsupportedMediaType())
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.status").value(415));
+        assertThat(storedObjects.keys(MediaKeys.podcastFolder(slug))).isEmpty();
     }
 
     @Test
@@ -236,7 +263,7 @@ class EpisodeApiIntegrationTest {
     void getsPatchesAndDeletesAnEpisode() throws Exception {
         JsonNode episode = api.publishEpisode(slug, token, "{\"title\":\"Draft\",\"guid\":\"g1\"}", AUDIO);
         String id = episode.get("id").asString();
-        long oid = api.audioOidOfEpisode(id);
+        String audioKey = ApiTestClient.audioKeyOf(episode);
 
         mockMvc.perform(get("/api/v1/{slug}/episodes/{id}", slug, id)
                         .header(HttpHeaders.AUTHORIZATION, token)
@@ -275,7 +302,7 @@ class EpisodeApiIntegrationTest {
                 .andExpect(status().isForbidden());
         mockMvc.perform(delete("/api/v1/{slug}/episodes/{id}", slug, id).header(HttpHeaders.AUTHORIZATION, admin))
                 .andExpect(status().isNoContent());
-        assertThat(api.largeObjectExists(oid)).isFalse();
+        assertThat(storedObjects.find(audioKey)).isEmpty();
         mockMvc.perform(get("/api/v1/{slug}/episodes/{id}", slug, id).header(HttpHeaders.AUTHORIZATION, admin))
                 .andExpect(status().isNotFound());
     }

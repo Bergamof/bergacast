@@ -1,5 +1,6 @@
 # Local stack mirroring production (one image per module): cp .env.example .env, adjust the values, then
-# `docker compose up -d --build`. The admin SPA is on BERGACAST_ADMIN_PORT, the API, feeds and audio on BERGACAST_PORT.
+# `docker compose up -d --build`. The admin SPA is on BERGACAST_ADMIN_PORT, the API on BERGACAST_PORT, the feeds,
+# audio files and images on BERGACAST_MEDIA_PORT (bucket "bergacast" of the object storage).
 name: bergacast
 
 services:
@@ -20,6 +21,20 @@ services:
       retries: 10
       start_period: 10s
 
+  # S3-compatible object storage for local use (Adobe S3Mock: no authentication, objects publicly readable, kept in
+  # the volume). In production, use a real object storage (Scaleway Object Storage) and set BERGACAST_STORAGE_*.
+  storage:
+    image: adobe/s3mock:5.2.3
+    restart: unless-stopped
+    environment:
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: bergacast
+      COM_ADOBE_TESTING_S3MOCK_STORE_ROOT: /data
+      COM_ADOBE_TESTING_S3MOCK_STORE_RETAIN_FILES_ON_EXIT: "true"
+    volumes:
+      - storage-data:/data
+    ports:
+      - "${BERGACAST_MEDIA_PORT:-9090}:9090"
+
   backend:
     build: ./backend
     image: bergacast-backend:latest
@@ -27,6 +42,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      storage:
+        condition: service_started
     environment:
       BERGACAST_PUBLIC_BASE_URL: ${BERGACAST_PUBLIC_BASE_URL:-http://localhost:8080}
       BERGACAST_CORS_ALLOWED_ORIGINS: ${BERGACAST_ADMIN_URL:-http://localhost:8081}
@@ -34,6 +51,12 @@ services:
       BERGACAST_ADMIN_PASSWORD: ${BERGACAST_ADMIN_PASSWORD:-}
       BERGACAST_JWT_SECRET: ${BERGACAST_JWT_SECRET:?BERGACAST_JWT_SECRET is required}
       BERGACAST_MAX_UPLOAD_SIZE: ${BERGACAST_MAX_UPLOAD_SIZE:-500MB}
+      BERGACAST_MEDIA_BASE_URL: ${BERGACAST_MEDIA_BASE_URL:-http://localhost:9090/bergacast}
+      BERGACAST_STORAGE_ENDPOINT: http://storage:9090
+      BERGACAST_STORAGE_BUCKET: bergacast
+      # Any value: S3Mock does not check credentials.
+      BERGACAST_STORAGE_ACCESS_KEY: local
+      BERGACAST_STORAGE_SECRET_KEY: local
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-bergacast}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-bergacast}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
@@ -51,3 +74,4 @@ services:
 
 volumes:
   db-data:
+  storage-data:

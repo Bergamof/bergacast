@@ -4,6 +4,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.Locale;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.util.unit.DataSize;
@@ -11,7 +12,10 @@ import org.springframework.util.unit.DataSize;
 /**
  * Application settings bound from {@code bergacast.*} (see {@code application.yaml} for the environment variables).
  *
- * @param publicBaseUrl absolute base URL used to build public links (feed, audio, publish endpoint)
+ * @param publicBaseUrl absolute base URL of the backend, used to build links to the API (e.g. the publish endpoint)
+ * @param mediaBaseUrl absolute public base URL of the object storage bucket (or of a CDN in front of it), used to
+ *     build the public links to feeds, audio files and images
+ * @param storage object storage where feeds, audio files and images are written
  * @param jwt settings of the admin access tokens
  * @param admin optional initial administrator created when no administrator exists
  * @param cors cross-origin access to the API, needed by the admin SPA served from another origin
@@ -20,6 +24,8 @@ import org.springframework.util.unit.DataSize;
 @ConfigurationProperties("bergacast")
 public record BergacastProperties(
         @DefaultValue("http://localhost:8080") URI publicBaseUrl,
+        URI mediaBaseUrl,
+        Storage storage,
         Jwt jwt,
         @DefaultValue InitialAdmin admin,
         @DefaultValue Cors cors,
@@ -36,7 +42,20 @@ public record BergacastProperties(
             throw new IllegalArgumentException("bergacast.max-image-upload-size (BERGACAST_MAX_IMAGE_UPLOAD_SIZE) must "
                     + "be positive and at most " + MAX_IMAGE_UPLOAD_SIZE_LIMIT);
         }
+        if (mediaBaseUrl == null || !mediaBaseUrl.isAbsolute()) {
+            throw new IllegalArgumentException(
+                    "bergacast.media-base-url (BERGACAST_MEDIA_BASE_URL) must be an absolute URL");
+        }
+        if (storage == null) {
+            throw new IllegalArgumentException("bergacast.storage (BERGACAST_STORAGE_*) is required");
+        }
         publicBaseUrl = URI.create(withoutTrailingSlash(publicBaseUrl.toString()));
+        mediaBaseUrl = URI.create(withoutTrailingSlash(mediaBaseUrl.toString()));
+        if (publicBaseUrl.equals(mediaBaseUrl)) {
+            // The backend redirects its former media URLs to the media base URL: the same URL would loop.
+            throw new IllegalArgumentException(
+                    "bergacast.media-base-url (BERGACAST_MEDIA_BASE_URL) must differ from bergacast.public-base-url");
+        }
     }
 
     private static String withoutTrailingSlash(String url) {
@@ -69,6 +88,43 @@ public record BergacastProperties(
         @Override
         public String toString() {
             return "Jwt[secret=<redacted>, lifetime=" + lifetime + ", issuer=" + issuer + "]";
+        }
+    }
+
+    /**
+     * S3-compatible object storage (Scaleway Object Storage in production), addressed with path-style URLs.
+     *
+     * @param endpoint URL of the S3 API, e.g. {@code https://s3.fr-par.scw.cloud}
+     * @param region region of the bucket, e.g. {@code fr-par}
+     * @param bucket name of the bucket
+     * @param accessKey access key of the credentials allowed to write to the bucket
+     * @param secretKey secret key of these credentials
+     */
+    public record Storage(
+            URI endpoint, @DefaultValue("fr-par") String region, String bucket, String accessKey, String secretKey) {
+
+        public Storage {
+            requireText(region, "region");
+            requireText(bucket, "bucket");
+            requireText(accessKey, "access-key");
+            requireText(secretKey, "secret-key");
+            if (endpoint == null || !endpoint.isAbsolute()) {
+                throw new IllegalArgumentException(
+                        "bergacast.storage.endpoint (BERGACAST_STORAGE_ENDPOINT) must be an absolute URL");
+            }
+        }
+
+        private static void requireText(String value, String property) {
+            if (value == null || value.isBlank()) {
+                throw new IllegalArgumentException("bergacast.storage." + property + " (BERGACAST_STORAGE_"
+                        + property.replace('-', '_').toUpperCase(Locale.ROOT) + ") is required");
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "Storage[endpoint=" + endpoint + ", region=" + region + ", bucket=" + bucket + ", accessKey="
+                    + accessKey + ", secretKey=<redacted>]";
         }
     }
 

@@ -16,8 +16,7 @@ public abstract sealed class ApiException extends ErrorResponseException
                 PreconditionFailedException,
                 UnprocessableContentException,
                 UnsupportedMediaTypeException,
-                ContentTooLargeException,
-                RangeNotSatisfiableException {
+                ContentTooLargeException {
 
     protected ApiException(HttpStatus status, String detail) {
         super(status, ProblemDetail.forStatusAndDetail(status, detail), null);

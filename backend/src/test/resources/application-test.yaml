@@ -1,5 +1,10 @@
 bergacast:
   public-base-url: https://podcasts.example.test/
+  media-base-url: https://media.example.test/
+  storage:
+    bucket: bergacast
+    access-key: test-access-key
+    secret-key: test-secret-key
   jwt:
     secret: test-secret-that-is-long-enough-for-hs256-signatures
   admin:

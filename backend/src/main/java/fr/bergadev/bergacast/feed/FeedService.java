@@ -17,7 +17,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Generates the RSS feed of a podcast on each request, so that it always reflects the current data. */
+/** Generates the RSS feed of a podcast from the current data. */
 @Service
 @Transactional(readOnly = true)
 public class FeedService {
@@ -44,14 +44,18 @@ public class FeedService {
         this.publicUrls = publicUrls;
     }
 
-    /** Returns the UTF-8 encoded RSS document of the podcast identified by {@code slug}. */
-    public byte[] render(String slug) {
+    /**
+     * Generates the RSS document of the podcast identified by {@code slug}.
+     *
+     * @throws fr.bergadev.bergacast.web.ResourceNotFoundException when there is no such podcast
+     */
+    public RenderedFeed render(String slug) {
         Podcast podcast = podcastService.getBySlug(slug);
         List<FeedItem> candidates = episodeService.listAll(podcast).stream()
                 .map(episode -> toFeedItem(slug, episode))
                 .toList();
         List<FeedItem> items = selector.select(candidates, podcast.getFeedSettings());
-        return writer.write(toChannel(podcast, items), items);
+        return new RenderedFeed(writer.write(toChannel(podcast, items), items), items.size());
     }
 
     private FeedChannel toChannel(Podcast podcast, List<FeedItem> items) {

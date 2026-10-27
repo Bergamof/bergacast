@@ -1,5 +1,7 @@
 package fr.bergadev.bergacast.web;
 
+import fr.bergadev.bergacast.feed.FeedPublicationException;
+import fr.bergadev.bergacast.storage.ObjectStorageException;
 import jakarta.validation.ConstraintViolationException;
 import java.util.Comparator;
 import java.util.List;
@@ -99,6 +101,24 @@ public class ProblemDetailsExceptionHandler extends ResponseEntityExceptionHandl
                 "Request rejected by a database constraint: {}",
                 exception.getMostSpecificCause().getMessage());
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "The request conflicts with an existing resource");
+    }
+
+    /** Raised after the change was committed: the change stands, only the feed is behind. */
+    @ExceptionHandler
+    ProblemDetail handleFeedPublication(FeedPublicationException exception) {
+        LOGGER.error("Feed not written", exception);
+        return ProblemDetail.forStatusAndDetail(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "The object storage is unavailable: the feed of the podcast '" + exception.getPodcastSlug()
+                        + "' could not be written. Any change in this request is saved; write the feed again with "
+                        + "POST " + ApiPaths.PODCAST_FEED_PUBLICATIONS.replace("{slug}", exception.getPodcastSlug()));
+    }
+
+    @ExceptionHandler
+    ProblemDetail handleObjectStorage(ObjectStorageException exception) {
+        LOGGER.error("Object storage unavailable", exception);
+        return ProblemDetail.forStatusAndDetail(
+                HttpStatus.SERVICE_UNAVAILABLE, "The object storage is unavailable, nothing was changed: retry later");
     }
 
     @ExceptionHandler

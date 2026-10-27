@@ -47,6 +47,9 @@ class InitialAdminUserCreatorTest {
     private void run(String password) {
         BergacastProperties properties = new BergacastProperties(
                 URI.create("http://localhost"),
+                URI.create("http://media.localhost"),
+                new BergacastProperties.Storage(
+                        URI.create("http://localhost:9000"), "fr-par", "bucket", "access-key", "secret-key"),
                 new BergacastProperties.Jwt("0123456789abcdef0123456789abcdef", Duration.ofMinutes(15), "x"),
                 new BergacastProperties.InitialAdmin("admin", password),
                 new BergacastProperties.Cors(List.of()),

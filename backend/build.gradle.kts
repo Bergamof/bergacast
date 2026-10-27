@@ -26,6 +26,7 @@ val springdocVersion = "3.1.1"
 val checkstyleVersion = "14.3.0"
 val jacocoVersion = "0.8.15"
 val palantirJavaFormatVersion = "2.102.0"
+val awsSdkVersion = "2.55.16"
 
 dependencies {
     implementation(platform(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES))
@@ -42,6 +43,13 @@ dependencies {
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:$springdocVersion")
     implementation("org.postgresql:postgresql")
+    // Object storage (Scaleway, S3 API): the JDK HttpURLConnection client keeps the native image small (no Netty, no Apache client).
+    implementation(platform("software.amazon.awssdk:bom:$awsSdkVersion"))
+    implementation("software.amazon.awssdk:s3") {
+        exclude(group = "software.amazon.awssdk", module = "netty-nio-client")
+        exclude(group = "software.amazon.awssdk", module = "apache-client")
+    }
+    implementation("software.amazon.awssdk:url-connection-client")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")

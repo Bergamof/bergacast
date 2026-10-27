@@ -4,31 +4,43 @@ import fr.bergadev.bergacast.image.ImageFormat;
 import fr.bergadev.bergacast.image.ImageResizer;
 import fr.bergadev.bergacast.image.InvalidImageException;
 import fr.bergadev.bergacast.image.ProcessedImage;
+import fr.bergadev.bergacast.storage.AfterCommit;
+import fr.bergadev.bergacast.storage.MediaKeys;
+import fr.bergadev.bergacast.storage.ObjectStorage;
 import fr.bergadev.bergacast.web.EntityTags;
 import fr.bergadev.bergacast.web.ResourceNotFoundException;
 import fr.bergadev.bergacast.web.Sha256;
 import fr.bergadev.bergacast.web.UnprocessableContentException;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.CacheControl;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Use cases of podcast cover images. Changing the image of a podcast changes the podcast representation, so it also
- * updates the podcast ({@code updatedAt} and version, hence its entity tag).
+ * Use cases of podcast cover images, whose content is an object of the storage. Changing the image of a podcast
+ * changes the podcast representation, so it also updates the podcast ({@code updatedAt} and version, hence its entity
+ * tag), and its feed, written again once the change is committed.
  */
 @Service
 public class PodcastImageService {
 
     /** Field reported in validation errors: the image is the whole request body. */
     static final String BODY_FIELD = "$";
+    /** Same freshness as the feed, which links the image: its URL stays the same when it is replaced. */
+    private static final CacheControl FIVE_MINUTES =
+            CacheControl.maxAge(Duration.ofMinutes(5)).cachePublic();
 
     private final PodcastService podcastService;
     private final PodcastImageRepository imageRepository;
     private final ImageResizer resizer;
+    private final ObjectStorage storage;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
     private final TransactionTemplate transaction;
     private final TransactionTemplate readOnlyTransaction;
@@ -37,11 +49,15 @@ public class PodcastImageService {
             PodcastService podcastService,
             PodcastImageRepository imageRepository,
             ImageResizer resizer,
+            ObjectStorage storage,
+            ApplicationEventPublisher events,
             Clock clock,
             PlatformTransactionManager transactionManager) {
         this.podcastService = podcastService;
         this.imageRepository = imageRepository;
         this.resizer = resizer;
+        this.storage = storage;
+        this.events = events;
         this.clock = clock;
         this.transaction = new TransactionTemplate(transactionManager);
         this.readOnlyTransaction = new TransactionTemplate(transactionManager);
@@ -73,17 +89,6 @@ public class PodcastImageService {
     }
 
     /**
-     * Returns the content of an image, to serve it.
-     *
-     * @throws ResourceNotFoundException when the image has been deleted meanwhile
-     */
-    public byte[] content(String slug, PodcastImageMetadata image) {
-        return Objects.requireNonNull(
-                        readOnlyTransaction.execute(status -> imageRepository.findContent(image.podcastId())))
-                .orElseThrow(() -> noImage(slug));
-    }
-
-    /**
      * Checks that an image can be uploaded for a podcast, before its content is read: the podcast exists and the
      * optional {@code If-Match} header matches its current image.
      *
@@ -99,11 +104,13 @@ public class PodcastImageService {
      * Sets the image of a podcast, downscaled if larger than what podcast apps accept. The preconditions checked by
      * {@link #prepare} are checked again when storing it, since the image may change meanwhile.
      *
-     * <p>The image is checked and resized outside of any transaction: no database connection is held meanwhile.
+     * <p>The image is checked and resized outside of any transaction: no database connection is held meanwhile. It is
+     * written to the storage once the preconditions are checked again, before the change is committed.
      *
      * @param ifMatch optional {@code If-Match} header value, checked against the entity tag of the current image
      * @throws ResourceNotFoundException when there is no such podcast
      * @throws UnprocessableContentException when the content is not a valid image of the declared format
+     * @throws fr.bergadev.bergacast.storage.ObjectStorageException when the storage fails (nothing is changed)
      */
     public PodcastImageChange put(String slug, byte[] content, ImageFormat declaredFormat, @Nullable String ifMatch) {
         ProcessedImage image = fit(content, declaredFormat);
@@ -112,17 +119,19 @@ public class PodcastImageService {
     }
 
     /**
-     * Deletes the image of a podcast.
+     * Deletes the image of a podcast; its object is removed from the storage once the deletion is committed.
      *
      * @throws ResourceNotFoundException when there is no such podcast or it has no image
      */
     public void delete(String slug) {
         transaction.executeWithoutResult(status -> {
             Podcast podcast = podcastService.getBySlug(slug);
-            if (imageRepository.deleteByPodcastId(podcast.getId()) == 0) {
-                throw noImage(slug);
-            }
+            PodcastImageMetadata image =
+                    imageRepository.findMetadata(podcast.getId()).orElseThrow(() -> noImage(slug));
+            imageRepository.deleteByPodcastId(podcast.getId());
             podcast.markUpdated(clock.instant());
+            AfterCommit.run(() -> storage.discard(keyOf(slug, image.format())));
+            events.publishEvent(new PodcastFeedChanged(slug));
         });
     }
 
@@ -131,12 +140,22 @@ public class PodcastImageService {
         Optional<PodcastImageMetadata> current = imageRepository.findMetadata(podcast.getId());
         // Checked again: the image may have changed while the new one was being processed.
         requireIfMatch(current, ifMatch);
+        storage.put(keyOf(slug, image.format()), image.content(), image.format().mimeType(), FIVE_MINUTES);
         if (current.isPresent()) {
             imageRepository.deleteByPodcastId(podcast.getId());
+            ImageFormat previousFormat = current.get().format();
+            if (previousFormat != image.format()) {
+                AfterCommit.run(() -> storage.discard(keyOf(slug, previousFormat)));
+            }
         }
         PodcastImage stored = imageRepository.save(new PodcastImage(podcast.getId(), image, sha256));
         podcast.markUpdated(clock.instant());
+        events.publishEvent(new PodcastFeedChanged(slug));
         return new PodcastImageChange(stored.metadata(), current.isEmpty());
+    }
+
+    private static String keyOf(String slug, ImageFormat format) {
+        return MediaKeys.podcastImage(slug, format.fileExtension());
     }
 
     private Optional<PodcastImageMetadata> currentImage(String slug) {

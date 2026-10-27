@@ -10,7 +10,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.mock.web.MockPart;
 import org.springframework.test.web.servlet.MockMvc;
@@ -24,16 +23,19 @@ public class ApiTestClient {
 
     public static final String ADMIN_USERNAME = "admin";
     public static final String ADMIN_PASSWORD = "admin-password-123";
+    /** {@code bergacast.media-base-url} of {@code application-test.yaml}, with the slash before the object keys. */
+    public static final String MEDIA_BASE_URL = "https://media.example.test/";
+    /** {@code bergacast.public-base-url} of {@code application-test.yaml}. */
+    public static final String PUBLIC_BASE_URL = "https://podcasts.example.test";
+
     private static final AtomicInteger SEQUENCE = new AtomicInteger();
 
     private final MockMvc mockMvc;
     private final JsonMapper jsonMapper;
-    private final JdbcTemplate jdbcTemplate;
 
-    public ApiTestClient(MockMvc mockMvc, JsonMapper jsonMapper, JdbcTemplate jdbcTemplate) {
+    public ApiTestClient(MockMvc mockMvc, JsonMapper jsonMapper) {
         this.mockMvc = mockMvc;
         this.jsonMapper = jsonMapper;
-        this.jdbcTemplate = jdbcTemplate;
     }
 
     public static String uniqueSlug(String prefix) {
@@ -114,21 +116,19 @@ public class ApiTestClient {
         return jsonMapper.readTree(result.getResponse().getContentAsString(StandardCharsets.UTF_8));
     }
 
-    /** Whether the large object holding the audio of an episode still exists. */
-    public boolean largeObjectExists(long oid) {
-        Integer count = jdbcTemplate.queryForObject(
-                "select count(*) from pg_largeobject_metadata where oid = ?", Integer.class, oid);
-        return count != null && count > 0;
+    /**
+     * Key of the object behind a public media URL (feed, audio file or image), which is its path below the media base
+     * URL of the test configuration.
+     */
+    public static String mediaKeyOf(String mediaUrl) {
+        if (!mediaUrl.startsWith(MEDIA_BASE_URL)) {
+            throw new IllegalArgumentException("Not a media URL: " + mediaUrl);
+        }
+        return mediaUrl.substring(MEDIA_BASE_URL.length());
     }
 
-    public long audioOidOfEpisode(String episodeId) {
-        Long oid = jdbcTemplate.queryForObject(
-                "select a.content_oid from audio_file a join episode e on e.audio_file_id = a.id where e.id = ?",
-                Long.class,
-                UUID.fromString(episodeId));
-        if (oid == null) {
-            throw new IllegalStateException("No audio for episode " + episodeId);
-        }
-        return oid;
+    /** Key of the audio object of an episode, from its JSON representation. */
+    public static String audioKeyOf(JsonNode episode) {
+        return mediaKeyOf(episode.get("audio").get("url").asString());
     }
 }

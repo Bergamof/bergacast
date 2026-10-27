@@ -9,9 +9,8 @@ import jakarta.persistence.Table;
 import java.util.UUID;
 
 /**
- * Audio content of an episode, stored in a PostgreSQL large object. Immutable once created.
- *
- * <p>Deleting the row unlinks the large object (database trigger), see {@code V1__create_schema.sql}.
+ * Description of the audio file of an episode, whose content is an object of the storage (see
+ * {@link fr.bergadev.bergacast.storage.MediaKeys#episodeAudio}). Immutable once created.
  */
 @Entity
 @Table(name = "audio_file")
@@ -20,9 +19,6 @@ public class AudioFile {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
-
-    @Column(name = "content_oid", nullable = false, updatable = false, columnDefinition = "oid")
-    private long contentOid;
 
     @Column(name = "mime_type", nullable = false, updatable = false, length = 127)
     private String mimeType;
@@ -40,20 +36,15 @@ public class AudioFile {
         // required by JPA
     }
 
-    AudioFile(StoredContent content, String mimeType, String fileExtension) {
-        this.contentOid = content.oid();
-        this.sizeBytes = content.sizeBytes();
-        this.sha256 = content.sha256();
+    AudioFile(String mimeType, long sizeBytes, String sha256, String fileExtension) {
         this.mimeType = mimeType;
+        this.sizeBytes = sizeBytes;
+        this.sha256 = sha256;
         this.fileExtension = fileExtension;
     }
 
     public UUID getId() {
         return id;
-    }
-
-    public long getContentOid() {
-        return contentOid;
     }
 
     public String getMimeType() {

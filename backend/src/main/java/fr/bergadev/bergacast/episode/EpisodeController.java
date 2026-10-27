@@ -7,6 +7,7 @@ import fr.bergadev.bergacast.web.ApiPaths;
 import fr.bergadev.bergacast.web.EntityTagged;
 import fr.bergadev.bergacast.web.PagedModels;
 import fr.bergadev.bergacast.web.SecuritySchemes;
+import fr.bergadev.bergacast.web.StorageResponses;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -180,6 +181,10 @@ class EpisodeController {
             content = @Content)
     @ApiResponse(responseCode = "422", description = "Invalid metadata, listed in errors", content = @Content)
     @EntityTagged
+    @ApiResponse(
+            responseCode = StorageResponses.UNAVAILABLE,
+            description = StorageResponses.UPLOAD_OR_FEED_FAILED,
+            content = @Content)
     ResponseEntity<EntityModel<EpisodeResponse>> publish(
             @PathVariable String slug,
             @Parameter(hidden = true) @RequestPart(METADATA_PART) Part metadata,
@@ -269,6 +274,10 @@ class EpisodeController {
             content = @Content)
     @ApiResponse(responseCode = "422", description = "Invalid patched metadata, listed in errors", content = @Content)
     @EntityTagged
+    @ApiResponse(
+            responseCode = StorageResponses.UNAVAILABLE,
+            description = StorageResponses.FEED_NOT_WRITTEN,
+            content = @Content)
     ResponseEntity<EntityModel<EpisodeResponse>> update(
             @PathVariable String slug,
             @PathVariable UUID episodeId,
@@ -286,6 +295,10 @@ class EpisodeController {
                     + "stops working.",
             security = @SecurityRequirement(name = SecuritySchemes.ADMIN_JWT))
     @ApiResponse(responseCode = "204", description = "Episode deleted")
+    @ApiResponse(
+            responseCode = StorageResponses.UNAVAILABLE,
+            description = StorageResponses.FEED_NOT_WRITTEN,
+            content = @Content)
     ResponseEntity<Void> delete(@PathVariable String slug, @PathVariable UUID episodeId) {
         episodeService.delete(slug, episodeId);
         return ResponseEntity.noContent().build();

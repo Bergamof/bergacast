@@ -5,7 +5,7 @@ import fr.bergadev.bergacast.config.BergacastProperties;
 import fr.bergadev.bergacast.token.ApiTokenService;
 import fr.bergadev.bergacast.web.ApiHeaders;
 import fr.bergadev.bergacast.web.ApiPaths;
-import fr.bergadev.bergacast.web.RobotsController;
+import fr.bergadev.bergacast.web.RobotsHeaders;
 import java.time.Duration;
 import java.util.List;
 import javax.crypto.SecretKey;
@@ -80,7 +80,7 @@ class SecurityConfiguration {
                 .logout(AbstractHttpConfigurer::disable)
                 .requestCache(AbstractHttpConfigurer::disable)
                 .headers(headers -> headers.addHeaderWriter(
-                        new StaticHeadersWriter(RobotsController.X_ROBOTS_TAG, RobotsController.NO_INDEX)))
+                        new StaticHeadersWriter(RobotsHeaders.X_ROBOTS_TAG, RobotsHeaders.NO_INDEX)))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(requests -> requests.requestMatchers(HttpMethod.GET, ApiPaths.BASE)
                         .permitAll()

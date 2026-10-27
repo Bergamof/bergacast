@@ -34,7 +34,17 @@ class RobotsIntegrationTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().string("X-Robots-Tag", "noindex, nofollow"));
         mockMvc.perform(get("/unknown-podcast.xml"))
+                .andExpect(status().isMovedPermanently())
+                .andExpect(header().string("X-Robots-Tag", "noindex, nofollow"));
+        mockMvc.perform(get("/no/such/page"))
                 .andExpect(status().isNotFound())
                 .andExpect(header().string("X-Robots-Tag", "noindex, nofollow"));
+    }
+
+    /** Static resources are limited to robots.txt: nothing else of the classpath is served. */
+    @Test
+    void servesNoOtherStaticResource() throws Exception {
+        mockMvc.perform(get("/application.yaml")).andExpect(status().isNotFound());
+        mockMvc.perform(get("/db/migration/V1__create_schema.sql")).andExpect(status().isNotFound());
     }
 }

@@ -145,7 +145,8 @@ export class ApiClient {
 		return this.request<T>(href);
 	}
 
-	post<T>(href: string, json: unknown): Promise<ApiResponse<T>> {
+	/** Posts `json` as the request body, or no body at all when it is omitted. */
+	post<T>(href: string, json?: unknown): Promise<ApiResponse<T>> {
 		return this.request<T>(href, { method: 'POST', json });
 	}
 

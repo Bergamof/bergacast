@@ -6,6 +6,7 @@ import fr.bergadev.bergacast.web.ApiLinks;
 import fr.bergadev.bergacast.web.ApiPaths;
 import fr.bergadev.bergacast.web.LimitedRequestBody;
 import fr.bergadev.bergacast.web.SecuritySchemes;
+import fr.bergadev.bergacast.web.StorageResponses;
 import fr.bergadev.bergacast.web.UnsupportedMediaTypeException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -104,6 +105,10 @@ class PodcastImageController {
             responseCode = "422",
             description = "Not a valid image of the declared type, or more than 50 megapixels",
             content = @Content)
+    @ApiResponse(
+            responseCode = StorageResponses.UNAVAILABLE,
+            description = StorageResponses.UPLOAD_OR_FEED_FAILED,
+            content = @Content)
     ResponseEntity<EntityModel<PodcastImageResponse>> put(
             @Parameter(description = SLUG_DESCRIPTION) @PathVariable String slug,
             @Parameter(description = "Only replace the image if its current ETag is one of these")
@@ -151,6 +156,10 @@ class PodcastImageController {
                     + "podcast, hence its ETag.")
     @ApiResponse(responseCode = "204", description = "Image deleted")
     @ApiResponse(responseCode = "404", description = "No such podcast, or it has no image", content = @Content)
+    @ApiResponse(
+            responseCode = StorageResponses.UNAVAILABLE,
+            description = StorageResponses.FEED_NOT_WRITTEN,
+            content = @Content)
     ResponseEntity<Void> delete(@Parameter(description = SLUG_DESCRIPTION) @PathVariable String slug) {
         imageService.delete(slug);
         return ResponseEntity.noContent().build();
