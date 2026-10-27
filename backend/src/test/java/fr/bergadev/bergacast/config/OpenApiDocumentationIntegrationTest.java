@@ -28,12 +28,13 @@ class OpenApiDocumentationIntegrationTest {
     private static final Set<String> PUBLIC_OPERATIONS = Set.of(
             "getApiRoot",
             "createAccessToken",
-            "getPodcastFeed",
             "getRobotsTxt",
-            "downloadEpisodeAudio",
-            "downloadEpisodeAudio_1",
-            "downloadPodcastImage",
-            "downloadPodcastImage_1");
+            "redirectPodcastFeed",
+            "redirectPodcastFeed_1",
+            "redirectEpisodeAudio",
+            "redirectEpisodeAudio_1",
+            "redirectPodcastImage",
+            "redirectPodcastImage_1");
 
     @Autowired
     private MockMvc mockMvc;
@@ -114,7 +115,12 @@ class OpenApiDocumentationIntegrationTest {
 
         assertThat(created)
                 .containsOnlyKeys(
-                        "createPodcast", "publishEpisode", "putPodcastImage", "createApiToken", "createAdminUser");
+                        "createPodcast",
+                        "publishEpisode",
+                        "putPodcastImage",
+                        "publishPodcastFeed",
+                        "createApiToken",
+                        "createAdminUser");
         assertThat(created.values())
                 .allSatisfy(headers -> assertThat(headers.has("Location")).isTrue());
     }
@@ -128,23 +134,39 @@ class OpenApiDocumentationIntegrationTest {
         assertThat(responseHeaders("publishEpisode", "201")).contains("ETag");
         assertThat(responseHeaders("getEpisode", "200")).contains("ETag");
         assertThat(responseHeaders("updateEpisode", "200")).contains("ETag");
-        assertThat(responseHeaders("getPodcastFeed", "200")).contains("ETag");
-        assertThat(responseHeaders("downloadEpisodeAudio", "206")).contains("ETag", "Content-Range");
         assertThat(responseHeaders("putPodcastImage", "201")).contains("ETag");
         assertThat(responseHeaders("putPodcastImage", "200")).contains("ETag");
         assertThat(responseHeaders("getPodcastImage", "200")).contains("ETag");
-        assertThat(responseHeaders("downloadPodcastImage", "200")).contains("ETag");
         assertThat(responseHeaders("createApiToken", "201")).doesNotContain("ETag");
     }
 
     @Test
     void documentsConditionalRequestHeaders() {
         assertThat(parameterNames("getEpisode")).contains("If-None-Match");
-        assertThat(parameterNames("getPodcastFeed")).contains("If-None-Match");
         assertThat(parameterNames("updateEpisode")).contains("If-Match");
         assertThat(parameterNames("putPodcastImage")).contains("If-Match");
         assertThat(parameterNames("getPodcastImage")).contains("If-None-Match");
         assertThat(parameterNames("createPodcast")).doesNotContain("If-None-Match", "If-Match");
+    }
+
+    @Test
+    void documentsTheRedirectionsOfTheFormerMediaUrls() {
+        assertThat(Stream.of("redirectPodcastFeed", "redirectPodcastImage", "redirectEpisodeAudio"))
+                .allSatisfy(id -> {
+                    assertThat(operation(id).get("responses").propertyNames())
+                            .as(id)
+                            .contains("301");
+                    assertThat(responseHeaders(id, "301")).as(id).contains("Location");
+                });
+    }
+
+    @Test
+    void documentsTheFeedPublicationAndItsStorageFailure() {
+        JsonNode publish = operation("publishPodcastFeed");
+
+        assertThat(publish.get("tags").valueStream().map(JsonNode::asString)).containsExactly("Feeds");
+        assertThat(publish.get("responses").propertyNames()).contains("201", "401", "403", "404", "503");
+        assertThat(publish.has("requestBody")).isFalse();
     }
 
     @Test

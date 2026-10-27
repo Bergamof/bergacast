@@ -8,8 +8,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -23,15 +21,14 @@ import org.jspecify.annotations.Nullable;
 /**
  * An episode of a podcast and its audio file.
  *
- * <p>Deleting an episode deletes its audio file and unlinks its large object (database triggers), hence the audio
- * file is only cascaded on persist.
+ * <p>Deleting an episode deletes its audio file row (database trigger), hence the audio file is only cascaded on
+ * persist. The identifier is assigned on creation: the object key of the audio file, written first, holds it.
  */
 @Entity
 @Table(name = "episode")
 public class Episode {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -85,11 +82,13 @@ public class Episode {
     }
 
     public Episode(
+            UUID id,
             Podcast podcast,
             AudioFile audioFile,
             EpisodeMetadata metadata,
             Instant addedAt,
             @Nullable String idempotencyKey) {
+        this.id = id;
         this.podcast = podcast;
         this.audioFile = audioFile;
         this.addedAt = addedAt;

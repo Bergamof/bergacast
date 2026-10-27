@@ -30,14 +30,15 @@ Dépôt : <https://github.com/Bergamof/bergacast> — licence [AGPL-3.0](LICENSE
   `assets`, `favicon.ico`).
 - **Publication d’épisodes** par upload `multipart/form-data` (audio + métadonnées JSON), avec en-tête
   `Idempotency-Key` pour rejouer une requête sans créer de doublon.
-- **Stockage de l’audio en base** (large objects PostgreSQL), upload en streaming (aucune mise en mémoire complète,
-  taille et SHA-256 calculés au fil de l’eau).
-- **Flux RSS 2.0 public** par podcast (`/{slug}.xml`) avec extensions iTunes/Apple Podcasts, généré à chaque requête,
-  ETag fort et cache HTTP de 5 minutes.
+- **Médias sur stockage objet** (S3, Scaleway Object Storage) : audio, images de couverture et flux sont des objets
+  publics dont la clé est le chemin de l’URL (`{slug}.xml`, `{slug}/image.jpg`,
+  `{slug}/episodes/{id}/audio.mp3`), retrouvables sans la base ; ni le backend ni la base ne sont sollicités par les
+  applications d’écoute.
+- **Flux RSS 2.0 public** par podcast avec extensions iTunes/Apple Podcasts, écrit sur le stockage à chaque
+  modification (podcast, image, épisodes), cache HTTP de 5 minutes.
 - **Réglages du flux** par podcast : nombre maximal d’épisodes, critère d’éviction, tri, inclusion des épisodes
   programmés dans le futur.
-- **Audio public** en streaming avec requêtes `Range` (lecture et avance rapide dans les lecteurs), ETag et cache
-  immuable.
+- **Audio public** servi par le stockage objet (requêtes `Range`, ETag, cache immuable d’un an).
 - **API REST** `/api/v1` : HAL, Problem Details (RFC 9457), pagination, `ETag`/`If-Match`, JSON Merge Patch.
 - **Deux types d’authentification** : jetons d’API par podcast (`bgc_…`, limités à la publication et à la lecture des
   épisodes de *ce* podcast) et JWT administrateur (15 minutes).
@@ -51,18 +52,19 @@ Monorepo :
 
 | Dossier      | Contenu                                                                                                |
 |--------------|--------------------------------------------------------------------------------------------------------|
-| `backend/`   | Spring Boot 4.1 (Java 25, Gradle Kotlin DSL), package `fr.bergadev.bergacast`, découpé par fonctionnalité : `podcast`, `episode`, `audio`, `feed`, `token`, `adminuser`, `security`, `web`, `config`. Migrations Flyway dans `src/main/resources/db/migration`. |
+| `backend/`   | Spring Boot 4.1 (Java 25, Gradle Kotlin DSL), package `fr.bergadev.bergacast`, découpé par fonctionnalité : `podcast`, `episode`, `audio`, `image`, `feed`, `storage`, `token`, `adminuser`, `security`, `web`, `requestlog`, `config`. Migrations Flyway dans `src/main/resources/db/migration`. |
 | `frontend/`  | SPA SvelteKit 3 / Svelte 5 (TypeScript, `adapter-static`), servie par static-web-server (voir [`frontend/README.md`](frontend/README.md)). |
 | racine       | `compose.yaml`, `.env.example`, `.sdkmanrc`, `.nvmrc`, `.spectral.yaml`, `.github/` (CI, Dependabot). |
 
 Chaque module produit sa propre image, déployée comme un conteneur indépendant (Scaleway Serverless Containers) :
 
-- **backend** (`backend/Dockerfile`) : exécutable natif GraalVM sur distroless ; sert l’API (`/api/v1`), les flux
-  (`/{slug}.xml`), l’audio (`/{slug}/episodes/{id}/audio.{ext}`) et la documentation OpenAPI ;
+- **backend** (`backend/Dockerfile`) : exécutable natif GraalVM sur distroless ; sert l’API (`/api/v1`) et la
+  documentation OpenAPI, écrit les flux, l’audio et les images sur le stockage objet, et redirige (`301`) leurs
+  anciennes URL (`/{slug}.xml`, `/{slug}/image.{ext}`, `/{slug}/episodes/{id}/audio.{ext}`) vers le stockage ;
 - **frontend** (`frontend/Dockerfile`) : SPA statique servie par static-web-server à la racine de son domaine ; elle
   appelle l’API du backend (autre origine, CORS) dont l’URL est donnée au démarrage du conteneur.
 
-PostgreSQL est la seule dépendance externe.
+Dépendances externes : PostgreSQL (métadonnées) et un stockage objet compatible S3 (médias et flux).
 
 ## Prérequis
 
@@ -220,7 +222,12 @@ L’application se configure par variables d’environnement (liées aux propri�
 | Variable | Défaut | Rôle |
 |----------|--------|------|
 | `BERGACAST_JWT_SECRET` | *(aucun, obligatoire)* | Secret HMAC des JWT administrateur, **au moins 32 octets** ; l’application refuse de démarrer sinon. Générer avec `openssl rand -base64 48`. |
-| `BERGACAST_PUBLIC_BASE_URL` | `http://localhost:8080` | URL publique de base, utilisée pour les URL absolues (flux, audio, URL de publication). |
+| `BERGACAST_PUBLIC_BASE_URL` | `http://localhost:8080` | URL publique du backend, utilisée pour les URL absolues de l’API (URL de publication). |
+| `BERGACAST_MEDIA_BASE_URL` | *(aucun, obligatoire)* | URL publique du bucket (ou d’un CDN devant lui), base des URL des flux, de l’audio et des images, par ex. `https://s3.fr-par.scw.cloud/mon-bucket`. Doit différer de `BERGACAST_PUBLIC_BASE_URL`. |
+| `BERGACAST_STORAGE_ENDPOINT` | `https://s3.fr-par.scw.cloud` | Point d’accès de l’API S3 (adresses en *path-style*). |
+| `BERGACAST_STORAGE_REGION` | `fr-par` | Région du bucket. |
+| `BERGACAST_STORAGE_BUCKET` | *(aucun, obligatoire)* | Nom du bucket. |
+| `BERGACAST_STORAGE_ACCESS_KEY` / `BERGACAST_STORAGE_SECRET_KEY` | *(aucun, obligatoires)* | Clé d’API autorisée à écrire et supprimer dans le bucket. |
 | `BERGACAST_CORS_ALLOWED_ORIGINS` | *(vide : aucune)* | Origines (séparées par des virgules) autorisées à appeler l’API depuis un navigateur : l’URL publique de la SPA d’administration, par ex. `https://admin.example.com`. |
 | `PORT` | `8080` | Port d’écoute (fourni par la plateforme serverless). |
 | `BERGACAST_ADMIN_USERNAME` / `BERGACAST_ADMIN_PASSWORD` | *(vides)* | Administrateur créé au démarrage s’il n’en existe aucun (mot de passe ≥ 12 caractères). Non renseignés : simple avertissement dans les logs. |
@@ -232,8 +239,9 @@ L’image frontend ne prend que `BERGACAST_API_URL` (obligatoire : origine publi
 `https://api.example.com`, écrite au démarrage dans `/config.js`) et `PORT` (`8080` par défaut).
 
 Avec Docker Compose s’ajoutent `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` (base du conteneur `db`),
-`BERGACAST_ADMIN_URL` (URL de la SPA, autorisée en CORS), `BERGACAST_PORT` et `BERGACAST_ADMIN_PORT` (ports publiés
-sur l’hôte, `8080` et `8081` par défaut). Modèle : [`.env.example`](.env.example).
+`BERGACAST_ADMIN_URL` (URL de la SPA, autorisée en CORS), `BERGACAST_PORT`, `BERGACAST_ADMIN_PORT` et
+`BERGACAST_MEDIA_PORT` (ports publiés sur l’hôte, `8080`, `8081` et `9090` par défaut) ; le stockage objet y est un
+S3Mock local (bucket `bergacast`, sans authentification). Modèle : [`.env.example`](.env.example).
 
 ## Lancer en local (développement)
 
@@ -246,18 +254,29 @@ sur l’hôte, `8080` et `8081` par défaut). Modèle : [`.env.example`](.env.ex
      -p 5432:5432 -v bergacast-dev-db:/var/lib/postgresql postgres:18
    ```
 
-2. **Backend** (dans `backend/`, Java 25 actif) — Flyway crée le schéma au démarrage :
+2. **Stockage objet** — un S3Mock jetable (compatible S3, sans authentification), bucket `bergacast` lisible sur
+   <http://localhost:9090/bergacast> :
+
+   ```sh
+   docker run -d --name bergacast-dev-s3 -e COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS=bergacast \
+     -p 9090:9090 adobe/s3mock:5.2.3
+   ```
+
+3. **Backend** (dans `backend/`, Java 25 actif) — Flyway crée le schéma au démarrage :
 
    ```sh
    BERGACAST_JWT_SECRET="$(openssl rand -base64 48)" \
    BERGACAST_ADMIN_USERNAME=admin \
    BERGACAST_ADMIN_PASSWORD=change-me-please-123 \
+   BERGACAST_STORAGE_ENDPOINT=http://localhost:9090 BERGACAST_STORAGE_BUCKET=bergacast \
+   BERGACAST_STORAGE_ACCESS_KEY=local BERGACAST_STORAGE_SECRET_KEY=local \
+   BERGACAST_MEDIA_BASE_URL=http://localhost:9090/bergacast \
    ./gradlew bootRun
    ```
 
    L’API écoute sur <http://localhost:8080> (identifiants de base par défaut : `bergacast`/`bergacast`).
 
-3. **Frontend** (dans `frontend/`, Node 24 et npm 12.2.1 actifs) :
+4. **Frontend** (dans `frontend/`, Node 24 et npm 12.2.1 actifs) :
 
    ```sh
    npm ci
@@ -267,8 +286,8 @@ sur l’hôte, `8080` et `8081` par défaut). Modèle : [`.env.example`](.env.ex
    L’interface est servie sur <http://localhost:5173> ; Vite redirige `/api`, `/v3` et `/swagger-ui` vers
    `http://localhost:8080`.
 
-Arrêt de la base : `docker rm -f bergacast-dev-db` (ajouter `docker volume rm bergacast-dev-db` pour effacer les
-données).
+Arrêt : `docker rm -f bergacast-dev-db bergacast-dev-s3` (ajouter `docker volume rm bergacast-dev-db` pour effacer
+les données de la base).
 
 ## Tests, lint et build
 
@@ -365,10 +384,56 @@ Configurer chaque conteneur sur un tag `X.Y.Z` (déploiement explicite, retour a
 
 - **backend** : port `8080` (la plateforme fournit `PORT`), variables de la section [Configuration](#configuration) ;
   `BERGACAST_PUBLIC_BASE_URL` = URL publique du conteneur backend, `BERGACAST_CORS_ALLOWED_ORIGINS` = URL publique du
-  conteneur frontend, `SPRING_DATASOURCE_*` = base PostgreSQL ; secrets (`BERGACAST_JWT_SECRET`, mots de passe) en
+  conteneur frontend, `SPRING_DATASOURCE_*` = base PostgreSQL, `BERGACAST_STORAGE_*` et `BERGACAST_MEDIA_BASE_URL` =
+  bucket (voir ci-dessous) ; secrets (`BERGACAST_JWT_SECRET`, `BERGACAST_STORAGE_SECRET_KEY`, mots de passe) en
   variables secrètes. Sonde de santé : `/actuator/health/liveness` (n’interroge pas la base). Le pool de
   connexions ne garde aucune connexion inactive (fermée après 30 s) : une base serverless peut se mettre en pause.
+  **Une seule instance** (`max-scale` = 1) : l’écriture des flux est sérialisée dans le processus.
 - **frontend** : `BERGACAST_API_URL` = URL publique du backend ; 128 Mo de mémoire suffisent. Sonde : `/health`.
+
+### Stockage objet (Scaleway Object Storage)
+
+1. Créer un bucket (région `fr-par`) et une application IAM avec une clé d’API ayant le droit d’écrire dans Object
+   Storage (`ObjectStorageFullAccess`, idéalement limitée au projet) : `BERGACAST_STORAGE_ACCESS_KEY` /
+   `BERGACAST_STORAGE_SECRET_KEY`.
+2. Rendre les objets lisibles par tous, par une *bucket policy*. Chez Scaleway, une policy ne laisse passer **que**
+   les principaux qu’elle liste : y inclure l’application du backend (et son propre utilisateur, pour garder la main
+   depuis la console) :
+
+   ```json
+   {
+     "Version": "2023-04-17",
+     "Id": "bergacast",
+     "Statement": [
+       {"Sid": "PublicRead", "Effect": "Allow", "Principal": "*", "Action": ["s3:GetObject"],
+        "Resource": ["MON-BUCKET/*"]},
+       {"Sid": "Backend", "Effect": "Allow", "Principal": {"SCW": "application_id:ID-DE-L-APPLICATION"},
+        "Action": ["s3:*"], "Resource": ["MON-BUCKET", "MON-BUCKET/*"]}
+     ]
+   }
+   ```
+
+3. `BERGACAST_MEDIA_BASE_URL` = `https://s3.fr-par.scw.cloud/MON-BUCKET`, ou l’URL d’un domaine Edge Services
+   (CDN) placé devant le bucket. Le backend écrit `robots.txt` (`Disallow: /`) à la racine du bucket au démarrage.
+
+### Migration des médias stockés en base
+
+Les versions précédentes gardaient l’audio (large objects) et les images (`bytea`) dans PostgreSQL. La migration
+`V3` conserve ce contenu ; une fois la nouvelle version déployée, le script
+[`backend/scripts/export-media-to-object-storage.sh`](backend/scripts/export-media-to-object-storage.sh) le copie
+dans le bucket (contrôle du SHA-256 de chaque fichier), puis fait réécrire chaque flux par le backend. Il se relance
+sans risque. Depuis un poste ayant `psql`, `curl` et `jq` :
+
+```sh
+DATABASE_URL='postgresql://UTILISATEUR:MOT-DE-PASSE@HOTE:5432/BASE?sslmode=require' \
+BERGACAST_STORAGE_ENDPOINT=https://s3.fr-par.scw.cloud BERGACAST_STORAGE_REGION=fr-par \
+BERGACAST_STORAGE_BUCKET=MON-BUCKET BERGACAST_STORAGE_ACCESS_KEY=… BERGACAST_STORAGE_SECRET_KEY=… \
+BASE_URL=https://api.example.com ADMIN_USERNAME=admin ADMIN_PASSWORD=… \
+backend/scripts/export-media-to-object-storage.sh
+```
+
+Pour une base Serverless SQL, l’URI de connexion est donnée dans la console (onglet *Connect*). Une fois les flux et
+l’audio vérifiés, une prochaine version supprimera l’ancien contenu de la base.
 
 ## Utilisation par des outils automatisés
 
@@ -405,21 +470,34 @@ Lister les épisodes : `GET /api/v1/{slug}/episodes?page=0&size=20&sort=publicat
 
 ### 3. URL publiques
 
+Sur le stockage objet, relatives à `BERGACAST_MEDIA_BASE_URL` (la clé de l’objet est le chemin de l’URL) :
+
 | URL | Contenu |
 |-----|---------|
-| `/{slug}.xml` | Flux RSS 2.0 (+ iTunes) à ajouter par son URL dans une application d’écoute ; il demande à Apple et Google de ne pas référencer le podcast dans leurs annuaires (`itunes:block`, `googleplay:block`). `Cache-Control: public, max-age=300`, `ETag`/`If-None-Match`. |
-| `/robots.txt` | Interdit l’exploration par les robots (`Disallow: /`) ; toutes les réponses portent `X-Robots-Tag: noindex, nofollow` (la SPA aussi). |
-| `/{slug}/episodes/{episodeId}/audio.{ext}` | Fichier audio (`GET`/`HEAD`, une seule plage `Range`, cache immuable d’un an). |
+| `/{slug}.xml` | Flux RSS 2.0 (+ iTunes) à ajouter par son URL dans une application d’écoute ; il demande à Apple et Google de ne pas référencer le podcast dans leurs annuaires (`itunes:block`, `googleplay:block`). `Cache-Control: public, max-age=300`. |
+| `/{slug}/image.{jpg\|png}` | Image de couverture envoyée (`Cache-Control: public, max-age=300`). |
+| `/{slug}/episodes/{episodeId}/audio.{ext}` | Fichier audio (cache immuable d’un an). |
+| `/robots.txt` | Interdit l’exploration par les robots (`Disallow: /`). |
 
-Les URL absolues (dans le flux et dans les réponses de l’API : `feedUrl`, `publishUrl`, `audio.url`) sont construites
-à partir de `BERGACAST_PUBLIC_BASE_URL`.
+Sur le backend (`BERGACAST_PUBLIC_BASE_URL`) : `/robots.txt` (`Disallow: /`, toutes les réponses portent
+`X-Robots-Tag: noindex, nofollow`, la SPA aussi) ; les anciennes URL des flux, images et audios sont redirigées
+(`301`) vers le même chemin sur le stockage, sans interroger la base.
+
+Le flux est écrit sur le stockage à chaque modification du podcast, de son image ou de ses épisodes. Un épisode
+programmé dans le futur n’y apparaît qu’à l’écriture suivante après sa date : `POST
+/api/v1/podcasts/{slug}/feed-publications` (administrateur, bouton de l’administration) réécrit le flux à la demande,
+comme après un échec d’écriture (`503`).
+
+Les URL absolues des réponses de l’API (`feedUrl`, `audio.url`, `image.url`) pointent vers le stockage ;
+`publishUrl` vers le backend.
 
 ### 4. Réglages du flux
 
 Chaque podcast a un objet `feed`, appliqué à chaque génération du flux, dans cet ordre :
 
 1. `includeFutureEpisodes` (défaut `false`) : sans cette option, les épisodes dont la `publicationDate` est future
-   sont exclus — on peut donc publier à l’avance un épisode programmé, il apparaîtra tout seul à sa date.
+   au moment où le flux est écrit sont exclus ; un épisode programmé apparaît à la prochaine écriture du flux après
+   sa date (nouvelle publication, modification, ou réécriture à la demande).
 2. `maxEpisodes` (entier ≥ 1, `null` = tous) : ne garde que les N épisodes les plus récents selon `evictOldestBy`
    (`PUBLICATION_DATE` ou `ADDED_DATE` = date d’upload), les plus anciens sortent du flux (ils restent en base).
 3. `sortBy` (`PUBLICATION_DATE` | `ADDED_DATE`) et `sortDirection` (`DESC` | `ASC`) : ordre des items (départage par
@@ -429,7 +507,7 @@ Chaque podcast a un objet `feed`, appliqué à chaque génération du flux, dans
 
 - Un JWT administrateur reste valide jusqu’à 15 minutes après la suppression de l’administrateur ou le changement de
   son mot de passe (jetons sans état).
-- Une seule plage d’octets par requête `Range` (pas de `multipart/byteranges`).
+- Le flux est un instantané écrit à chaque modification : un épisode programmé n’apparaît pas tout seul à sa date.
 - L’audio d’un épisode programmé dans le futur est accessible à qui connaît son URL.
 
 ## Documentation de l’API

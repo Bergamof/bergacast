@@ -10,6 +10,7 @@ public final class ApiPaths {
     public static final String PODCAST_API_TOKENS = PODCAST + "/api-tokens";
     public static final String PODCAST_API_TOKEN = PODCAST_API_TOKENS + "/{tokenId}";
     public static final String PODCAST_IMAGE = PODCAST + "/image";
+    public static final String PODCAST_FEED_PUBLICATIONS = PODCAST + "/feed-publications";
     public static final String EPISODES = BASE + "/{slug}/episodes";
     public static final String EPISODE = EPISODES + "/{episodeId}";
     public static final String ADMIN_USERS = BASE + "/admin-users";

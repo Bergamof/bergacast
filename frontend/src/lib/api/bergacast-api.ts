@@ -8,6 +8,7 @@ import type {
 	CreatedApiToken,
 	Episode,
 	EpisodeMetadata,
+	FeedPublication,
 	Podcast,
 	PodcastImageResource,
 	PodcastInput,
@@ -110,6 +111,15 @@ export class BergacastApi {
 
 	async deletePodcast(podcast: Podcast): Promise<void> {
 		await this.#client.delete(requireLinkHref(podcast, 'self'));
+	}
+
+	/**
+	 * Rewrites the RSS feed of a podcast on the object storage now, e.g. so that an episode whose
+	 * publication date has passed appears without waiting for the next change.
+	 */
+	async publishFeed(podcast: Podcast): Promise<FeedPublication> {
+		const href = requireLinkHref(podcast, 'feedPublications');
+		return (await this.#client.post<FeedPublication>(href)).body;
 	}
 
 	#podcastImageHref(podcast: Podcast): string {

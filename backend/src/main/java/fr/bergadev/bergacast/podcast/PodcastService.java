@@ -12,6 +12,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -28,16 +29,19 @@ public class PodcastService {
     private final PodcastRepository podcastRepository;
     private final PodcastImageRepository imageRepository;
     private final JsonMergePatch jsonMergePatch;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
     PodcastService(
             PodcastRepository podcastRepository,
             PodcastImageRepository imageRepository,
             JsonMergePatch jsonMergePatch,
+            ApplicationEventPublisher events,
             Clock clock) {
         this.podcastRepository = podcastRepository;
         this.imageRepository = imageRepository;
         this.jsonMergePatch = jsonMergePatch;
+        this.events = events;
         this.clock = clock;
     }
 
@@ -67,16 +71,19 @@ public class PodcastService {
         return overviewOf(getBySlug(slug));
     }
 
+    /** Creates a podcast; its (empty) feed is written once the podcast is committed. */
     public PodcastOverview create(PodcastInput input) {
         if (podcastRepository.existsBySlug(input.slug())) {
             throw new ConflictException("The slug '" + input.slug() + "' is already used by another podcast");
         }
         Podcast podcast = new Podcast(input.slug(), input.toDetails(), input.toFeedSettings(), clock.instant());
-        return new PodcastOverview(podcastRepository.saveAndFlush(podcast), 0, null);
+        PodcastOverview created = new PodcastOverview(podcastRepository.saveAndFlush(podcast), 0, null);
+        events.publishEvent(new PodcastFeedChanged(input.slug()));
+        return created;
     }
 
     /**
-     * Applies a JSON Merge Patch to a podcast.
+     * Applies a JSON Merge Patch to a podcast; its feed is written again once the change is committed.
      *
      * @param ifMatch optional {@code If-Match} header value, checked against the current entity tag
      */
@@ -89,12 +96,19 @@ public class PodcastService {
             throw new UnprocessableContentException(SLUG_FIELD, "cannot be changed once the podcast is created");
         }
         podcast.update(patched.toDetails(), patched.toFeedSettings(), clock.instant());
-        return new PodcastOverview(podcastRepository.saveAndFlush(podcast), current.episodeCount(), current.image());
+        PodcastOverview updated =
+                new PodcastOverview(podcastRepository.saveAndFlush(podcast), current.episodeCount(), current.image());
+        events.publishEvent(new PodcastFeedChanged(slug));
+        return updated;
     }
 
-    /** Deletes a podcast with its episodes, audio content, image and API tokens (database cascades and triggers). */
+    /**
+     * Deletes a podcast with its episodes, image and API tokens (database cascades and triggers); its objects (feed,
+     * image, audio files) are removed from the storage once the deletion is committed.
+     */
     public void delete(String slug) {
         podcastRepository.delete(getBySlug(slug));
+        events.publishEvent(new PodcastDeleted(slug));
     }
 
     private PodcastOverview overviewOf(Podcast podcast) {

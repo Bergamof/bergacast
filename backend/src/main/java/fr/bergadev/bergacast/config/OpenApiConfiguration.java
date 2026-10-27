@@ -91,6 +91,10 @@ class OpenApiConfiguration {
                         .description("Episode publication by automated tools (podcast API token or "
                                 + "administrator) and episode administration (administrators only)."),
                 new Tag()
+                        .name("Feeds")
+                        .description("RSS feeds written to the object storage, where podcast apps read them. "
+                                + "Administrators only."),
+                new Tag()
                         .name("API tokens")
                         .description("Long-lived `bgc_…` tokens allowing an automated tool to publish the "
                                 + "episodes of one podcast. Administrators only."),
@@ -100,8 +104,9 @@ class OpenApiConfiguration {
                         .description("Crawling rules keeping search engines away from the server. Public."),
                 new Tag()
                         .name("Public feed")
-                        .description(
-                                "RSS feeds, audio files and cover images, for podcast apps. No " + "authentication."));
+                        .description("Former URLs of the RSS feeds, audio files and cover images on this server, "
+                                + "permanently redirected to the object storage that now serves them. No "
+                                + "authentication."));
     }
 
     /** Documents the conventions shared by all operations (authentication errors, headers, Problem Details...). */

@@ -50,6 +50,7 @@
 <PublishingInfo
 	{podcast}
 	apiTokensHref={resolve('/(app)/podcasts/[slug]/tokens', { slug: podcast.slug })}
+	onPublishFeed={() => api.publishFeed(podcast)}
 />
 
 <section class="card" aria-labelledby="settings-title">

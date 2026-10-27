@@ -18,6 +18,7 @@ class PodcastModelAssembler implements RepresentationModelAssembler<PodcastOverv
     static final LinkRelation API_TOKENS = LinkRelation.of("apiTokens");
     static final LinkRelation FEED = LinkRelation.of("feed");
     static final LinkRelation IMAGE = LinkRelation.of("image");
+    static final LinkRelation FEED_PUBLICATIONS = LinkRelation.of("feedPublications");
 
     private final PublicUrls publicUrls;
     private final PodcastImageModelAssembler imageAssembler;
@@ -60,6 +61,7 @@ class PodcastModelAssembler implements RepresentationModelAssembler<PodcastOverv
                 ApiLinks.link(API_TOKENS, ApiPaths.PODCAST_API_TOKENS, slug),
                 Link.of(publicUrls.feed(slug).toString(), FEED),
                 // Always present: the cover image resource, where the first image is uploaded too.
-                ApiLinks.link(IMAGE, ApiPaths.PODCAST_IMAGE, slug));
+                ApiLinks.link(IMAGE, ApiPaths.PODCAST_IMAGE, slug),
+                ApiLinks.link(FEED_PUBLICATIONS, ApiPaths.PODCAST_FEED_PUBLICATIONS, slug));
     }
 }

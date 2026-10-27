@@ -3,12 +3,13 @@ package fr.bergadev.bergacast.episode;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import fr.bergadev.bergacast.support.ApiTestClient;
+import fr.bergadev.bergacast.support.StoredObjects;
 import fr.bergadev.bergacast.support.TestcontainersConfiguration;
 import fr.bergadev.bergacast.web.Sha256;
-import java.net.URI;
 import java.util.Random;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
@@ -27,13 +28,16 @@ import tools.jackson.databind.JsonNode;
 /** Exercises behaviours MockMvc cannot observe: Tomcat multipart streaming of large uploads. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, StoredObjects.class})
 class HttpServerIntegrationTest {
 
     private static final int AUDIO_SIZE = 3 * 1024 * 1024 + 17;
 
     @LocalServerPort
     private int port;
+
+    @Autowired
+    private StoredObjects storedObjects;
 
     private RestClient client;
 
@@ -43,7 +47,7 @@ class HttpServerIntegrationTest {
     }
 
     @Test
-    void streamsAnUploadIntoTheDatabaseAndBack() {
+    void streamsALargeUploadToTheObjectStorage() {
         byte[] audio = new byte[AUDIO_SIZE];
         new Random(42).nextBytes(audio);
         String admin = ApiTestClient.bearer(login());
@@ -82,17 +86,8 @@ class HttpServerIntegrationTest {
         assertThat(episode.get("audio").get("sizeBytes").asLong()).isEqualTo(AUDIO_SIZE);
         assertThat(episode.get("audio").get("sha256").asString()).isEqualTo(Sha256.hex(audio));
 
-        String audioPath =
-                URI.create(episode.get("audio").get("url").asString()).getPath();
-        byte[] downloaded = client.get().uri(audioPath).retrieve().body(byte[].class);
-        assertThat(downloaded).isEqualTo(audio);
-        ResponseEntity<byte[]> range = client.get()
-                .uri(audioPath)
-                .header(HttpHeaders.RANGE, "bytes=1048576-")
-                .retrieve()
-                .toEntity(byte[].class);
-        assertThat(range.getStatusCode()).isEqualTo(HttpStatus.PARTIAL_CONTENT);
-        assertThat(range.getBody()).hasSize(AUDIO_SIZE - 1048576);
+        assertThat(storedObjects.get(ApiTestClient.audioKeyOf(episode)).content())
+                .isEqualTo(audio);
     }
 
     private static HttpEntity<?> part(Object body, MediaType contentType) {

@@ -17,7 +17,8 @@ const ROOT = {
 const PODCAST_LINKS = {
 	self: { href: '/api/v1/podcasts/demo' },
 	episodes: { href: '/api/v1/demo/episodes' },
-	apiTokens: { href: '/api/v1/podcasts/demo/api-tokens' }
+	apiTokens: { href: '/api/v1/podcasts/demo/api-tokens' },
+	feedPublications: { href: '/api/v1/podcasts/demo/feed-publications' }
 };
 
 const podcast = { slug: 'demo', _links: PODCAST_LINKS } as unknown as Podcast;
@@ -169,6 +170,35 @@ describe('BergacastApi', () => {
 		await api.deletePodcastImage(podcast);
 
 		expect(requests[0]).toMatchObject({ url: '/api/v1/podcasts/demo/image', method: 'DELETE' });
+	});
+
+	it('publishes the feed through the podcast feedPublications link', async () => {
+		const publication = {
+			feedUrl: 'https://media.example/demo.xml',
+			publishedAt: '2026-10-27T08:15:00Z',
+			episodeCount: 12
+		};
+		const { api, requests } = createApi(
+			jsonResponse(201, publication, { Location: publication.feedUrl })
+		);
+
+		await expect(api.publishFeed(podcast)).resolves.toEqual(publication);
+		expect(requests[0]).toMatchObject({
+			url: '/api/v1/podcasts/demo/feed-publications',
+			method: 'POST',
+			body: undefined
+		});
+	});
+
+	it('reports an unavailable object storage when publishing the feed', async () => {
+		const { api } = createApi(
+			jsonResponse(503, { title: 'Service indisponible' }, {}, 'application/problem+json')
+		);
+
+		await expect(api.publishFeed(podcast)).rejects.toMatchObject({
+			status: 503,
+			problem: { title: 'Service indisponible' }
+		});
 	});
 
 	it('deletes a podcast through its self link', async () => {

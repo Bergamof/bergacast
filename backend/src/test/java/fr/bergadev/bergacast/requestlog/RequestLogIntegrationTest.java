@@ -49,9 +49,23 @@ class RequestLogIntegrationTest {
         String slug = ApiTestClient.uniqueSlug("request-log");
         api.createPodcast(slug);
 
-        mockMvc.perform(get("/" + slug + ".xml")).andExpect(status().isOk());
+        String admin = api.adminAuthorization();
 
-        assertThat(output).containsPattern("GET /" + slug + "\\.xml 200 \\d+ms db=yes");
+        mockMvc.perform(get("/api/v1/podcasts/{slug}", slug).header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isOk());
+
+        assertThat(output).containsPattern("GET /api/v1/podcasts/" + slug + " 200 \\d+ms db=yes");
+    }
+
+    /** Podcast apps still polling the former feed URL must not wake the serverless database up. */
+    @Test
+    void logsTheRedirectionOfAFormerFeedUrlWithoutUsingTheDatabase(CapturedOutput output) throws Exception {
+        String slug = ApiTestClient.uniqueSlug("request-log-feed");
+        api.createPodcast(slug);
+
+        mockMvc.perform(get("/" + slug + ".xml")).andExpect(status().isMovedPermanently());
+
+        assertThat(output).containsPattern("GET /" + slug + "\\.xml 301 \\d+ms db=no");
     }
 
     @Test

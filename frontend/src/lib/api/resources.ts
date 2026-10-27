@@ -44,7 +44,7 @@ export interface PodcastImage {
 	height: number;
 	sizeBytes: number;
 	sha256: string;
-	/** Public, cacheable URL of the image, served by the backend. */
+	/** Public, cacheable URL of the image, served by the object storage (another origin). */
 	url: string;
 }
 
@@ -55,6 +55,7 @@ export interface Podcast extends PodcastInput, HalResource {
 	id: string;
 	/** `null` when no image has been uploaded. */
 	image: PodcastImage | null;
+	/** Public URL of the RSS feed, served by the object storage (another origin). */
 	feedUrl: string;
 	publishUrl: string;
 	episodeCount: number;
@@ -66,7 +67,18 @@ export interface EpisodeAudio {
 	mimeType: string;
 	sizeBytes: number;
 	sha256: string;
+	/** Public URL of the audio file, served by the object storage (another origin). */
 	url: string;
+}
+
+/** Result of an on-demand rewrite of the RSS feed on the object storage. */
+export interface FeedPublication extends HalResource {
+	/** Public URL of the written feed. */
+	feedUrl: string;
+	/** Instant (ISO 8601) at which the feed was written. */
+	publishedAt: string;
+	/** Number of episodes listed in the written feed. */
+	episodeCount: number;
 }
 
 /** Writable episode metadata (PATCH body, and `metadata` part of an upload). */

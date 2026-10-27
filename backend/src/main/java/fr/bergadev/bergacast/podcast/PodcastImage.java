@@ -14,8 +14,8 @@ import org.springframework.data.domain.Persistable;
 /**
  * Cover image uploaded for a podcast, identified by the podcast itself.
  *
- * <p>The entity is only used to insert images: reads go through {@link PodcastImageRepository} projections, so that
- * the content is loaded only when it is served.
+ * <p>The content is an object of the storage (see {@link fr.bergadev.bergacast.storage.MediaKeys#podcastImage}). The
+ * entity is only used to insert images: reads go through {@link PodcastImageRepository} projections.
  */
 @Entity
 @Table(name = "podcast_image")
@@ -24,9 +24,6 @@ class PodcastImage implements Persistable<UUID> {
     @Id
     @Column(name = "podcast_id", nullable = false, updatable = false)
     private UUID podcastId;
-
-    @Column(name = "content", nullable = false, updatable = false)
-    private byte[] content;
 
     @Column(name = "mime_type", nullable = false, updatable = false)
     private String mimeType;
@@ -53,7 +50,6 @@ class PodcastImage implements Persistable<UUID> {
 
     PodcastImage(UUID podcastId, ProcessedImage image, String sha256) {
         this.podcastId = podcastId;
-        this.content = image.content();
         this.mimeType = image.format().mimeType();
         this.width = image.width();
         this.height = image.height();

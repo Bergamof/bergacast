@@ -94,6 +94,17 @@ describe('ApiClient', () => {
 		expect(requests[0].body).toBe('{"username":"alice"}');
 	});
 
+	it('posts without body nor content type when no JSON is given', async () => {
+		const { fetch, requests } = createFakeFetch(jsonResponse(201, {}));
+		const { client } = createClient(fetch);
+
+		await client.post('/api/v1/podcasts/demo/feed-publications');
+
+		expect(requests[0].method).toBe('POST');
+		expect(requests[0].headers.has('Content-Type')).toBe(false);
+		expect(requests[0].body).toBeUndefined();
+	});
+
 	it('sends merge patches with If-Match', async () => {
 		const { fetch, requests } = createFakeFetch(jsonResponse(200, {}));
 		const { client } = createClient(fetch);

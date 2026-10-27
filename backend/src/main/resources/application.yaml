@@ -69,6 +69,14 @@ springdoc:
 
 bergacast:
   public-base-url: ${BERGACAST_PUBLIC_BASE_URL:http://localhost:8080}
+  # Public URL of the bucket (or of a CDN in front of it): feeds, audio files and images are served from there.
+  media-base-url: ${BERGACAST_MEDIA_BASE_URL:}
+  storage:
+    endpoint: ${BERGACAST_STORAGE_ENDPOINT:https://s3.fr-par.scw.cloud}
+    region: ${BERGACAST_STORAGE_REGION:fr-par}
+    bucket: ${BERGACAST_STORAGE_BUCKET:}
+    access-key: ${BERGACAST_STORAGE_ACCESS_KEY:}
+    secret-key: ${BERGACAST_STORAGE_SECRET_KEY:}
   jwt:
     secret: ${BERGACAST_JWT_SECRET:}
     lifetime: 15m

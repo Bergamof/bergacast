@@ -12,8 +12,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import fr.bergadev.bergacast.storage.MediaKeys;
 import fr.bergadev.bergacast.support.ApiTestClient;
 import fr.bergadev.bergacast.support.IntegrationTest;
+import fr.bergadev.bergacast.support.StoredObjects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +35,9 @@ class PodcastApiIntegrationTest {
 
     @Autowired
     private ApiTestClient api;
+
+    @Autowired
+    private StoredObjects storedObjects;
 
     private String admin;
 
@@ -61,7 +66,7 @@ class PodcastApiIntegrationTest {
                 .andExpect(jsonPath("$.feed.sortBy").value("PUBLICATION_DATE"))
                 .andExpect(jsonPath("$.feed.sortDirection").value("DESC"))
                 .andExpect(jsonPath("$.feed.includeFutureEpisodes").value(false))
-                .andExpect(jsonPath("$.feedUrl").value("https://podcasts.example.test/" + slug + ".xml"))
+                .andExpect(jsonPath("$.feedUrl").value("https://media.example.test/" + slug + ".xml"))
                 .andExpect(jsonPath("$.publishUrl").value("https://podcasts.example.test/api/v1/" + slug + "/episodes"))
                 .andExpect(jsonPath("$.episodeCount").value(0))
                 .andExpect(jsonPath("$.createdAt").isString())
@@ -69,9 +74,11 @@ class PodcastApiIntegrationTest {
                 .andExpect(jsonPath("$._links.episodes.href").value(endsWith("/api/v1/" + slug + "/episodes")))
                 .andExpect(
                         jsonPath("$._links.apiTokens.href").value(endsWith("/api/v1/podcasts/" + slug + "/api-tokens")))
-                .andExpect(jsonPath("$._links.feed.href").value("https://podcasts.example.test/" + slug + ".xml"))
+                .andExpect(jsonPath("$._links.feed.href").value("https://media.example.test/" + slug + ".xml"))
                 .andExpect(jsonPath("$.image").isEmpty())
-                .andExpect(jsonPath("$._links.image.href").value(endsWith("/api/v1/podcasts/" + slug + "/image")));
+                .andExpect(jsonPath("$._links.image.href").value(endsWith("/api/v1/podcasts/" + slug + "/image")))
+                .andExpect(jsonPath("$._links.feedPublications.href")
+                        .value(endsWith("/api/v1/podcasts/" + slug + "/feed-publications")));
     }
 
     @Test
@@ -218,23 +225,46 @@ class PodcastApiIntegrationTest {
     }
 
     @Test
-    void deletesAPodcastWithItsEpisodesAudioAndTokens() throws Exception {
+    void deletesAPodcastWithItsEpisodesTokensAndObjects() throws Exception {
         String slug = ApiTestClient.uniqueSlug("delete");
         api.createPodcast(slug);
         String token = ApiTestClient.bearer(api.createApiToken(slug));
         JsonNode episode = api.publishEpisode(slug, token, "{\"title\":\"Doomed\"}", new byte[] {1, 2, 3});
-        long oid = api.audioOidOfEpisode(episode.get("id").asString());
-        assertThat(api.largeObjectExists(oid)).isTrue();
+        String audioKey = ApiTestClient.audioKeyOf(episode);
+        String otherObjectKey = MediaKeys.podcastFolder(slug) + "leftover.bin";
+        storedObjects.put(otherObjectKey, new byte[] {4});
+        assertThat(storedObjects.find(audioKey)).isPresent();
+        assertThat(storedObjects.find(MediaKeys.feed(slug))).isPresent();
 
         mockMvc.perform(delete("/api/v1/podcasts/{slug}", slug).header(HttpHeaders.AUTHORIZATION, admin))
                 .andExpect(status().isNoContent());
 
-        assertThat(api.largeObjectExists(oid)).isFalse();
+        assertThat(storedObjects.find(audioKey)).isEmpty();
+        assertThat(storedObjects.find(otherObjectKey)).isEmpty();
+        assertThat(storedObjects.find(MediaKeys.feed(slug))).isEmpty();
         mockMvc.perform(get("/api/v1/podcasts/{slug}", slug).header(HttpHeaders.AUTHORIZATION, admin))
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
         mockMvc.perform(get("/api/v1/{slug}/episodes", slug).header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(status().isUnauthorized());
+    }
+
+    /** Objects are listed by prefix: deleting a podcast keeps those of a podcast whose slug extends its slug. */
+    @Test
+    void keepsTheObjectsOfOtherPodcastsWhenDeletingAPodcast() throws Exception {
+        String slug = ApiTestClient.uniqueSlug("prefix");
+        String longerSlug = slug + "-2";
+        api.createPodcast(slug);
+        api.createPodcast(longerSlug);
+        String token = ApiTestClient.bearer(api.createApiToken(longerSlug));
+        String audioKey =
+                ApiTestClient.audioKeyOf(api.publishEpisode(longerSlug, token, "{\"title\":\"Kept\"}", new byte[] {1}));
+
+        mockMvc.perform(delete("/api/v1/podcasts/{slug}", slug).header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isNoContent());
+
+        assertThat(storedObjects.find(audioKey)).isPresent();
+        assertThat(storedObjects.find(MediaKeys.feed(longerSlug))).isPresent();
     }
 
     @Test

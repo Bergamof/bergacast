@@ -23,8 +23,7 @@ public class RobotsController {
     public static final String X_ROBOTS_TAG = "X-Robots-Tag";
     public static final String NO_INDEX = "noindex, nofollow";
     static final String ROBOTS_TXT = "User-agent: *\nDisallow: /\n";
-    private static final CacheControl ONE_DAY =
-            CacheControl.maxAge(Duration.ofDays(1)).cachePublic();
+    static final CacheControl ONE_DAY = CacheControl.maxAge(Duration.ofDays(1)).cachePublic();
 
     @GetMapping(path = "/robots.txt", produces = MediaType.TEXT_PLAIN_VALUE)
     @Operation(

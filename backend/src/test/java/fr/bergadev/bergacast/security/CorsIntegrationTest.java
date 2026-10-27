@@ -119,10 +119,9 @@ class CorsIntegrationTest {
     @Test
     void addsNoCorsHeadersOutsideOfTheApi() throws Exception {
         String slug = ApiTestClient.uniqueSlug("cors-feed");
-        api.createPodcast(slug);
 
         mockMvc.perform(get("/{slug}.xml", slug).header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN))
-                .andExpect(status().isOk())
+                .andExpect(status().isMovedPermanently())
                 .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN))
                 .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS));
         mockMvc.perform(get("/v3/api-docs").header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN))
