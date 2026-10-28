@@ -420,25 +420,6 @@ Configurer chaque conteneur sur un tag `X.Y.Z` (déploiement explicite, retour a
    aucun `robots.txt` n’est possible (les flux portent de toute façon `itunes:block`/`googleplay:block`, et l’audio
    n’est lié que depuis eux).
 
-### Migration des médias stockés en base
-
-Les versions précédentes gardaient l’audio (large objects) et les images (`bytea`) dans PostgreSQL. La migration
-`V3` conserve ce contenu ; une fois la nouvelle version déployée, le script
-[`backend/scripts/export-media-to-object-storage.sh`](backend/scripts/export-media-to-object-storage.sh) le copie
-dans le bucket (contrôle du SHA-256 de chaque fichier), puis fait réécrire chaque flux par le backend. Il se relance
-sans risque. Depuis un poste ayant `psql`, `curl` et `jq` :
-
-```sh
-DATABASE_URL='postgresql://UTILISATEUR:MOT-DE-PASSE@HOTE:5432/BASE?sslmode=require' \
-BERGACAST_STORAGE_ENDPOINT=https://s3.fr-par.scw.cloud BERGACAST_STORAGE_REGION=fr-par \
-BERGACAST_STORAGE_BUCKET=MON-BUCKET BERGACAST_STORAGE_ACCESS_KEY=… BERGACAST_STORAGE_SECRET_KEY=… \
-BASE_URL=https://api.example.com ADMIN_USERNAME=admin ADMIN_PASSWORD=… \
-backend/scripts/export-media-to-object-storage.sh
-```
-
-Pour une base Serverless SQL, l’URI de connexion est donnée dans la console (onglet *Connect*). Une fois les flux et
-l’audio vérifiés, une prochaine version supprimera l’ancien contenu de la base.
-
 ## Utilisation par des outils automatisés
 
 ### 1. Obtenir un jeton d’API
