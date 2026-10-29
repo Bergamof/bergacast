@@ -22,7 +22,7 @@ repositories {
     mavenCentral()
 }
 
-val springdocVersion = "3.1.1"
+val springdocVersion = "3.2.0"
 val checkstyleVersion = "14.3.0"
 val jacocoVersion = "0.8.15"
 val palantirJavaFormatVersion = "2.102.0"
