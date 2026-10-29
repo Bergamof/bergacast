@@ -2,7 +2,7 @@ plugins {
     java
     jacoco
     checkstyle
-    id("org.springframework.boot") version "4.1.1"
+    id("org.springframework.boot") version "4.1.2"
     id("com.diffplug.spotless") version "8.10.4"
     id("org.graalvm.buildtools.native") version "1.1.16"
 }
