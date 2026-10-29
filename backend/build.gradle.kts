@@ -26,7 +26,7 @@ val springdocVersion = "3.1.1"
 val checkstyleVersion = "14.3.0"
 val jacocoVersion = "0.8.15"
 val palantirJavaFormatVersion = "2.102.0"
-val awsSdkVersion = "2.55.16"
+val awsSdkVersion = "2.57.3"
 
 dependencies {
     implementation(platform(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES))
