@@ -5,10 +5,14 @@
 	import ConfirmButton from '#lib/components/ConfirmButton.svelte';
 	import FormField from '#lib/components/FormField.svelte';
 	import PasswordChangeForm from '#lib/components/PasswordChangeForm.svelte';
+	import PendingButton from '#lib/components/PendingButton.svelte';
 	import ProblemAlert from '#lib/components/ProblemAlert.svelte';
+	import RequiredFieldsLegend from '#lib/components/RequiredFieldsLegend.svelte';
+	import StatusMessage from '#lib/components/StatusMessage.svelte';
 	import { MINIMUM_PASSWORD_LENGTH, validateAdminUserForm } from '#lib/forms/admin-user-form.ts';
 	import { FormState } from '#lib/forms/form-state.svelte.ts';
 	import { formatDateTime } from '#lib/format/date-time.ts';
+	import { focusThenAnnounce } from '#lib/forms/focus.ts';
 	import { LoadDependency } from '#lib/load-dependencies.ts';
 	import type { PageProps } from './$types';
 
@@ -16,20 +20,29 @@
 
 	let username = $state('');
 	let password = $state('');
+	let creationMessage = $state('');
+	let deletionMessage = $state('');
+	let usersHeading: HTMLElement | undefined = $state();
 	const form = new FormState();
 
-	async function handleCreate(event: SubmitEvent): Promise<void> {
+	async function handleCreate(
+		event: SubmitEvent & { currentTarget: EventTarget & HTMLFormElement }
+	): Promise<void> {
 		event.preventDefault();
+		creationMessage = '';
+		const newUsername = username.trim();
 		const created = await form.submit(
 			() => validateAdminUserForm(username, password),
 			async () => {
-				await api.createAdminUser(username.trim(), password);
+				await api.createAdminUser(newUsername, password);
 				await invalidate(LoadDependency.adminUsers);
-			}
+			},
+			event.currentTarget
 		);
 		if (created) {
 			username = '';
 			password = '';
+			creationMessage = `Compte « ${newUsername} » créé.`;
 		}
 	}
 
@@ -38,6 +51,7 @@
 	}
 
 	async function deleteUser(user: AdminUser): Promise<void> {
+		deletionMessage = '';
 		await api.deleteAdminUser(user);
 		await invalidate(LoadDependency.adminUsers);
 	}
@@ -50,8 +64,10 @@
 <h1>Administrateurs</h1>
 
 <section class="card" aria-labelledby="admin-users-title">
-	<h2 id="admin-users-title">Comptes existants</h2>
-	<ul class="users">
+	<!-- Receives the focus after a deletion, the button that started it being gone. -->
+	<h2 id="admin-users-title" tabindex="-1" bind:this={usersHeading}>Comptes existants</h2>
+	<StatusMessage message={deletionMessage} />
+	<ul class="users" aria-labelledby="admin-users-title">
 		{#each data.adminUsers as user (user.id)}
 			<li>
 				<div class="toolbar">
@@ -67,6 +83,11 @@
 						accessibleLabel="Supprimer le compte « {user.username} »"
 						title="Supprimer le compte « {user.username} » ?"
 						onConfirm={() => deleteUser(user)}
+						afterConfirm={() =>
+							focusThenAnnounce(
+								usersHeading,
+								() => (deletionMessage = `Compte « ${user.username} » supprimé.`)
+							)}
 					>
 						<p>
 							Ce compte ne pourra plus se connecter. Il est impossible de supprimer son propre
@@ -75,9 +96,12 @@
 					</ConfirmButton>
 				</div>
 				<details>
-					<summary>Changer le mot de passe</summary>
+					<summary>
+						Changer le mot de passe <span class="visually-hidden">de « {user.username} »</span>
+					</summary>
 					<PasswordChangeForm
 						idPrefix="user-{user.id}"
+						username={user.username}
 						onSubmit={(newPassword) => changePassword(user, newPassword)}
 					/>
 				</details>
@@ -89,7 +113,7 @@
 <section class="card" aria-labelledby="new-admin-title">
 	<h2 id="new-admin-title">Nouvel administrateur</h2>
 	<form novalidate onsubmit={handleCreate}>
-		<ProblemAlert problem={form.problem} inlineFields={['username', 'password']} />
+		<RequiredFieldsLegend />
 		<div class="form-grid">
 			<FormField id="new-username" label="Identifiant" required error={form.fieldErrors.username}>
 				{#snippet control(attributes)}
@@ -113,10 +137,12 @@
 				{/snippet}
 			</FormField>
 		</div>
+		<ProblemAlert problem={form.problem} inlineFields={['username', 'password']} />
 		<div class="actions">
-			<button type="submit" disabled={form.pending}>
-				{form.pending ? 'Création…' : 'Créer le compte'}
-			</button>
+			<PendingButton type="submit" pending={form.pending} pendingLabel="Création…">
+				Créer le compte
+			</PendingButton>
+			<StatusMessage message={creationMessage} />
 		</div>
 	</form>
 </section>

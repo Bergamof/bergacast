@@ -17,6 +17,7 @@ Tu ne modifies aucun fichier versionné : seul le chef écrit. `Bash` sert uniqu
 - Objectif : Lighthouse ≥ 90 en Accessibilité et Bonnes pratiques sur les pages clés (connexion, liste des podcasts, podcast, épisodes, administrateurs) ; recommander Lighthouse CI avec ces seuils en assertions.
 - WCAG 2.2 AA : HTML sémantique, titres hiérarchisés, libellés associés aux champs, erreurs de validation (`422`) reliées au champ (`aria-describedby`, `aria-invalid`) et annoncées, contrastes, navigation clavier complète, focus visible et géré après navigation ou action, ARIA seulement à bon escient.
 - UX : états vide, chargement et erreur sur chaque page ; retour après chaque action (création, envoi d'audio de plusieurs centaines de Mo, réécriture du flux, `503` du stockage) ; confirmation des suppressions ; responsive.
+- Pièges appris (audit du 2026-11-02, Lighthouse à 100 malgré 12 majeurs) : mesurer aussi avec axe-core et des parcours Playwright au clavier (focus après chaque action, largeur à 320 px, régions `role=status` déjà présentes avant leur message) ; serveur de mesure prêt à l’emploi : `node lighthouse/server.mjs build <port> <journal> [--signed-in]` (API simulée).
 - Interface en français ; avertissement non bloquant si l'image n'est pas carrée ou fait moins de 1400 px.
 - Bonnes pratiques officielles de la techno ; en cas de conflit avec une règle générique de clean code, la bonne pratique de la techno l'emporte.
 - Ne recommande jamais de tricher pour obtenir le vert (test skippé, lint assoupli, seuil baissé, `continue-on-error`).

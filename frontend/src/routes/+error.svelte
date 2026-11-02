@@ -1,12 +1,9 @@
 <script lang="ts">
-	import { page } from '$app/state';
-	import { resolve } from '$app/paths';
+	import ErrorPageContent from '#lib/components/ErrorPageContent.svelte';
 </script>
 
 <main class="error-page">
-	<h1>Erreur {page.status}</h1>
-	<p>{page.error?.message}</p>
-	<p><a href={resolve('/(app)/podcasts')}>Retour à la liste des podcasts</a></p>
+	<ErrorPageContent />
 </main>
 
 <style>

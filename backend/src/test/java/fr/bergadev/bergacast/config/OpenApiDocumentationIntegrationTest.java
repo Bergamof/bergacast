@@ -183,6 +183,46 @@ class OpenApiDocumentationIntegrationTest {
     }
 
     @Test
+    void documentsTheJsonContentLimitOnOperationsWithAJsonBodyOnly() {
+        List<String> withJsonBody = new ArrayList<>();
+        List<String> withJsonLimit = new ArrayList<>();
+        operations().forEach(operation -> {
+            String id = operation.get("operationId").asString();
+            boolean jsonBody = operation.path("requestBody").path("content").propertyNames().stream()
+                    .anyMatch(mediaType -> mediaType.equals("application/json") || mediaType.endsWith("+json"));
+            if (jsonBody) {
+                withJsonBody.add(id);
+            }
+            if (operation
+                    .get("responses")
+                    .path("413")
+                    .path("description")
+                    .asString()
+                    .startsWith("JSON content")) {
+                withJsonLimit.add(id);
+            }
+        });
+
+        assertThat(withJsonBody).contains("createAccessToken", "createPodcast", "updatePodcast");
+        assertThat(withJsonLimit).containsExactlyInAnyOrderElementsOf(withJsonBody);
+    }
+
+    @Test
+    void documentsTheLoginThrottle() {
+        JsonNode tooManyRequests =
+                operation("createAccessToken").get("responses").get("429");
+
+        assertThat(tooManyRequests
+                        .get("headers")
+                        .get("Retry-After")
+                        .get("schema")
+                        .get("type")
+                        .asString())
+                .isEqualTo("integer");
+        assertThat(tooManyRequests.get("content").propertyNames()).containsExactly("application/problem+json");
+    }
+
+    @Test
     void documentsTheEpisodePublicationWithExamples() {
         JsonNode publish = operation("publishEpisode");
         JsonNode multipart = publish.get("requestBody").get("content").get("multipart/form-data");

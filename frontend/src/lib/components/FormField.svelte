@@ -4,6 +4,8 @@
 		id: string;
 		'aria-describedby': string | undefined;
 		'aria-invalid': 'true' | undefined;
+		/** Native `required`, exposed to assistive technologies; forms keep `novalidate`. */
+		required: true | undefined;
 	}
 </script>
 
@@ -27,14 +29,15 @@
 		id,
 		'aria-describedby':
 			[hint ? hintId : null, error ? errorId : null].filter(Boolean).join(' ') || undefined,
-		'aria-invalid': error ? 'true' : undefined
+		'aria-invalid': error ? 'true' : undefined,
+		required: required ? true : undefined
 	});
 </script>
 
 <div class="field">
 	<label for={id}>
 		{label}
-		{#if required}<span aria-hidden="true" class="required">*</span>{/if}
+		{#if required}<span aria-hidden="true" class="required-marker">*</span>{/if}
 	</label>
 	{@render control(attributes)}
 	{#if hint}
@@ -65,9 +68,5 @@
 	.error {
 		color: var(--color-danger);
 		font-weight: 600;
-	}
-
-	.required {
-		color: var(--color-danger);
 	}
 </style>

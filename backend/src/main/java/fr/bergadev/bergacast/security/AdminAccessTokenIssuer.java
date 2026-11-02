@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -15,7 +16,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
 
-/** Checks administrator credentials and issues short-lived HS256 JWTs. */
+/** Checks administrator credentials, throttling repeated failures, and issues short-lived HS256 JWTs. */
 @Service
 class AdminAccessTokenIssuer {
 
@@ -24,16 +25,19 @@ class AdminAccessTokenIssuer {
     static final String USERNAME_CLAIM = "preferred_username";
 
     private final AuthenticationManager adminAuthenticationManager;
+    private final LoginThrottle loginThrottle;
     private final JwtEncoder jwtEncoder;
     private final BergacastProperties.Jwt jwtProperties;
     private final Clock clock;
 
     AdminAccessTokenIssuer(
             AuthenticationManager adminAuthenticationManager,
+            LoginThrottle loginThrottle,
             JwtEncoder jwtEncoder,
             BergacastProperties properties,
             Clock clock) {
         this.adminAuthenticationManager = adminAuthenticationManager;
+        this.loginThrottle = loginThrottle;
         this.jwtEncoder = jwtEncoder;
         this.jwtProperties = properties.jwt();
         this.clock = clock;
@@ -43,11 +47,11 @@ class AdminAccessTokenIssuer {
      * Issues a token for valid credentials.
      *
      * @throws org.springframework.security.core.AuthenticationException when the credentials are invalid
+     * @throws fr.bergadev.bergacast.web.TooManyRequestsException while the username is blocked after failures
      */
     AccessTokenResponse issue(AccessTokenRequest credentials) {
-        Authentication authentication = adminAuthenticationManager.authenticate(
-                UsernamePasswordAuthenticationToken.unauthenticated(credentials.username(), credentials.password()));
-        AdminPrincipal admin = (AdminPrincipal) authentication.getPrincipal();
+        AdminPrincipal admin = authenticate(credentials);
+
         Instant now = clock.instant();
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer(jwtProperties.issuer())
@@ -62,5 +66,22 @@ class AdminAccessTokenIssuer {
                 jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
         return new AccessTokenResponse(
                 token, TOKEN_TYPE, jwtProperties.lifetime().toSeconds());
+    }
+
+    /** Only wrong credentials count as failures: an unavailable database must not block the administrator. */
+    private AdminPrincipal authenticate(AccessTokenRequest credentials) {
+        String username = credentials.username();
+        try (LoginThrottle.LoginAttempt attempt = loginThrottle.begin(username)) {
+            Authentication authentication;
+            try {
+                authentication = adminAuthenticationManager.authenticate(
+                        UsernamePasswordAuthenticationToken.unauthenticated(username, credentials.password()));
+            } catch (BadCredentialsException wrongCredentials) {
+                attempt.failed();
+                throw wrongCredentials;
+            }
+            attempt.succeeded();
+            return (AdminPrincipal) authentication.getPrincipal();
+        }
     }
 }

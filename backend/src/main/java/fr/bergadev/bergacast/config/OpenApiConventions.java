@@ -1,5 +1,6 @@
 package fr.bergadev.bergacast.config;
 
+import fr.bergadev.bergacast.web.JsonRequestSizeFilter;
 import fr.bergadev.bergacast.web.SecuritySchemes;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
@@ -47,6 +48,9 @@ final class OpenApiConventions implements OpenApiCustomizer {
     private static final String UNAUTHORIZED = "401";
     private static final String FORBIDDEN = "403";
     private static final String NOT_FOUND = "404";
+    private static final String CONTENT_TOO_LARGE = "413";
+    private static final String JSON = "application/json";
+    private static final String JSON_SUFFIX = "+json";
     private static final String DEFAULT_RESPONSE = "default";
     private static final String PATH = "path";
     private static final String HEADER = "header";
@@ -82,6 +86,7 @@ final class OpenApiConventions implements OpenApiCustomizer {
         operations(openApi).forEach(operation -> {
             documentAuthenticationErrors(operation);
             documentNotFound(operation);
+            documentJsonContentLimit(operation);
             documentLocation(operation.getResponses());
             documentConditionalRequestHeaders(operation);
             describeCommonParameters(operation);
@@ -141,6 +146,23 @@ final class OpenApiConventions implements OpenApiCustomizer {
                     .computeIfAbsent(
                             NOT_FOUND,
                             status -> new ApiResponse().description("No such podcast, or no such resource in it"));
+        }
+    }
+
+    /** JSON request bodies are bounded by {@link JsonRequestSizeFilter}. */
+    private static void documentJsonContentLimit(Operation operation) {
+        boolean jsonBody = operation.getRequestBody() != null
+                && operation.getRequestBody().getContent() != null
+                && operation.getRequestBody().getContent().keySet().stream()
+                        .anyMatch(mediaType -> JSON.equals(mediaType) || mediaType.endsWith(JSON_SUFFIX));
+        if (jsonBody) {
+            operation
+                    .getResponses()
+                    .computeIfAbsent(
+                            CONTENT_TOO_LARGE,
+                            status -> new ApiResponse()
+                                    .description("JSON content larger than "
+                                            + JsonRequestSizeFilter.MAX_JSON_BODY.toKilobytes() + " KiB"));
         }
     }
 

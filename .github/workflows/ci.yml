@@ -6,6 +6,10 @@ on:
     types: [opened, synchronize, reopened, ready_for_review, edited]
   push:
     branches: [main]
+  # Daily security scans of main (new CVEs appear without any code change): see the jobs without the
+  # `github.event_name != 'schedule'` condition.
+  schedule:
+    - cron: "17 3 * * *"
 
 permissions:
   contents: read
@@ -21,6 +25,9 @@ defaults:
 
 env:
   SPECTRAL_CLI_VERSION: 6.17.0
+  # Run through npx, like Spectral, rather than as a dev dependency: its dependency tree (puppeteer, proxy-agent…)
+  # carries unfixed high vulnerabilities that would fail npm audit, while it only ever audits our local pages in CI.
+  LHCI_CLI_VERSION: 0.15.1
 
 # Every verification job publishes a one-line `summary` output (plus a few detailed ones), computed in a step
 # that runs `if: always()` so the outputs exist even when the verification fails. The `report` job gathers them.
@@ -33,7 +40,7 @@ jobs:
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Conventional Commits title
@@ -57,12 +64,13 @@ jobs:
 
   release-scripts:
     name: Release scripts
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Install bats
@@ -99,6 +107,7 @@ jobs:
 
   backend-lint:
     name: Backend lint
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -106,11 +115,11 @@ jobs:
       checkstyle-violations: ${{ steps.summary.outputs.checkstyle-violations }}
       spotless: ${{ steps.summary.outputs.spotless }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: gradle/actions/wrapper-validation@v6
-      - uses: actions/setup-java@v6
+      - uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version-file: .sdkmanrc
@@ -154,6 +163,7 @@ jobs:
 
   backend-test:
     name: Backend tests
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -163,10 +173,10 @@ jobs:
       skipped: ${{ steps.summary.outputs.skipped }}
       line-coverage: ${{ steps.summary.outputs.line-coverage }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version-file: .sdkmanrc
@@ -220,7 +230,7 @@ jobs:
           PY
       - name: Upload test reports
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: backend-test-reports
           path: |
@@ -236,10 +246,10 @@ jobs:
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version-file: .sdkmanrc
@@ -250,6 +260,13 @@ jobs:
       - name: Boot jar
         working-directory: backend
         run: ./gradlew bootJar
+      - name: Keep the jar for the dependency scan
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: backend-jar
+          path: backend/build/libs/*.jar
+          if-no-files-found: error
+          retention-days: 1
       - name: Summarize
         id: summary
         if: always()
@@ -266,6 +283,7 @@ jobs:
 
   openapi-lint:
     name: OpenAPI lint
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
@@ -273,10 +291,10 @@ jobs:
       errors: ${{ steps.summary.outputs.errors }}
       warnings: ${{ steps.summary.outputs.warnings }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version-file: .sdkmanrc
@@ -284,7 +302,7 @@ jobs:
           cache-dependency-path: |
             backend/*.gradle*
             backend/gradle/wrapper/gradle-wrapper.properties
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
       - name: Generate the OpenAPI document (boots the app against Testcontainers PostgreSQL)
@@ -322,6 +340,7 @@ jobs:
 
   frontend-lint:
     name: Frontend lint
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -330,10 +349,10 @@ jobs:
       eslint-errors: ${{ steps.summary.outputs.eslint-errors }}
       svelte-check-errors: ${{ steps.summary.outputs.svelte-check-errors }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -405,6 +424,7 @@ jobs:
 
   frontend-test:
     name: Frontend tests
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -414,10 +434,10 @@ jobs:
       skipped: ${{ steps.summary.outputs.skipped }}
       line-coverage: ${{ steps.summary.outputs.line-coverage }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -472,7 +492,7 @@ jobs:
           PY
       - name: Upload test reports
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: frontend-test-reports
           path: |
@@ -483,15 +503,16 @@ jobs:
 
   frontend-build:
     name: Frontend build
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -519,8 +540,349 @@ jobs:
           echo "$summary"
           echo "summary=$summary" >> "$GITHUB_OUTPUT"
 
+  backend-dependencies:
+    name: Backend dependencies (CVE)
+    needs: backend-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The jar holds every runtime dependency (the native image has no SBOM that Trivy could read).
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: backend-jar
+          path: ${{ runner.temp }}/backend-jar
+      - name: Trivy
+        uses: ./.github/actions/trivy-scan
+        with:
+          scan-type: rootfs
+          target: ${{ runner.temp }}/backend-jar
+          summary-file: ${{ runner.temp }}/trivy.summary
+      - name: Summarize
+        id: summary
+        if: always()
+        env:
+          SUMMARY_FILE: ${{ runner.temp }}/trivy.summary
+        run: |
+          summary=$(cat "$SUMMARY_FILE" 2>/dev/null || echo "Trivy: not run")
+          echo "$summary"
+          echo "summary=$summary" >> "$GITHUB_OUTPUT"
+
+  frontend-dependencies:
+    name: Frontend dependencies (CVE)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Install the npm version pinned by packageManager
+        working-directory: frontend
+        run: npm install --global "$(node -p "require('./package.json').packageManager")"
+      # Development dependencies are audited too: they run in CI and on the developers' machines.
+      - name: npm audit
+        id: audit
+        working-directory: frontend
+        run: |
+          npm audit --package-lock-only --omit=dev --json > "$RUNNER_TEMP/audit-prod.json" || true
+          npm audit --package-lock-only --json > "$RUNNER_TEMP/audit-all.json" || true
+          npm audit --package-lock-only --audit-level=high
+      - name: Summarize
+        id: summary
+        if: always()
+        env:
+          PROD_JSON: ${{ runner.temp }}/audit-prod.json
+          ALL_JSON: ${{ runner.temp }}/audit-all.json
+        run: |
+          python3 - <<'PY'
+          import json, os
+
+          def counts(name):
+              try:
+                  return json.load(open(os.environ[name], encoding="utf-8"))["metadata"]["vulnerabilities"]
+              except (OSError, ValueError, KeyError):
+                  return None
+
+          prod, everything = counts("PROD_JSON"), counts("ALL_JSON")
+          if prod is None or everything is None:
+              summary = "npm audit: no result"
+          else:
+              summary = (
+                  f"npm audit: production {prod['total']} · all {everything['critical']} critical,"
+                  f" {everything['high']} high, {everything['moderate']} moderate, {everything['low']} low"
+              )
+          print(summary)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"summary={summary}\n")
+          PY
+
+  secrets:
+    name: Secrets (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      # Installed from the release with a pinned checksum (gitleaks-action needs a license for organizations).
+      - name: Install gitleaks
+        run: |
+          archive="$RUNNER_TEMP/gitleaks.tar.gz"
+          curl -fsSL -o "$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "$GITLEAKS_SHA256  $archive" | sha256sum --check --strict
+          tar -xzf "$archive" -C "$RUNNER_TEMP" gitleaks
+      # Whole history; false positives are listed in .gitleaksignore.
+      - name: gitleaks
+        run: >-
+          "$RUNNER_TEMP/gitleaks" git --redact --exit-code 1
+          --report-format json --report-path "$RUNNER_TEMP/gitleaks.json" .
+          2>&1 | tee "$RUNNER_TEMP/gitleaks.log"
+      - name: Summarize
+        id: summary
+        if: always()
+        env:
+          REPORT: ${{ runner.temp }}/gitleaks.json
+          LOG_FILE: ${{ runner.temp }}/gitleaks.log
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+
+          log = open(os.environ["LOG_FILE"], encoding="utf-8").read() if os.path.isfile(os.environ["LOG_FILE"]) else ""
+          commits = re.search(r"(\d+) commits scanned", log)
+          ignored = sum(
+              1 for line in open(".gitleaksignore", encoding="utf-8") if line.strip() and not line.startswith("#")
+          )
+          if os.path.isfile(os.environ["REPORT"]) and commits:
+              leaks = len(json.load(open(os.environ["REPORT"], encoding="utf-8")))
+              summary = f"gitleaks: {leaks} leak(s) in {commits.group(1)} commit(s) · {ignored} known false positive(s)"
+          else:
+              summary = "gitleaks: not run"
+          print(summary)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"summary={summary}\n")
+          PY
+
+  codeql:
+    name: CodeQL
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # No build: Java is extracted from the sources (a Gradle build would need JDK 25, Spring AOT and Docker).
+      # .svelte files are not analyzed by CodeQL, the TypeScript modules are.
+      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: java-kotlin, javascript-typescript, actions
+          build-mode: none
+          queries: security-extended
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          output: ${{ runner.temp }}/codeql
+      # Every alert of the analysis is printed below and listed in the Security tab. A high or critical result
+      # (security-severity >= 7.0) blocks while code scanning reports its alert as open; a false positive is dismissed
+      # by a maintainer in GitHub (with a reason), never silenced in the repository. On a pull request, code scanning
+      # only tracks the alerts of the changed files: the other results are listed and judged on main, where every high
+      # result must be known to the API (an unknown one blocks rather than passes).
+      - name: Summarize
+        id: summary
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          EVENT: ${{ github.event_name }}
+          SARIF_DIR: ${{ runner.temp }}/codeql
+          ALERTS_FILE: ${{ runner.temp }}/codeql-alerts.jsonl
+        run: |
+          gh api --paginate --jq '.[]' \
+            "repos/$REPOSITORY/code-scanning/alerts?ref=$REF&tool_name=CodeQL&per_page=100" > "$ALERTS_FILE"
+          python3 - <<'PY'
+          import glob, json, os, sys
+
+          HIGH = 7.0
+          states = {}
+          for line in open(os.environ["ALERTS_FILE"], encoding="utf-8"):
+              alert = json.loads(line)
+              location = alert["most_recent_instance"]["location"]
+              states[(alert["rule"]["id"], location["path"], location.get("start_line"))] = alert["state"]
+          print(f"Code scanning knows {len(states)} alert(s) on this ref")
+
+          parts, blocking = [], []
+          for path in sorted(glob.glob(os.path.join(os.environ["SARIF_DIR"], "*.sarif"))):
+              for run in json.load(open(path, encoding="utf-8")).get("runs", []):
+                  rules = {}
+                  for component in [run["tool"]["driver"], *run["tool"].get("extensions", [])]:
+                      for rule in component.get("rules", []):
+                          rules[rule["id"]] = float(rule.get("properties", {}).get("security-severity", 0))
+                  results = run.get("results", [])
+                  language = os.path.basename(path).removesuffix(".sarif")
+                  for result in results:
+                      location = result["locations"][0]["physicalLocation"]
+                      key = (result.get("ruleId"), location["artifactLocation"]["uri"], location.get("region", {}).get("startLine"))
+                      severity = rules.get(key[0], 0)
+                      state = states.get(key, "unknown")
+                      print(f"{language}: {key[0]} (security-severity {severity}) {key[1]}:{key[2]} [{state}]")
+                      unknown_blocks = os.environ["EVENT"] != "pull_request"
+                      if severity >= HIGH and (state == "open" or (state == "unknown" and unknown_blocks)):
+                          blocking.append(f"{key[0]} {key[1]}:{key[2]} [{state}]")
+                  parts.append(f"{language} {len(results)}")
+
+          summary = (
+              f"CodeQL: alerts {' · '.join(parts)} · {len(blocking)} blocking high+" if parts else "CodeQL: no result"
+          )
+          print(summary)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"summary={summary}\n")
+          if blocking or not parts:
+              print("Blocking:", *blocking, sep="\n  ")
+              sys.exit("High or critical CodeQL alerts (or no analysis): fix them, or dismiss a false positive in GitHub")
+          PY
+      - name: Upload the SARIF reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: codeql-sarif
+          path: ${{ runner.temp }}/codeql/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  frontend-lighthouse:
+    name: Frontend Lighthouse
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install the npm version pinned by packageManager
+        working-directory: frontend
+        run: npm install --global "$(node -p "require('./package.json').packageManager")"
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Vite build
+        working-directory: frontend
+        run: npm run build
+      # The SPA and a fake API (lighthouse/fake-api.mjs): one server signed out (login page), one signed in.
+      - name: Start the servers
+        working-directory: frontend
+        run: |
+          node lighthouse/server.mjs build 4173 "$RUNNER_TEMP/api-requests.log" &
+          node lighthouse/server.mjs build 4174 "$RUNNER_TEMP/api-requests.log" --signed-in &
+          for port in 4173 4174; do
+            for _ in $(seq 1 30); do curl -fsS -o /dev/null "http://localhost:$port/login" && break; sleep 1; done
+          done
+      # Accessibility and best practices >= 0.9 on every page (lighthouserc.json); Chrome is preinstalled.
+      - name: Lighthouse CI
+        id: lighthouse
+        working-directory: frontend
+        run: npx --yes "@lhci/cli@${LHCI_CLI_VERSION}" autorun
+      # A page that failed to load its data would still score well: every page must have fetched it.
+      - name: Pages rendered their data
+        working-directory: frontend
+        env:
+          REQUEST_LOG: ${{ runner.temp }}/api-requests.log
+        run: |
+          cat "$REQUEST_LOG"
+          if grep -v ' 200$' "$REQUEST_LOG" | grep -v '^POST '; then
+            echo "Unexpected API errors while auditing" >&2
+            exit 1
+          fi
+          for path in /api/v1/podcasts /api/v1/podcasts/mon-podcast /api/v1/podcasts/mon-podcast/api-tokens \
+            /api/v1/mon-podcast/episodes /api/v1/mon-podcast/episodes/ep-2 /api/v1/admin-users; do
+            grep -q "^GET $path 200$" "$REQUEST_LOG" || { echo "No page fetched $path" >&2; exit 1; }
+          done
+      # Keyboard and screen reader journeys (focus, status messages, 412/503, error page) and axe-core
+      # on every page, in a real browser on the same build and fake API (own servers, playwright.config.ts).
+      - name: Accessibility journeys (Playwright, axe-core)
+        id: journeys
+        if: ${{ !cancelled() }}
+        working-directory: frontend
+        env:
+          CI: true
+        run: npm run test:e2e
+      - name: Upload the Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lighthouse-reports
+          path: frontend/.lighthouseci/reports/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Upload the journey traces
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: accessibility-journeys
+          path: frontend/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Summarize
+        id: summary
+        if: always()
+        env:
+          MANIFEST: frontend/.lighthouseci/reports/manifest.json
+          JOURNEYS: frontend/test-results/e2e.json
+        run: |
+          python3 - <<'PY'
+          import json, os
+
+          if os.path.isfile(os.environ["JOURNEYS"]):
+              stats = json.load(open(os.environ["JOURNEYS"], encoding="utf-8"))["stats"]
+              journeys = f"journeys: {stats['expected']} passed, {stats['unexpected']} failed"
+          else:
+              journeys = "journeys: no report"
+          if os.path.isfile(os.environ["MANIFEST"]):
+              runs = [run for run in json.load(open(os.environ["MANIFEST"], encoding="utf-8")) if run.get("isRepresentativeRun")]
+              def lowest(category):
+                  return round(100 * min(run["summary"][category] for run in runs))
+              summary = (
+                  f"{len(runs)} page(s) · lowest scores: accessibility {lowest('accessibility')},"
+                  f" best practices {lowest('best-practices')}, performance {lowest('performance')}"
+              )
+          else:
+              summary = "Lighthouse: no report"
+          summary = f"{summary} · {journeys}"
+          print(summary)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"summary={summary}\n")
+          PY
+
   backend-image:
     name: Backend native image
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     outputs:
@@ -553,13 +915,13 @@ jobs:
           --health-cmd "pg_isready -U bergacast -d bergacast"
           --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Build the native image (not pushed)
         id: build
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: backend
           platforms: linux/amd64
@@ -593,6 +955,16 @@ jobs:
       - name: Container logs
         if: always() && steps.start.outcome == 'success'
         run: docker logs backend
+      # Only the Debian packages of the distroless base are visible here (the Java dependencies are scanned in the
+      # jar by backend-dependencies).
+      - name: Trivy
+        id: trivy
+        if: always() && steps.build.outcome == 'success'
+        uses: ./.github/actions/trivy-scan
+        with:
+          scan-type: image
+          target: ${{ env.IMAGE }}
+          summary-file: ${{ runner.temp }}/trivy.summary
       - name: Summarize
         id: summary
         if: always()
@@ -614,6 +986,9 @@ jobs:
             bytes=""
             summary="image not built"
           fi
+          if [ -f "$RUNNER_TEMP/trivy.summary" ]; then
+            summary="$summary · $(cat "$RUNNER_TEMP/trivy.summary")"
+          fi
           echo "$summary"
           {
             echo "summary=$summary"
@@ -631,13 +1006,13 @@ jobs:
       IMAGE: bergacast-frontend:ci
       API_URL: https://api.example.test
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Build the image (not pushed)
         id: build
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: frontend
           platforms: linux/amd64
@@ -667,6 +1042,14 @@ jobs:
               exit 1
             fi
           done
+      - name: Trivy
+        id: trivy
+        if: always() && steps.build.outcome == 'success'
+        uses: ./.github/actions/trivy-scan
+        with:
+          scan-type: image
+          target: ${{ env.IMAGE }}
+          summary-file: ${{ runner.temp }}/trivy.summary
       - name: Summarize
         id: summary
         if: always()
@@ -688,6 +1071,9 @@ jobs:
             bytes=""
             summary="image not built"
           fi
+          if [ -f "$RUNNER_TEMP/trivy.summary" ]; then
+            summary="$summary · $(cat "$RUNNER_TEMP/trivy.summary")"
+          fi
           echo "$summary"
           {
             echo "summary=$summary"
@@ -708,6 +1094,11 @@ jobs:
       - frontend-build
       - backend-image
       - frontend-image
+      - backend-dependencies
+      - frontend-dependencies
+      - secrets
+      - codeql
+      - frontend-lighthouse
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -717,7 +1108,7 @@ jobs:
       # On pull requests from forks GITHUB_TOKEN is read-only: the comment cannot be posted, the script then only
       # logs a warning and the report stays available in the job summary. Never switch to pull_request_target.
       - name: Post or update the PR comment
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           NEEDS: ${{ toJSON(needs) }}
         with:
@@ -733,8 +1124,13 @@ jobs:
               ['frontend-lint', 'Frontend lint (Prettier, ESLint, svelte-check)'],
               ['frontend-test', 'Frontend tests'],
               ['frontend-build', 'Frontend build'],
-              ['backend-image', 'Backend native image (GraalVM, smoke test)'],
-              ['frontend-image', 'Frontend image (static-web-server)'],
+              ['backend-image', 'Backend native image (GraalVM, smoke test, Trivy)'],
+              ['frontend-image', 'Frontend image (static-web-server, Trivy)'],
+              ['backend-dependencies', 'Backend dependencies (Trivy)'],
+              ['frontend-dependencies', 'Frontend dependencies (npm audit)'],
+              ['secrets', 'Secrets (gitleaks)'],
+              ['codeql', 'CodeQL (Java, TypeScript, workflows)'],
+              ['frontend-lighthouse', 'Frontend Lighthouse (≥ 90) and accessibility journeys (Playwright, axe)'],
             ];
             const icons = { success: '✅', failure: '❌', cancelled: '⚠️', skipped: '⚠️' };
             try {

@@ -2,10 +2,11 @@ import { error, redirect } from '@sveltejs/kit';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { ApiClient } from './api/client';
+import { createXhrUploadTransport } from './api/upload-transport';
 import { BergacastApi, OPENAPI_DOCUMENTATION_PATH } from './api/bergacast-api';
-import { ApiError } from './api/problem';
+import { ApiError, SERVICE_UNAVAILABLE } from './api/problem';
 import { EXPIRED_PARAMETER, REDIRECT_PARAMETER } from './auth/login-redirect';
-import { SessionStore } from './auth/session-store';
+import { SessionStore, type Session } from './auth/session-store';
 import { apiOriginOf } from './runtime-config';
 
 /** Application-wide singletons, wired to the browser (the SPA never renders on a server). */
@@ -30,6 +31,12 @@ export async function logOut(options: { expired?: boolean } = {}): Promise<void>
 	await goto(loginPageHref({ returnTo, expired: options.expired }));
 }
 
+/** Logs in (or renews the session of) `username` and stores the new session. */
+export async function logIn(username: string, password: string): Promise<Session> {
+	const token = await api.logIn(username, password);
+	return sessionStore.save(token.accessToken, username, token.expiresIn);
+}
+
 const apiOrigin = apiOriginOf(globalThis.bergacastConfig);
 
 export const api = new BergacastApi(
@@ -37,14 +44,13 @@ export const api = new BergacastApi(
 		fetch: (input, init) => fetch(input, init),
 		getAccessToken: () => sessionStore.read()?.accessToken ?? null,
 		onUnauthorized: () => void logOut({ expired: true }),
+		uploadTransport: createXhrUploadTransport(),
 		apiOrigin
 	})
 );
 
 /** Swagger UI of the backend, which may be served from another origin than the SPA. */
 export const apiDocumentationHref = `${apiOrigin ?? ''}${OPENAPI_DOCUMENTATION_PATH}`;
-
-const SERVICE_UNAVAILABLE = 503;
 
 /** Turns an API failure in a `load` function into a SvelteKit redirect (401) or error page. */
 export function throwAsPageError(cause: unknown, url: URL): never {

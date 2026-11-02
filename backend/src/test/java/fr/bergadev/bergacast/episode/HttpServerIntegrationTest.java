@@ -5,7 +5,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import fr.bergadev.bergacast.support.ApiTestClient;
 import fr.bergadev.bergacast.support.StoredObjects;
 import fr.bergadev.bergacast.support.TestcontainersConfiguration;
+import fr.bergadev.bergacast.web.JsonRequestSizeFilter;
 import fr.bergadev.bergacast.web.Sha256;
+import java.io.ByteArrayInputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.Random;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,7 +32,10 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 
-/** Exercises behaviours MockMvc cannot observe: Tomcat multipart streaming of large uploads. */
+/**
+ * Exercises behaviours MockMvc cannot observe: Tomcat multipart streaming of large uploads, request bodies sent
+ * without Content-Length (chunked).
+ */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Import({TestcontainersConfiguration.class, StoredObjects.class})
@@ -94,6 +104,29 @@ class HttpServerIntegrationTest {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(contentType);
         return new HttpEntity<>(body, headers);
+    }
+
+    @Test
+    void refusesAChunkedJsonBodyAboveTheLimitWith413() throws Exception {
+        String slug = ApiTestClient.uniqueSlug("chunked");
+        byte[] body = ("{\"slug\":\"" + slug + "\",\"title\":\"t\",\"description\":\""
+                        + "d".repeat(Math.toIntExact(JsonRequestSizeFilter.MAX_JSON_BODY.toBytes()))
+                        + "\",\"language\":\"en\"}")
+                .getBytes(StandardCharsets.UTF_8);
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/podcasts"))
+                .header(HttpHeaders.AUTHORIZATION, ApiTestClient.bearer(login()))
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                // An input stream of unknown length is sent chunked, without Content-Length.
+                .POST(HttpRequest.BodyPublishers.ofInputStream(() -> new ByteArrayInputStream(body)))
+                .build();
+
+        try (HttpClient httpClient = HttpClient.newHttpClient()) {
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            assertThat(response.statusCode()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE.value());
+            assertThat(response.headers().firstValue(HttpHeaders.CONTENT_TYPE))
+                    .hasValue(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
+        }
     }
 
     private String login() {

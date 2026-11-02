@@ -4,6 +4,8 @@
 	--color-text: #1c2230;
 	--color-muted: #556070;
 	--color-border: #d3d8e0;
+	/* Delimits form controls: at least 3:1 against the surfaces (WCAG 1.4.11). */
+	--color-control-border: #7b8494;
 	--color-primary: #2f5bd3;
 	--color-primary-text: #ffffff;
 	--color-danger: #b42318;
@@ -12,7 +14,8 @@
 	--color-success-background: #e7f6ec;
 	--color-warning-background: #fff4d6;
 	--color-warning-text: #6b4e00;
-	--color-focus: #f0a500;
+	/* Drawn on the page background (outline-offset): at least 3:1 against it. */
+	--color-focus: #1c2230;
 	--radius: 6px;
 	--space-xs: 0.25rem;
 	--space-s: 0.5rem;
@@ -31,6 +34,7 @@
 		--color-text: #e6e9ef;
 		--color-muted: #a3adbd;
 		--color-border: #343c4a;
+		--color-control-border: #6b7586;
 		--color-primary: #7aa2ff;
 		--color-primary-text: #0b1020;
 		--color-danger: #ff8a80;
@@ -39,6 +43,7 @@
 		--color-success-background: #13311f;
 		--color-warning-background: #3b3013;
 		--color-warning-text: #ffd978;
+		--color-focus: #f0a500;
 	}
 }
 
@@ -139,6 +144,8 @@ form {
 fieldset {
 	display: grid;
 	gap: var(--space-m);
+	/* Lets the fieldset shrink below its content at 320 px (default: min-content). */
+	min-inline-size: 0;
 	margin: 0;
 	padding: var(--space-m);
 	border: 1px solid var(--color-border);
@@ -153,7 +160,7 @@ legend {
 .form-grid {
 	display: grid;
 	gap: var(--space-m);
-	grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
 }
 
 label {
@@ -176,7 +183,7 @@ textarea {
 	padding: var(--space-s);
 	color: var(--color-text);
 	background: var(--color-surface);
-	border: 1px solid var(--color-border);
+	border: 1px solid var(--color-control-border);
 }
 
 input[aria-invalid='true'],
@@ -226,7 +233,8 @@ button.danger {
 	color: var(--color-surface);
 }
 
-button:disabled {
+/* Pending buttons stay focusable (aria-disabled, not disabled) so that the focus is not lost. */
+button[aria-disabled='true'] {
 	cursor: progress;
 	opacity: 0.7;
 }
@@ -234,6 +242,8 @@ button:disabled {
 /* Tables */
 
 .table-wrapper {
+	/* Contains the absolutely positioned .visually-hidden texts of the table. */
+	position: relative;
 	overflow-x: auto;
 }
 
@@ -286,4 +296,8 @@ th {
 
 .notice p {
 	margin: var(--space-xs) 0;
+}
+
+.required-marker {
+	color: var(--color-danger);
 }

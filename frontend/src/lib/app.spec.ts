@@ -6,7 +6,7 @@ const { goto } = vi.hoisted(() => ({ goto: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto }));
 vi.mock('$app/paths', () => ({ resolve: (route: string) => `/admin${route}` }));
 
-const { loginPageHref, logOut, sessionStore, throwAsPageError } = await import('./app');
+const { api, logIn, loginPageHref, logOut, sessionStore, throwAsPageError } = await import('./app');
 
 const PAGE_URL = new URL('http://localhost/admin/podcasts?page=2');
 
@@ -18,6 +18,33 @@ function catchThrown(action: () => void): unknown {
 	}
 	throw new Error('Expected an exception');
 }
+
+function stubSessionStorage(): void {
+	const storage = new Map<string, string>();
+	vi.stubGlobal('sessionStorage', {
+		getItem: (key: string) => storage.get(key) ?? null,
+		setItem: (key: string, value: string) => storage.set(key, value),
+		removeItem: (key: string) => storage.delete(key)
+	});
+}
+
+describe('logIn', () => {
+	beforeEach(stubSessionStorage);
+
+	it('stores the session of the new token and returns it', async () => {
+		vi.spyOn(api, 'logIn').mockResolvedValue({
+			accessToken: 'new-jwt',
+			tokenType: 'Bearer',
+			expiresIn: 900
+		});
+
+		const session = await logIn('alice', 'secret');
+
+		expect(api.logIn).toHaveBeenCalledWith('alice', 'secret');
+		expect(session).toMatchObject({ accessToken: 'new-jwt', username: 'alice' });
+		expect(sessionStore.read()).toEqual(session);
+	});
+});
 
 describe('loginPageHref', () => {
 	it('links to the login page', () => {
@@ -33,12 +60,7 @@ describe('loginPageHref', () => {
 
 describe('logOut', () => {
 	beforeEach(() => {
-		const storage = new Map<string, string>();
-		vi.stubGlobal('sessionStorage', {
-			getItem: (key: string) => storage.get(key) ?? null,
-			setItem: (key: string, value: string) => storage.set(key, value),
-			removeItem: (key: string) => storage.delete(key)
-		});
+		stubSessionStorage();
 		vi.stubGlobal('location', { pathname: '/admin/podcasts', search: '?page=2' });
 		goto.mockReset();
 	});

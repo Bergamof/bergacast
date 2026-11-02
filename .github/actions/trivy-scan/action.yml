@@ -1,0 +1,74 @@
+name: Trivy vulnerability scan
+description: >-
+  Scans a directory (rootfs) or a local image with Trivy, installed from its release with a pinned checksum. Fails on
+  any CRITICAL or HIGH vulnerability not listed in .trivyignore.yaml. Writes a one-line summary to the summary-file
+  input, even when the scan fails, for the job summary.
+inputs:
+  scan-type:
+    description: Trivy target type, `rootfs` or `image`.
+    required: true
+  target:
+    description: Directory or image reference to scan.
+    required: true
+  summary-file:
+    description: File receiving the one-line summary.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Install Trivy
+      shell: bash
+      env:
+        TRIVY_VERSION: 0.76.1
+        TRIVY_SHA256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
+      run: |
+        if ! command -v trivy >/dev/null || [ "$(trivy --version --format json | jq -r .Version)" != "$TRIVY_VERSION" ]; then
+          archive="$RUNNER_TEMP/trivy.tar.gz"
+          curl -fsSL -o "$archive" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "$TRIVY_SHA256  $archive" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/trivy-bin"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/trivy-bin" trivy
+          echo "$RUNNER_TEMP/trivy-bin" >> "$GITHUB_PATH"
+        fi
+    - name: Cache date
+      id: date
+      shell: bash
+      run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+    # Vulnerability databases (from mirror.gcr.io), refreshed once a day.
+    - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      with:
+        path: ~/.cache/trivy
+        key: trivy-db-${{ steps.date.outputs.day }}
+        restore-keys: trivy-db-
+    - name: Scan
+      shell: bash
+      env:
+        SCAN_TYPE: ${{ inputs.scan-type }}
+        TARGET: ${{ inputs.target }}
+        SUMMARY_FILE: ${{ inputs.summary-file }}
+      run: |
+        report="$RUNNER_TEMP/trivy-$(date +%s%N).json"
+        echo "Trivy: scan failed" > "$SUMMARY_FILE"
+        trivy "$SCAN_TYPE" --scanners vuln --ignorefile .trivyignore.yaml --show-suppressed \
+          --format json --output "$report" "$TARGET"
+        trivy convert --format table "$report"
+        python3 - "$report" <<'PY'
+        import json, os, sys
+        from collections import Counter
+
+        report = json.load(open(sys.argv[1], encoding="utf-8"))
+        severities, ignored = Counter(), 0
+        for result in report.get("Results") or []:
+            severities.update(v["Severity"] for v in result.get("Vulnerabilities") or [])
+            ignored += len(result.get("ModifiedFindings") or [])
+        summary = (
+            f"Trivy: {severities['CRITICAL']} critical, {severities['HIGH']} high"
+            f" ({ignored} ignored) · {severities['MEDIUM']} medium, {severities['LOW']} low"
+        )
+        print(summary)
+        with open(os.environ["SUMMARY_FILE"], "w", encoding="utf-8") as out:
+            out.write(summary + "\n")
+        if severities["CRITICAL"] or severities["HIGH"]:
+            sys.exit("Critical or high vulnerabilities: fix them or justify them in .trivyignore.yaml")
+        PY

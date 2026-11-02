@@ -27,6 +27,13 @@ describe('toProblemDetails', () => {
 		});
 	});
 
+	it.each([
+		[413, 'Contenu trop volumineux'],
+		[429, 'Trop de tentatives, réessayez plus tard']
+	])('gives a French default title to status %i', (status, title) => {
+		expect(toProblemDetails(status, null).title).toBe(title);
+	});
+
 	it('falls back to a generic title for unknown statuses', () => {
 		expect(toProblemDetails(418, null).title).toBe('Erreur HTTP 418');
 	});
@@ -43,6 +50,13 @@ describe('ApiError', () => {
 		expect(new ApiError(400, { title: 'Bad' }).message).toBe('Bad');
 		expect(new ApiError(400, {}).message).toBe('Erreur HTTP 400');
 	});
+
+	it('tells a concurrent change (412) and an unavailable service (503)', () => {
+		expect(new ApiError(412, {}).isPreconditionFailed).toBe(true);
+		expect(new ApiError(409, {}).isPreconditionFailed).toBe(false);
+		expect(new ApiError(503, {}).isServiceUnavailable).toBe(true);
+		expect(new ApiError(500, {}).isServiceUnavailable).toBe(false);
+	});
 });
 
 describe('problemFromError', () => {
@@ -57,6 +71,14 @@ describe('problemFromError', () => {
 
 		expect(problem.title).toBe('Modification concurrente');
 		expect(problem.detail).toContain('Rechargez');
+		expect(problem.status).toBe(412);
+	});
+
+	it('tells a cancelled upload', () => {
+		expect(problemFromError(new DOMException('x', 'AbortError'))).toEqual({
+			title: 'Envoi annulé',
+			detail: 'Rien n’a été publié.'
+		});
 	});
 
 	it('wraps unexpected errors', () => {

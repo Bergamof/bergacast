@@ -27,6 +27,11 @@ spring:
   mvc:
     problemdetails:
       enabled: true
+    # The API has no form endpoint: FormContentFilter would read whole PUT/PATCH/DELETE form bodies in memory, before
+    # authentication and without any size limit (server.tomcat.max-http-form-post-size only bounds POST).
+    formcontent:
+      filter:
+        enabled: false
   web:
     resources:
       # Only robots.txt: the admin SPA is a separate image, the media are on the object storage.

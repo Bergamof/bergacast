@@ -1,3 +1,5 @@
+import { isAbortError } from './abort';
+
 /** A single invalid field, as listed in the `errors` member of a validation problem. */
 export interface FieldViolation {
 	field: string;
@@ -16,6 +18,10 @@ export interface ProblemDetails {
 
 /** Status used when the server could not be reached at all (no HTTP response). */
 export const NETWORK_ERROR_STATUS = 0;
+/** Concurrent change: the `If-Match` version is no longer the stored one. */
+export const PRECONDITION_FAILED = 412;
+/** Also answered after a saved change whose feed could not be written (see `changeThenRefresh`). */
+export const SERVICE_UNAVAILABLE = 503;
 
 export class ApiError extends Error {
 	readonly status: number;
@@ -33,7 +39,11 @@ export class ApiError extends Error {
 	}
 
 	get isPreconditionFailed(): boolean {
-		return this.status === 412;
+		return this.status === PRECONDITION_FAILED;
+	}
+
+	get isServiceUnavailable(): boolean {
+		return this.status === SERVICE_UNAVAILABLE;
 	}
 }
 
@@ -45,9 +55,10 @@ const DEFAULT_TITLES: Record<number, string> = {
 	404: 'Ressource introuvable',
 	409: 'Conflit',
 	412: 'Ressource modifiée entre-temps',
-	413: 'Fichier trop volumineux',
+	413: 'Contenu trop volumineux',
 	415: 'Type de contenu non supporté',
-	422: 'Données invalides'
+	422: 'Données invalides',
+	429: 'Trop de tentatives, réessayez plus tard'
 };
 
 function isFieldViolation(value: unknown): value is FieldViolation {
@@ -81,14 +92,19 @@ export function problemFromError(error: unknown): ProblemDetails {
 	if (error instanceof ApiError && error.isPreconditionFailed) {
 		return {
 			...error.problem,
+			status: error.status,
 			title: 'Modification concurrente',
 			detail:
 				'Cette ressource a été modifiée ailleurs depuis l’ouverture de la page. ' +
-				'Rechargez-la pour partir de la dernière version, puis refaites vos changements.'
+				'Rechargez la dernière version, puis refaites vos changements.'
 		};
 	}
 	if (error instanceof ApiError) {
 		return error.problem;
+	}
+	// Only uploads can be cancelled from the interface (`UploadTracker`).
+	if (isAbortError(error)) {
+		return { title: 'Envoi annulé', detail: 'Rien n’a été publié.' };
 	}
 	return {
 		title: 'Erreur inattendue',

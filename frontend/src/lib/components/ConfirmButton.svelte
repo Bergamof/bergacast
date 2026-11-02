@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { problemFromError, type ProblemDetails } from '../api/problem';
+	import ModalDialog from './ModalDialog.svelte';
+	import PendingButton from './PendingButton.svelte';
 	import ProblemAlert from './ProblemAlert.svelte';
 
 	interface Props {
@@ -11,6 +13,11 @@
 		title: string;
 		confirmLabel?: string;
 		onConfirm: () => Promise<void>;
+		/**
+		 * Called once the dialog is closed after the action succeeded, e.g. to move the focus to a
+		 * stable element when the opening button is gone with what it deleted.
+		 */
+		afterConfirm?: () => void | Promise<void>;
 		children: Snippet;
 	}
 
@@ -20,18 +27,26 @@
 		title,
 		confirmLabel = 'Supprimer',
 		onConfirm,
+		afterConfirm,
 		children
 	}: Props = $props();
 
-	const uid = $props.id();
-	const titleId = `${uid}-title`;
-	let dialog: HTMLDialogElement | undefined = $state();
+	let modal: ModalDialog | undefined = $state();
+	let cancelButton: HTMLButtonElement | undefined = $state();
 	let pending = $state(false);
 	let problem = $state<ProblemDetails | null>(null);
 
 	function open(): void {
 		problem = null;
-		dialog?.showModal();
+		modal?.open();
+		// The safe choice gets the focus, not the destructive one.
+		cancelButton?.focus();
+	}
+
+	function cancel(): void {
+		if (!pending) {
+			modal?.close();
+		}
 	}
 
 	async function confirm(): Promise<void> {
@@ -39,50 +54,46 @@
 		problem = null;
 		try {
 			await onConfirm();
-			dialog?.close();
 		} catch (error) {
 			problem = problemFromError(error);
+			return;
 		} finally {
 			pending = false;
 		}
+		modal?.close();
+		await afterConfirm?.();
 	}
 </script>
 
 <button type="button" class="danger" aria-label={accessibleLabel} onclick={open}>{label}</button>
 
-<dialog bind:this={dialog} aria-labelledby={titleId}>
-	<h2 id={titleId}>{title}</h2>
-	<div class="content">
-		{@render children()}
-		<ProblemAlert {problem} />
-	</div>
+<!-- Not dismissible while the request runs: closing would hide the error it may end with. -->
+<ModalDialog bind:this={modal} {title} dismissible={!pending} description={children}>
+	<div class="problem"><ProblemAlert {problem} /></div>
 	<div class="actions">
-		<button type="button" class="danger" disabled={pending} onclick={confirm}>
-			{pending ? `${confirmLabel}…` : confirmLabel}
-		</button>
-		<button type="button" class="secondary" disabled={pending} onclick={() => dialog?.close()}>
+		<PendingButton
+			type="button"
+			class="danger"
+			{pending}
+			pendingLabel="{confirmLabel}…"
+			onclick={confirm}
+		>
+			{confirmLabel}
+		</PendingButton>
+		<button
+			type="button"
+			class="secondary"
+			aria-disabled={pending ? 'true' : undefined}
+			bind:this={cancelButton}
+			onclick={cancel}
+		>
 			Annuler
 		</button>
 	</div>
-</dialog>
+</ModalDialog>
 
 <style>
-	dialog {
-		max-width: min(32rem, calc(100vw - 2 * var(--space-m)));
-		padding: var(--space-l);
-		color: var(--color-text);
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius);
-	}
-
-	dialog::backdrop {
-		background: rgb(0 0 0 / 50%);
-	}
-
-	.content {
-		display: grid;
-		gap: var(--space-m);
-		margin-bottom: var(--space-l);
+	.problem:not(:empty) {
+		margin-bottom: var(--space-m);
 	}
 </style>

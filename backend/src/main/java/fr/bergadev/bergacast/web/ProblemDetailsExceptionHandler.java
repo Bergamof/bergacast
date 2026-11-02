@@ -17,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
@@ -53,6 +54,21 @@ public class ProblemDetailsExceptionHandler extends ResponseEntityExceptionHandl
         Stream<InvalidField> globalErrors = exception.getBindingResult().getGlobalErrors().stream()
                 .map(error -> new InvalidField(BODY_FIELD, messageOf(error)));
         return unprocessable(Stream.concat(fieldErrors, globalErrors).toList(), request);
+    }
+
+    /**
+     * A JSON body above the size limit fails while Jackson reads it ({@link JsonRequestSizeFilter}), and Jackson wraps
+     * the failure: answer with the 413 it carries rather than a 400.
+     */
+    @Override
+    protected @Nullable ResponseEntity<Object> handleHttpMessageNotReadable(
+            HttpMessageNotReadableException exception, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        for (Throwable cause = exception.getCause(); cause != null; cause = cause.getCause()) {
+            if (cause instanceof ContentTooLargeException tooLarge) {
+                return handleErrorResponseException(tooLarge, tooLarge.getHeaders(), tooLarge.getStatusCode(), request);
+            }
+        }
+        return super.handleHttpMessageNotReadable(exception, headers, status, request);
     }
 
     @Override
