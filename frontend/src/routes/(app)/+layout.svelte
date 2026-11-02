@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { navigating, page } from '$app/state';
-	import { api, apiDocumentationHref, logOut } from '#lib/app.ts';
+	import { api, apiDocumentationHref, logIn, logOut } from '#lib/app.ts';
 	import NewTabNotice from '#lib/components/NewTabNotice.svelte';
+	import SessionRenewalDialog from '#lib/components/SessionRenewalDialog.svelte';
 	import { spaVersion } from '#lib/version.ts';
 	import type { LayoutProps } from './$types';
 
@@ -33,14 +34,12 @@
 		return page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
 	}
 
-	$effect(() => {
-		// The API would reject the expired JWT anyway; logging out on time avoids losing a form.
-		const timeout = setTimeout(
-			() => void logOut({ expired: true }),
-			data.session.expiresAt - Date.now()
-		);
-		return () => clearTimeout(timeout);
-	});
+	// Follows the layout data (read from the store at each navigation) and a renewal made in place.
+	let session = $derived(data.session);
+
+	async function renewSession(password: string): Promise<void> {
+		session = await logIn(session.username, password);
+	}
 </script>
 
 <a class="skip-link" href="#main-content">Aller au contenu</a>
@@ -67,7 +66,7 @@
 			</ul>
 		</nav>
 		<div class="user">
-			<span class="muted">{data.session.username}</span>
+			<span class="muted">{session.username}</span>
 			<button type="button" class="secondary" onclick={() => logOut()}>Se déconnecter</button>
 		</div>
 	</div>
@@ -76,6 +75,8 @@
 <main id="main-content" aria-busy={loading ? 'true' : undefined}>
 	{@render children()}
 </main>
+
+<SessionRenewalDialog {session} onRenew={renewSession} onLogOut={() => logOut()} />
 
 <footer class="muted">
 	Interface {spaVersion} · Serveur

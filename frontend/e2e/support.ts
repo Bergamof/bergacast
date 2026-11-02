@@ -32,3 +32,77 @@ export function heldResponse() {
 	const released = new Promise<void>((resolve) => (release = resolve));
 	return { released, release };
 }
+
+/** Drives the uploads of a page whose XMLHttpRequest was replaced by `installControllableUploads`. */
+export interface UploadDriver {
+	progress(loaded: number, total: number): Promise<void>;
+	respond(status: number, body: unknown): Promise<void>;
+	failNetwork(): Promise<void>;
+}
+
+/**
+ * Replaces XMLHttpRequest, used for uploads only, by one the test drives: Playwright reports no
+ * upload progress for the requests it intercepts.
+ */
+export async function installControllableUploads(page: Page): Promise<UploadDriver> {
+	await page.addInitScript(() => {
+		type Listener = ((event?: unknown) => void) | null;
+		class ControllableXhr {
+			static current: ControllableXhr | null = null;
+			status = 0;
+			responseText = '';
+			upload: { onprogress: Listener } = { onprogress: null };
+			onload: Listener = null;
+			onerror: Listener = null;
+			onabort: Listener = null;
+			open(): void {}
+			setRequestHeader(): void {}
+			getAllResponseHeaders(): string {
+				return 'content-type: application/hal+json\r\n';
+			}
+			send(): void {
+				ControllableXhr.current = this;
+			}
+			abort(): void {
+				this.onabort?.();
+			}
+		}
+		Object.assign(window, {
+			XMLHttpRequest: ControllableXhr,
+			uploadDriver: {
+				progress: (loaded: number, total: number) =>
+					ControllableXhr.current?.upload.onprogress?.({ lengthComputable: true, loaded, total }),
+				respond: (status: number, body: string) => {
+					const request = ControllableXhr.current;
+					if (request) {
+						request.status = status;
+						request.responseText = body;
+						request.onload?.();
+					}
+				},
+				failNetwork: () => ControllableXhr.current?.onerror?.()
+			}
+		});
+	});
+	return {
+		progress: (loaded, total) =>
+			page.evaluate(([sent, size]) => window.uploadDriver.progress(sent, size), [loaded, total]),
+		respond: (status, body) =>
+			page.evaluate(([code, text]) => window.uploadDriver.respond(code, text), [
+				status,
+				JSON.stringify(body)
+			] as const),
+		failNetwork: () => page.evaluate(() => window.uploadDriver.failNetwork())
+	};
+}
+
+declare global {
+	interface Window {
+		/** Set by `installControllableUploads`. */
+		uploadDriver: {
+			progress(loaded: number, total: number): void;
+			respond(status: number, body: string): void;
+			failNetwork(): void;
+		};
+	}
+}

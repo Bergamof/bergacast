@@ -1,4 +1,4 @@
-import { withQuery, type ApiClient } from './client';
+import { withQuery, type ApiClient, type UploadTransfer } from './client';
 import { parseCollection, requireLinkHref, type PagedCollection } from './hal';
 import type {
 	AccessTokenResponse,
@@ -76,7 +76,11 @@ export class BergacastApi {
 
 	async logIn(username: string, password: string): Promise<AccessTokenResponse> {
 		const href = await this.#rootLink('accessTokens');
-		const response = await this.#client.post<AccessTokenResponse>(href, { username, password });
+		// Also used to renew a session in place: a wrong password must not end the current one.
+		const response = await this.#client.postAnonymously<AccessTokenResponse>(href, {
+			username,
+			password
+		});
 		return response.body;
 	}
 
@@ -159,7 +163,12 @@ export class BergacastApi {
 		return { resource: response.body, etag: response.etag };
 	}
 
-	async uploadEpisode(podcast: Podcast, upload: EpisodeUpload): Promise<Episode> {
+	/** Uploads the audio and metadata of a new episode; `transfer` follows or cancels the upload. */
+	async uploadEpisode(
+		podcast: Podcast,
+		upload: EpisodeUpload,
+		transfer: UploadTransfer = {}
+	): Promise<Episode> {
 		const formData = new FormData();
 		formData.append(
 			'metadata',
@@ -169,7 +178,8 @@ export class BergacastApi {
 		const response = await this.#client.postMultipart<Episode>(
 			requireLinkHref(podcast, 'episodes'),
 			formData,
-			{ 'Idempotency-Key': upload.idempotencyKey }
+			{ 'Idempotency-Key': upload.idempotencyKey },
+			transfer
 		);
 		return response.body;
 	}

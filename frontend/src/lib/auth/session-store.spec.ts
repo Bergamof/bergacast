@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { SessionStore } from './session-store';
+import { EXPIRY_MARGIN_MS, SessionStore } from './session-store';
 
 class MemoryStorage implements Storage {
 	readonly #items = new Map<string, string>();
@@ -52,7 +52,7 @@ describe('SessionStore', () => {
 		expect(store.read()).toEqual({
 			accessToken: 'jwt',
 			username: 'alice',
-			expiresAt: NOW + FIFTEEN_MINUTES_IN_SECONDS * 1000
+			expiresAt: NOW + FIFTEEN_MINUTES_IN_SECONDS * 1000 - EXPIRY_MARGIN_MS
 		});
 	});
 

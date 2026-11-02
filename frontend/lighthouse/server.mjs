@@ -8,6 +8,7 @@ import { appendFileSync, createReadStream, existsSync, statSync } from 'node:fs'
 import { createServer } from 'node:http';
 import { extname, join, resolve, sep } from 'node:path';
 import { COVER_IMAGE, answer } from './fake-api.mjs';
+import { SESSION_LIFETIME_MILLISECONDS } from './session.mjs';
 
 const [buildArgument, portArgument, requestLog, ...flags] = process.argv.slice(2);
 if (!buildArgument || !portArgument || !requestLog) {
@@ -17,7 +18,6 @@ if (!buildArgument || !portArgument || !requestLog) {
 const buildDirectory = resolve(buildArgument);
 const port = Number(portArgument);
 const signedIn = flags.includes('--signed-in');
-const SESSION_LIFETIME_MILLISECONDS = 3_600_000;
 
 const CONTENT_TYPES = {
 	'.html': 'text/html; charset=utf-8',

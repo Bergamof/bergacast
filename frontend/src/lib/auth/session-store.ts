@@ -1,5 +1,10 @@
 const STORAGE_KEY = 'bergacast.session';
 const MILLISECONDS_PER_SECOND = 1000;
+/**
+ * The expiry is computed when the response arrives, after the server issued the token: the SPA
+ * considers it expired a bit earlier, so that it never sends a token the server already refuses.
+ */
+export const EXPIRY_MARGIN_MS = 5000;
 
 export interface Session {
 	accessToken: string;
@@ -37,7 +42,7 @@ export class SessionStore {
 		const session: Session = {
 			accessToken,
 			username,
-			expiresAt: this.#now() + expiresInSeconds * MILLISECONDS_PER_SECOND
+			expiresAt: this.#now() + expiresInSeconds * MILLISECONDS_PER_SECOND - EXPIRY_MARGIN_MS
 		};
 		this.#getStorage().setItem(STORAGE_KEY, JSON.stringify(session));
 		return session;
