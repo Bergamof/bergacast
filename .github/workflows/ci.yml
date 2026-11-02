@@ -702,43 +702,57 @@ jobs:
       - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           output: ${{ runner.temp }}/codeql
-      # The alerts are also listed in the Security tab; any high or critical one (security-severity >= 7.0) fails.
+      # Every alert of the analysis is printed below and listed in the Security tab. The check fails on the OPEN high
+      # or critical alerts (security-severity >= 7.0) of this ref, read from the code scanning API: a false positive
+      # is dismissed by a maintainer in GitHub (with a reason), never silenced in the repository.
       - name: Summarize
         id: summary
         if: always()
         env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
           SARIF_DIR: ${{ runner.temp }}/codeql
+          ALERTS_FILE: ${{ runner.temp }}/codeql-open-alerts.jsonl
         run: |
+          gh api --paginate --jq '.[]' \
+            "repos/$REPOSITORY/code-scanning/alerts?ref=$REF&state=open&tool_name=CodeQL&per_page=100" > "$ALERTS_FILE"
           python3 - <<'PY'
           import glob, json, os, sys
 
-          HIGH = 7.0
-          parts, high = [], 0
+          parts = []
           for path in sorted(glob.glob(os.path.join(os.environ["SARIF_DIR"], "*.sarif"))):
               for run in json.load(open(path, encoding="utf-8")).get("runs", []):
-                  driver = run["tool"]["driver"]
                   rules = {}
-                  for component in [driver, *run["tool"].get("extensions", [])]:
+                  for component in [run["tool"]["driver"], *run["tool"].get("extensions", [])]:
                       for rule in component.get("rules", []):
-                          rules[rule["id"]] = float(rule.get("properties", {}).get("security-severity", 0))
+                          rules[rule["id"]] = rule.get("properties", {}).get("security-severity", "-")
                   results = run.get("results", [])
                   language = os.path.basename(path).removesuffix(".sarif")
                   for result in results:
                       location = result["locations"][0]["physicalLocation"]
                       print(
-                          f"{language}: {result.get('ruleId')} (security-severity {rules.get(result.get('ruleId'), 0)})"
+                          f"{language}: {result.get('ruleId')} (security-severity {rules.get(result.get('ruleId'), '-')})"
                           f" {location['artifactLocation']['uri']}:{location.get('region', {}).get('startLine', '?')}"
-                          f" {result['message']['text'][:200]}"
                       )
-                  severe = sum(1 for result in results if rules.get(result.get("ruleId"), 0) >= HIGH)
-                  high += severe
-                  parts.append(f"{language} {len(results)} alert(s), {severe} high+")
-          summary = "CodeQL: " + (" · ".join(parts) if parts else "no result")
+                  parts.append(f"{language} {len(results)}")
+
+          blocking = []
+          for line in open(os.environ["ALERTS_FILE"], encoding="utf-8"):
+              alert = json.loads(line)
+              if alert["rule"].get("security_severity_level") in ("high", "critical"):
+                  location = alert["most_recent_instance"]["location"]
+                  blocking.append(f"{alert['rule']['id']} {location['path']}:{location.get('start_line', '?')} {alert['html_url']}")
+          print("Open high or critical alerts:", *blocking or ["none"], sep="\n  ")
+
+          summary = (
+              f"CodeQL: alerts {' · '.join(parts)} · {len(blocking)} open high+" if parts else "CodeQL: no result"
+          )
           print(summary)
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
               out.write(f"summary={summary}\n")
-          if high or not parts:
-              sys.exit("High or critical CodeQL alerts (or no analysis): see the Security tab")
+          if blocking or not parts:
+              sys.exit("Open high or critical CodeQL alerts (or no analysis): fix them, or dismiss a false positive in GitHub")
           PY
       - name: Upload the SARIF reports
         if: always()
