@@ -702,10 +702,11 @@ jobs:
       - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           output: ${{ runner.temp }}/codeql
-      # Every alert of the analysis is printed below and listed in the Security tab. The check fails on each high or
-      # critical result (security-severity >= 7.0) unless code scanning reports its alert as dismissed or fixed on this
-      # ref: a false positive is dismissed by a maintainer in GitHub (with a reason), never silenced in the repository,
-      # and a result the API does not know (yet) blocks rather than passes.
+      # Every alert of the analysis is printed below and listed in the Security tab. A high or critical result
+      # (security-severity >= 7.0) blocks while code scanning reports its alert as open; a false positive is dismissed
+      # by a maintainer in GitHub (with a reason), never silenced in the repository. On a pull request, code scanning
+      # only tracks the alerts of the changed files: the other results are listed and judged on main, where every high
+      # result must be known to the API (an unknown one blocks rather than passes).
       - name: Summarize
         id: summary
         if: always()
@@ -713,6 +714,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           REF: ${{ github.ref }}
+          EVENT: ${{ github.event_name }}
           SARIF_DIR: ${{ runner.temp }}/codeql
           ALERTS_FILE: ${{ runner.temp }}/codeql-alerts.jsonl
         run: |
@@ -744,12 +746,13 @@ jobs:
                       severity = rules.get(key[0], 0)
                       state = states.get(key, "unknown")
                       print(f"{language}: {key[0]} (security-severity {severity}) {key[1]}:{key[2]} [{state}]")
-                      if severity >= HIGH and state not in ("dismissed", "fixed"):
+                      unknown_blocks = os.environ["EVENT"] != "pull_request"
+                      if severity >= HIGH and (state == "open" or (state == "unknown" and unknown_blocks)):
                           blocking.append(f"{key[0]} {key[1]}:{key[2]} [{state}]")
                   parts.append(f"{language} {len(results)}")
 
           summary = (
-              f"CodeQL: alerts {' · '.join(parts)} · {len(blocking)} high+ not dismissed" if parts else "CodeQL: no result"
+              f"CodeQL: alerts {' · '.join(parts)} · {len(blocking)} blocking high+" if parts else "CodeQL: no result"
           )
           print(summary)
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
