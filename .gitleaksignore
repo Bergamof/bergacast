@@ -1,0 +1,13 @@
+# gitleaks false positives (CI job `secrets`): documentation and test examples, not secrets.
+# Fingerprint format: <commit>:<file>:<rule>:<line>. Prefer a `gitleaks:allow` comment on new code.
+# Example S3 credentials in a code comment.
+8ef094a722c924c2cee4d7b0d632c7da11e3ace4:backend/src/main/java/fr/bergadev/bergacast/storage/StorageConfiguration.java:generic-api-key:28
+# Idempotency-Key example in the OpenAPI documentation.
+6f0e383fd1a0477472a4310fbd8756ca9a548d46:backend/src/main/java/fr/bergadev/bergacast/episode/EpisodeController.java:generic-api-key:80
+# Example JWT in the OpenAPI documentation of the access token response.
+6f0e383fd1a0477472a4310fbd8756ca9a548d46:backend/src/main/java/fr/bergadev/bergacast/security/AccessTokenResponse.java:jwt:11
+# Token placeholder (bgc_VOTRE_JETON) in a README curl example.
+664ab13fddb3021f91bc5125bb5c89f8e3e4306a:README.md:curl-auth-header:334
+# JWT secret of the test profile.
+2b250e34b12862a60feb55d0be8fd6512aca8f54:backend/src/test/java/io/github/bergamof/bergacast/config/BergacastPropertiesTest.java:generic-api-key:12
+2b250e34b12862a60feb55d0be8fd6512aca8f54:backend/src/test/resources/application-test.yaml:generic-api-key:4

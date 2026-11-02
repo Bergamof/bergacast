@@ -1,0 +1,9 @@
+# Trivy exceptions (CI: backend-dependencies, backend-image, frontend-image). Empty by default: a critical or high
+# vulnerability is fixed, not ignored. An exception is only for a vulnerability without a fix, or proven not
+# exploitable here, and is also recorded in CLAUDE.md (« Décisions techniques »). Each entry states why and expires,
+# so that it is reviewed:
+#   - id: CVE-YYYY-NNNNN
+#     purls: ["pkg:maven/group/artifact@version"]   # or paths: [...]
+#     statement: no fix released; the vulnerable code path is not used because ...
+#     expired_at: YYYY-MM-DD                        # about three months later
+vulnerabilities: []

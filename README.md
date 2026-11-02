@@ -508,8 +508,10 @@ Authentification administrateur : `POST /api/v1/access-tokens` avec `{"username"
 ## Intégration continue
 
 Le workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) s’exécute sur chaque pull request (création, mise à
-jour, réouverture, sortie de brouillon, modification du titre ou de la description) et sur chaque push sur `main`. Les versions de Java et Node sont lues dans
-`.sdkmanrc` et `.nvmrc`, la version de npm dans `packageManager`.
+jour, réouverture, sortie de brouillon, modification du titre ou de la description), sur chaque push sur `main` et
+chaque nuit sur `main` (contrôles de sécurité seulement : de nouvelles CVE apparaissent sans changement de code). Les
+versions de Java et Node sont lues dans `.sdkmanrc` et `.nvmrc`, la version de npm dans `packageManager`. Les actions
+GitHub sont épinglées par SHA de commit (mis à jour par Dependabot).
 
 | Job | Vérification |
 |-----|--------------|
@@ -522,8 +524,17 @@ jour, réouverture, sortie de brouillon, modification du titre ou de la descript
 | `frontend-lint` | Prettier, ESLint, svelte-check |
 | `frontend-test` | Vitest + couverture |
 | `frontend-build` | Build Vite |
-| `backend-image` | Build de l’image native (non publiée), démarrage contre PostgreSQL puis `backend/scripts/smoke-test.sh` |
-| `frontend-image` | Build de l’image (non publiée), vérification du service (`config.js`, repli SPA, cache, refus d’une URL d’API invalide) |
+| `backend-dependencies` | Trivy sur le jar (dépendances Java) : échec sur toute CVE critique ou haute (nuit comprise) |
+| `frontend-dependencies` | `npm audit` de toutes les dépendances : échec sur toute vulnérabilité haute ou critique (nuit comprise) |
+| `secrets` | gitleaks sur tout l’historique (faux positifs dans `.gitleaksignore`, nuit comprise) |
+| `codeql` | CodeQL (Java, TypeScript, workflows ; requêtes `security-extended`) : échec sur toute alerte de sévérité haute ou critique non écartée (onglet *Security*) ; un faux positif s’écarte dans GitHub (*Dismiss alert*, avec la raison) |
+| `frontend-lighthouse` | Lighthouse CI (`frontend/lighthouserc.json`) sur 8 pages servies avec une API simulée (`frontend/lighthouse/`) : Accessibilité et Bonnes pratiques ≥ 90 |
+| `backend-image` | Build de l’image native (non publiée), démarrage contre PostgreSQL puis `backend/scripts/smoke-test.sh`, Trivy sur l’image |
+| `frontend-image` | Build de l’image (non publiée), vérification du service (`config.js`, repli SPA, cache, refus d’une URL d’API invalide), Trivy sur l’image (nuit comprise) |
+
+Les outils de sécurité (Trivy 0.76.1, gitleaks 8.30.1) sont installés depuis leurs releases avec une somme SHA-256
+épinglée. Exceptions Trivy : `.trivyignore.yaml` (vide par défaut ; chaque entrée justifiée et datée d’une
+expiration).
 
 Puis le job `report` (toujours exécuté sur une PR, même en cas d’échec) publie — ou met à jour — **un commentaire sur
 la PR** avec un tableau des résultats (statut et synthèse : violations, tests passés/échoués, couverture, taille du jar
@@ -531,9 +542,12 @@ ou des images, mémoire…) et le lien du run. Dependabot propose chaque semaine
 Docker).
 
 **Protection de branche recommandée sur `main`** (*Settings → Rules → Rulesets* ou *Branches*) : exiger une pull
-request, exiger que la branche soit à jour, et rendre obligatoires les 11 vérifications : *PR title*, *Release scripts*, *Backend lint*, *Backend
-tests*, *Backend build*, *OpenAPI lint*, *Frontend lint*, *Frontend tests*, *Frontend build*, *Backend native image*, *Frontend image* (le job
-*PR report* ne doit pas être obligatoire : il rend compte, il ne juge pas).
+request, exiger que la branche soit à jour, et rendre obligatoires les 16 vérifications : *PR title*, *Release scripts*, *Backend lint*, *Backend
+tests*, *Backend build*, *OpenAPI lint*, *Frontend lint*, *Frontend tests*, *Frontend build*, *Backend dependencies (CVE)*,
+*Frontend dependencies (CVE)*, *Secrets (gitleaks)*, *CodeQL*, *Frontend Lighthouse*, *Backend native image*, *Frontend
+image* (le job *PR report* ne doit pas être obligatoire : il rend compte, il ne juge pas).
+
+Sécurité : voir [`SECURITY.md`](SECURITY.md) pour signaler une vulnérabilité.
 
 ## Licence
 

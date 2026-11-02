@@ -2,8 +2,11 @@
 # for the modules, released as a patch version.
 version: 2
 updates:
+  # Actions are pinned by commit SHA (with the version in a comment): Dependabot updates both.
   - package-ecosystem: github-actions
-    directory: /
+    directories:
+      - /
+      - /.github/actions/trivy-scan
     schedule:
       interval: weekly
     commit-message:
