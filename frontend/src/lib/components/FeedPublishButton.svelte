@@ -9,9 +9,11 @@
 	interface Props {
 		/** Rewrites the feed on the object storage now. */
 		onPublishFeed: () => Promise<FeedPublication>;
+		/** Offered next to a 503 alert, which the rewrite makes obsolete: the message says so. */
+		afterFeedFailure?: boolean;
 	}
 
-	let { onPublishFeed }: Props = $props();
+	let { onPublishFeed, afterFeedFailure = false }: Props = $props();
 
 	let publishing = $state(false);
 	let publicationMessage = $state('');
@@ -22,7 +24,10 @@
 		publicationMessage = '';
 		publicationProblem = null;
 		try {
-			publicationMessage = feedPublicationMessage(await onPublishFeed());
+			const message = feedPublicationMessage(await onPublishFeed());
+			publicationMessage = afterFeedFailure
+				? `${message} L’avertissement ci-dessus ne s’applique plus.`
+				: message;
 		} catch (error) {
 			publicationProblem = problemFromError(error);
 		} finally {

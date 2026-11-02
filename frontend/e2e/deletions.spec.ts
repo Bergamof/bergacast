@@ -41,7 +41,11 @@ test.describe('episode deletion', () => {
 		await dialog.getByRole('button', { name: 'Supprimer', exact: true }).click();
 
 		await page.keyboard.press('Escape');
-		await expect(dialog).toBeVisible();
+		await expect(dialog.getByRole('button', { name: 'Annuler' })).toHaveAttribute(
+			'aria-disabled',
+			'true'
+		);
+		expect(await dialog.evaluate((element) => (element as HTMLDialogElement).open)).toBe(true);
 		deletion.release();
 
 		await expect(dialog).toBeHidden();
@@ -65,7 +69,7 @@ test.describe('API tokens', () => {
 							name: 'Make',
 							token: 'bgc_secret',
 							tokenPrefix: 'bgc_secr',
-							createdAt: new Date().toISOString(),
+							createdAt: '2026-11-02T10:00:00Z',
 							lastUsedAt: null,
 							_links: { self: { href: '/api/v1/podcasts/mon-podcast/api-tokens/t3' } }
 						})
@@ -78,7 +82,7 @@ test.describe('API tokens', () => {
 		await page.getByRole('button', { name: 'Créer le jeton' }).click();
 
 		await expect(page.getByText('Jeton « Make » créé.')).toBeVisible();
-		await expect(page.locator('.notice.warning')).toBeFocused();
+		await expect(page.getByRole('group', { name: 'Jeton « Make » créé.' })).toBeFocused();
 		await page.getByRole('button', { name: 'J’ai copié le jeton' }).click();
 		await expect(page.getByLabel('Nom')).toBeFocused();
 	});
@@ -94,5 +98,31 @@ test.describe('API tokens', () => {
 		await expect(page.getByRole('status').filter({ hasText: 'révoqué' })).toHaveText(
 			'Jeton « n8n » révoqué.'
 		);
+	});
+});
+
+test.describe('administrators', () => {
+	test('focuses the list after a deletion and announces it', async ({ page }) => {
+		await page.route('**/api/v1/admin-users/u1', (route) => route.fulfill({ status: 204 }));
+		await page.goto(`${SIGNED_IN}/admin-users`);
+
+		await page.getByRole('button', { name: 'Supprimer le compte « adrien »' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Supprimer' }).click();
+
+		await expect(page.getByRole('heading', { name: 'Comptes existants' })).toBeFocused();
+		await expect(page.getByRole('status').filter({ hasText: 'supprimé' })).toHaveText(
+			'Compte « adrien » supprimé.'
+		);
+	});
+
+	test('closes the confirmation on Escape and gives the focus back', async ({ page }) => {
+		await page.goto(`${SIGNED_IN}/admin-users`);
+		const opener = page.getByRole('button', { name: 'Supprimer le compte « adrien »' });
+		await opener.click();
+
+		await page.keyboard.press('Escape');
+
+		await expect(page.getByRole('alertdialog')).toBeHidden();
+		await expect(opener).toBeFocused();
 	});
 });

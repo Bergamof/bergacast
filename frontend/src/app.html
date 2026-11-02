@@ -18,6 +18,16 @@
 	</head>
 	<body data-sveltekit-preload-data="hover">
 		<p id="app-loading" class="app-loading" role="status">Chargement de Bergacast…</p>
+		<script>
+			// Still here after a while: the start failed (e.g. a file of a previous version, gone).
+			setTimeout(() => {
+				const loading = document.getElementById('app-loading');
+				if (loading) {
+					loading.textContent =
+						'Le chargement est anormalement long. Si rien ne s’affiche, rechargez la page.';
+				}
+			}, 30000);
+		</script>
 		<noscript
 			><p class="app-loading">L’administration de Bergacast nécessite JavaScript.</p></noscript
 		>

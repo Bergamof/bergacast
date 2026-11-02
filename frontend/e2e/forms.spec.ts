@@ -74,7 +74,7 @@ test.describe('podcast settings', () => {
 
 		await expect(settings(page).getByRole('status')).toHaveText('Modifications enregistrées.');
 		await expect(save).toBeFocused();
-		expect(patches).toBe(1);
+		await expect.poll(() => patches).toBe(1);
 	});
 
 	test('after a 503, reloads the podcast, keeps the input and offers to rewrite the feed', async ({
@@ -94,7 +94,7 @@ test.describe('podcast settings', () => {
 				contentType: 'application/json',
 				body: JSON.stringify({
 					feedUrl: 'https://media.example/x.xml',
-					publishedAt: '',
+					publishedAt: '2026-11-02T10:00:00Z',
 					episodeCount: 3
 				})
 			})
@@ -109,8 +109,8 @@ test.describe('podcast settings', () => {
 		await expect.poll(() => reads).toBeGreaterThan(readsBefore);
 		await expect(settings(page).getByLabel('Titre')).toHaveValue('Titre modifié');
 		await settings(page).getByRole('button', { name: 'Réécrire le flux' }).click();
-		await expect(settings(page).getByRole('status').first()).toHaveText(
-			'Flux réécrit : 3 épisodes.'
+		await expect(settings(page).getByRole('status').filter({ hasText: 'Flux réécrit' })).toHaveText(
+			'Flux réécrit : 3 épisodes. L’avertissement ci-dessus ne s’applique plus.'
 		);
 	});
 
@@ -173,4 +173,18 @@ test.describe('episode upload', () => {
 		await expect(title).toBeFocused();
 		await expect(title).toHaveAccessibleDescription('Titre trop long');
 	});
+});
+
+test('podcast creation focuses the slug the API rejects', async ({ page }) => {
+	await page.goto(`${SIGNED_IN}/podcasts/new`);
+	await page.getByRole('textbox', { name: 'Identifiant (slug)' }).fill('mon-podcast');
+	await page.getByRole('textbox', { name: 'Titre', exact: true }).fill('Mon podcast');
+	await page.getByRole('textbox', { name: 'Langue' }).fill('fr');
+	await page.getByRole('textbox', { name: 'Description' }).fill('Une description.');
+
+	await page.getByRole('button', { name: 'Créer le podcast' }).click();
+
+	const slug = page.getByRole('textbox', { name: 'Identifiant (slug)' });
+	await expect(slug).toBeFocused();
+	await expect(slug).toHaveAccessibleDescription(/Ce slug est déjà utilisé\./);
 });

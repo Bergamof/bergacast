@@ -43,5 +43,5 @@
 		</PendingButton>
 	</div>
 {:else if action === 'publish-feed' && onPublishFeed}
-	<FeedPublishButton {onPublishFeed} />
+	<FeedPublishButton {onPublishFeed} afterFeedFailure />
 {/if}
