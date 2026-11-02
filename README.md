@@ -503,7 +503,10 @@ Chaque podcast a un objet `feed`, appliqué à chaque génération du flux, dans
 Ces pages sont **publiques, y compris en production**, volontairement, pour faciliter l’intégration d’outils externes.
 
 Authentification administrateur : `POST /api/v1/access-tokens` avec `{"username": "…", "password": "…"}` renvoie
-`200 {accessToken, tokenType: "Bearer", expiresIn: 900}`, à passer dans `Authorization: Bearer …`.
+`200 {accessToken, tokenType: "Bearer", expiresIn: 900}`, à passer dans `Authorization: Bearer …`. Après 3 échecs
+consécutifs pour un même identifiant, les connexions de cet identifiant sont refusées en `429` (en-tête `Retry-After`)
+pendant 10 s, durée doublée à chaque nouvel échec (une heure au plus) jusqu’à une connexion réussie. Les corps JSON de
+l’API sont limités à 256 Kio (`413` au-delà).
 
 ## Intégration continue
 
