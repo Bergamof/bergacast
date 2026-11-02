@@ -43,7 +43,9 @@ test.describe('audio upload', () => {
 		await startPendingUpload(page);
 
 		await expect(page.getByText('episode.mp3 · 2 Mio')).toBeVisible();
-		await expect(page.getByRole('progressbar', { name: 'Envoi du fichier audio' })).toBeVisible();
+		const progress = page.getByRole('progressbar', { name: 'Envoi du fichier audio' });
+		await expect(progress).toBeVisible();
+		await expect(progress).not.toHaveAttribute('value');
 		await expect(page.getByRole('button', { name: 'Annuler l’envoi' })).toBeVisible();
 		await expectNoAxeViolations(page);
 	});
@@ -62,6 +64,8 @@ test.describe('audio upload', () => {
 		);
 		await expect(page.getByRole('progressbar')).toHaveAttribute('value', '25');
 		await uploads.progress(100, 100);
+		// Indeterminate while the server stores the episode, not back to 0 %.
+		await expect(page.getByRole('progressbar')).not.toHaveAttribute('value');
 
 		await expect(cancel).toHaveCount(0);
 		await expect(page.getByRole('button', { name: 'Envoi en cours…' })).toBeFocused();

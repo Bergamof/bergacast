@@ -137,13 +137,18 @@
 	{#if upload.active}
 		<div class="upload-progress">
 			<label for="{uid}-progress">Envoi du fichier audio</label>
-			<!-- Indeterminate (no value) until the size is known and while the server stores the episode. -->
-			<progress
-				id="{uid}-progress"
-				aria-describedby="{uid}-progress-label"
-				max={upload.total || 1}
-				value={upload.total > 0 && !upload.sent ? upload.loaded : undefined}
-			></progress>
+			<!-- Indeterminate (no value attribute: Svelte would write value="0") until the size is known
+				and while the server stores the episode. -->
+			{#if upload.total > 0 && !upload.sent}
+				<progress
+					id="{uid}-progress"
+					aria-describedby="{uid}-progress-label"
+					max={upload.total}
+					value={upload.loaded}
+				></progress>
+			{:else}
+				<progress id="{uid}-progress" aria-describedby="{uid}-progress-label"></progress>
+			{/if}
 			<span id="{uid}-progress-label" class="muted">{upload.label}</span>
 		</div>
 	{/if}
