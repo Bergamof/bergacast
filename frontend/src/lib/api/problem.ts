@@ -1,3 +1,5 @@
+import { isAbortError } from './upload-transport';
+
 /** A single invalid field, as listed in the `errors` member of a validation problem. */
 export interface FieldViolation {
 	field: string;
@@ -99,6 +101,9 @@ export function problemFromError(error: unknown): ProblemDetails {
 	}
 	if (error instanceof ApiError) {
 		return error.problem;
+	}
+	if (isAbortError(error)) {
+		return { title: 'Envoi annulé', detail: 'Rien n’a été publié.' };
 	}
 	return {
 		title: 'Erreur inattendue',

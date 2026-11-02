@@ -2,6 +2,7 @@ import { error, redirect } from '@sveltejs/kit';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { ApiClient } from './api/client';
+import { createXhrUploadTransport } from './api/upload-transport';
 import { BergacastApi, OPENAPI_DOCUMENTATION_PATH } from './api/bergacast-api';
 import { ApiError, SERVICE_UNAVAILABLE } from './api/problem';
 import { EXPIRED_PARAMETER, REDIRECT_PARAMETER } from './auth/login-redirect';
@@ -37,6 +38,7 @@ export const api = new BergacastApi(
 		fetch: (input, init) => fetch(input, init),
 		getAccessToken: () => sessionStore.read()?.accessToken ?? null,
 		onUnauthorized: () => void logOut({ expired: true }),
+		uploadTransport: createXhrUploadTransport(),
 		apiOrigin
 	})
 );

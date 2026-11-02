@@ -74,6 +74,13 @@ describe('problemFromError', () => {
 		expect(problem.status).toBe(412);
 	});
 
+	it('tells a cancelled upload', () => {
+		expect(problemFromError(new DOMException('x', 'AbortError'))).toEqual({
+			title: 'Envoi annulé',
+			detail: 'Rien n’a été publié.'
+		});
+	});
+
 	it('wraps unexpected errors', () => {
 		expect(problemFromError(new Error('boom'))).toEqual({
 			title: 'Erreur inattendue',

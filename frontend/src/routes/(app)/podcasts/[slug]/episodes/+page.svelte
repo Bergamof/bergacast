@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { api } from '#lib/app.ts';
+	import type { UploadTransfer } from '#lib/api/client.ts';
 	import type { Episode } from '#lib/api/resources.ts';
 	import { changeThenRefresh } from '#lib/api/change-then-refresh.ts';
 	import ConfirmButton from '#lib/components/ConfirmButton.svelte';
@@ -31,15 +32,16 @@
 	function uploadEpisode(
 		values: EpisodeFormValues,
 		audio: File,
-		idempotencyKey: string
+		idempotencyKey: string,
+		transfer: UploadTransfer
 	): Promise<void> {
 		return changeThenRefresh(
 			() =>
-				api.uploadEpisode(podcast, {
-					metadata: toUploadMetadata(values),
-					audio,
-					idempotencyKey
-				}),
+				api.uploadEpisode(
+					podcast,
+					{ metadata: toUploadMetadata(values), audio, idempotencyKey },
+					transfer
+				),
 			refresh
 		);
 	}

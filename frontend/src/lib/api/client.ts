@@ -1,4 +1,9 @@
 import { ApiError, NETWORK_ERROR_STATUS, toProblemDetails } from './problem';
+import {
+	isAbortError,
+	type UploadProgressListener,
+	type UploadTransport
+} from './upload-transport';
 
 const HAL_JSON = 'application/hal+json';
 const JSON_TYPE = 'application/json';
@@ -25,6 +30,15 @@ export interface RequestOptions {
 	blob?: Blob;
 	ifMatch?: string | null;
 	headers?: Record<string, string>;
+	/** Cancels the request: the returned promise rejects with an `AbortError`. */
+	signal?: AbortSignal;
+	/** Reports the progress of the request body (sent through `uploadTransport`). */
+	onUploadProgress?: UploadProgressListener;
+	/**
+	 * Sent without the bearer token, e.g. a login: its 401 means wrong credentials, not an
+	 * expired session to log out of.
+	 */
+	anonymous?: boolean;
 }
 
 export interface ApiClientOptions {
@@ -33,12 +47,17 @@ export interface ApiClientOptions {
 	getAccessToken: () => string | null;
 	/** Called when the API rejects the token we sent (expired, revoked, secret rotated…). */
 	onUnauthorized: () => void;
+	/** Sends the requests that report their upload progress; `fetch` cannot. */
+	uploadTransport: UploadTransport;
 	/**
 	 * Origin serving the API (scheme, host and port) when it differs from the page origin. Without
 	 * it, requests stay on the page origin (development proxy).
 	 */
 	apiOrigin?: string;
 }
+
+/** Follows (`onUploadProgress`) or cancels (`signal`) the upload of a request body. */
+export type UploadTransfer = Pick<RequestOptions, 'signal' | 'onUploadProgress'>;
 
 interface EncodedBody {
 	body?: BodyInit;
@@ -97,7 +116,7 @@ export class ApiClient {
 	}
 
 	async request<T>(href: string, options: RequestOptions = {}): Promise<ApiResponse<T>> {
-		const accessToken = this.#options.getAccessToken();
+		const accessToken = options.anonymous ? null : this.#options.getAccessToken();
 		const { body, contentType } = encodeBody(options);
 		const headers: Record<string, string> = { Accept: ACCEPT_HEADER, ...options.headers };
 		if (contentType) {
@@ -112,12 +131,17 @@ export class ApiClient {
 
 		let response: Response;
 		try {
-			response = await this.#options.fetch(this.toRequestUrl(href), {
+			response = await this.#send(this.toRequestUrl(href), {
 				method: options.method ?? 'GET',
 				headers,
-				body
+				body,
+				signal: options.signal,
+				onUploadProgress: options.onUploadProgress
 			});
 		} catch (cause) {
+			if (isAbortError(cause)) {
+				throw cause;
+			}
 			throw new ApiError(
 				NETWORK_ERROR_STATUS,
 				toProblemDetails(NETWORK_ERROR_STATUS, {
@@ -141,6 +165,26 @@ export class ApiClient {
 		};
 	}
 
+	#send(
+		url: string,
+		init: RequestInit & {
+			headers: Record<string, string>;
+			onUploadProgress?: UploadProgressListener;
+		}
+	): Promise<Response> {
+		const { onUploadProgress, ...fetchInit } = init;
+		if (onUploadProgress === undefined) {
+			return this.#options.fetch(url, fetchInit);
+		}
+		return this.#options.uploadTransport(url, {
+			method: fetchInit.method ?? 'GET',
+			headers: fetchInit.headers,
+			body: fetchInit.body as XMLHttpRequestBodyInit | undefined,
+			signal: fetchInit.signal ?? undefined,
+			onUploadProgress
+		});
+	}
+
 	get<T>(href: string): Promise<ApiResponse<T>> {
 		return this.request<T>(href);
 	}
@@ -150,12 +194,18 @@ export class ApiClient {
 		return this.request<T>(href, { method: 'POST', json });
 	}
 
+	/** Posts `json` without the bearer token (see `RequestOptions.anonymous`). */
+	postAnonymously<T>(href: string, json: unknown): Promise<ApiResponse<T>> {
+		return this.request<T>(href, { method: 'POST', json, anonymous: true });
+	}
+
 	postMultipart<T>(
 		href: string,
 		formData: FormData,
-		headers: Record<string, string> = {}
+		headers: Record<string, string> = {},
+		transfer: UploadTransfer = {}
 	): Promise<ApiResponse<T>> {
-		return this.request<T>(href, { method: 'POST', formData, headers });
+		return this.request<T>(href, { method: 'POST', formData, headers, ...transfer });
 	}
 
 	/** Replaces the resource at `href` with the raw content of `blob`. */

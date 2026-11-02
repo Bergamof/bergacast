@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createFakeFetch, emptyResponse, jsonResponse } from '../testing/fake-fetch';
 import { ApiClient, withQuery } from './client';
 import { ApiError, NETWORK_ERROR_STATUS } from './problem';
+import { abortError, isAbortError, type UploadTransport } from './upload-transport';
 
 const API_ORIGIN = 'https://api.example';
 
@@ -11,16 +12,82 @@ function createClient(
 	{ apiOrigin }: { apiOrigin?: string } = { apiOrigin: API_ORIGIN }
 ) {
 	const onUnauthorized = vi.fn();
+	const uploadTransport = vi.fn<UploadTransport>();
 	const client = new ApiClient({
 		fetch,
 		getAccessToken: () => accessToken,
 		onUnauthorized,
+		uploadTransport,
 		apiOrigin
 	});
-	return { client, onUnauthorized };
+	return { client, onUnauthorized, uploadTransport };
 }
 
 describe('ApiClient', () => {
+	it('sends an anonymous request without the token and without logging out on its 401', async () => {
+		const { fetch, requests } = createFakeFetch(jsonResponse(401, { title: 'Bad credentials' }));
+		const { client, onUnauthorized } = createClient(fetch);
+
+		await expect(client.postAnonymously('/api/v1/access-tokens', {})).rejects.toBeInstanceOf(
+			ApiError
+		);
+
+		expect(requests[0].headers.has('Authorization')).toBe(false);
+		expect(onUnauthorized).not.toHaveBeenCalled();
+	});
+
+	it('sends an upload followed by its progress through the upload transport', async () => {
+		const { fetch } = createFakeFetch();
+		const { client, uploadTransport } = createClient(fetch);
+		uploadTransport.mockResolvedValue(jsonResponse(201, { id: 'e1' }));
+		const onUploadProgress = vi.fn();
+		const signal = new AbortController().signal;
+		const formData = new FormData();
+
+		const response = await client.postMultipart(
+			'/api/v1/demo/episodes',
+			formData,
+			{ 'Idempotency-Key': 'k' },
+			{ onUploadProgress, signal }
+		);
+
+		expect(response.body).toEqual({ id: 'e1' });
+		expect(fetch).not.toHaveBeenCalled();
+		expect(uploadTransport).toHaveBeenCalledWith('https://api.example/api/v1/demo/episodes', {
+			method: 'POST',
+			headers: expect.objectContaining({
+				Authorization: 'Bearer jwt-token',
+				'Idempotency-Key': 'k'
+			}),
+			body: formData,
+			signal,
+			onUploadProgress
+		});
+	});
+
+	it('passes the signal to fetch for the other requests', async () => {
+		const { fetch } = createFakeFetch(jsonResponse(200, {}));
+		const { client } = createClient(fetch);
+		const signal = new AbortController().signal;
+
+		await client.request('/api/v1', { signal });
+
+		expect(fetch).toHaveBeenCalledWith(
+			'https://api.example/api/v1',
+			expect.objectContaining({ signal })
+		);
+	});
+
+	it('rejects a cancelled request with its AbortError, not a network problem', async () => {
+		const { fetch } = createFakeFetch();
+		const { client, uploadTransport } = createClient(fetch);
+		uploadTransport.mockRejectedValue(abortError());
+
+		await expect(
+			client.postMultipart('/x', new FormData(), {}, { onUploadProgress: vi.fn() })
+		).rejects.toSatisfy(isAbortError);
+	});
+
 	it('sends the bearer token and HAL accept header', async () => {
 		const { fetch, requests } = createFakeFetch(jsonResponse(200, { title: 'Podcast' }));
 		const { client } = createClient(fetch);

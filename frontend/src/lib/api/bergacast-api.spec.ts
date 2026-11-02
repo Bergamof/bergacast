@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createFakeFetch, emptyResponse, jsonResponse } from '../testing/fake-fetch';
 import { BergacastApi, DEFAULT_PAGE_SIZE } from './bergacast-api';
 import { ApiClient } from './client';
 import type { Episode, Podcast } from './resources';
+import type { UploadTransport } from './upload-transport';
 
 const ROOT = {
 	version: '1.2.3',
@@ -25,12 +26,14 @@ const podcast = { slug: 'demo', _links: PODCAST_LINKS } as unknown as Podcast;
 
 function createApi(...responses: Response[]) {
 	const { fetch, requests } = createFakeFetch(...responses);
+	const uploadTransport = vi.fn<UploadTransport>();
 	const client = new ApiClient({
 		fetch,
 		getAccessToken: () => 'jwt',
-		onUnauthorized: () => undefined
+		onUnauthorized: () => undefined,
+		uploadTransport
 	});
-	return { api: new BergacastApi(client), requests };
+	return { api: new BergacastApi(client), requests, uploadTransport };
 }
 
 describe('BergacastApi', () => {
@@ -41,6 +44,7 @@ describe('BergacastApi', () => {
 		await expect(api.logIn('alice', 'secret')).resolves.toEqual(token);
 		expect(requests.map((request) => request.url)).toEqual(['/api/v1', '/api/v1/access-tokens']);
 		expect(requests[1].body).toBe('{"username":"alice","password":"secret"}');
+		expect(requests[1].headers.has('Authorization')).toBe(false);
 	});
 
 	it('discovers the API root only once', async () => {
@@ -265,6 +269,24 @@ describe('BergacastApi', () => {
 		expect(metadata.type).toBe('application/json');
 		expect(JSON.parse(await metadata.text())).toEqual({ title: 'Épisode' });
 		expect((body.get('audio') as File).name).toBe('episode.mp3');
+	});
+
+	it('follows the progress of an episode upload', async () => {
+		const { api, uploadTransport } = createApi();
+		uploadTransport.mockResolvedValue(jsonResponse(201, { id: 'e1' }));
+		const onUploadProgress = vi.fn();
+
+		const episode = await api.uploadEpisode(
+			podcast,
+			{ metadata: { title: 'Épisode' }, audio: new File(['a'], 'a.mp3'), idempotencyKey: 'k' },
+			{ onUploadProgress }
+		);
+
+		expect(episode).toEqual({ id: 'e1' });
+		expect(uploadTransport).toHaveBeenCalledWith(
+			'/api/v1/demo/episodes',
+			expect.objectContaining({ onUploadProgress })
+		);
 	});
 
 	it('manages API tokens through the podcast apiTokens link', async () => {
