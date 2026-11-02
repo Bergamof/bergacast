@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { PODCAST_PATH, SIGNED_IN, heldResponse } from './support';
+import { API_TOKENS_API, EPISODES_API, PODCAST_PATH, SIGNED_IN, heldResponse } from './support';
 
 const EPISODE_TITLE = 'Épisode 2 : un titre';
 
@@ -9,13 +9,12 @@ test.describe('episode deletion', () => {
 	test.beforeEach(async ({ page }) => {
 		let deleted = false;
 		deletion = heldResponse();
-		const response = deletion;
-		await page.route('**/api/v1/mon-podcast/episodes/ep-2', async (route) => {
-			await response.released;
+		await page.route(`${EPISODES_API}/ep-2`, async (route) => {
+			await deletion.released;
 			deleted = true;
 			await route.fulfill({ status: 204 });
 		});
-		await page.route('**/api/v1/mon-podcast/episodes?*', async (route) => {
+		await page.route(`${EPISODES_API}?*`, async (route) => {
 			const listed = await route.fetch();
 			const body = await listed.json();
 			if (deleted) {
@@ -56,7 +55,7 @@ test.describe('episode deletion', () => {
 
 test.describe('API tokens', () => {
 	test('focuses the created token, then the name field once dismissed', async ({ page }) => {
-		await page.route('**/api/v1/podcasts/mon-podcast/api-tokens', (route) =>
+		await page.route(API_TOKENS_API, (route) =>
 			route.request().method() === 'POST'
 				? route.fulfill({
 						status: 201,
@@ -85,7 +84,7 @@ test.describe('API tokens', () => {
 	});
 
 	test('focuses the list after a revocation and announces it', async ({ page }) => {
-		await page.route('**/api-tokens/t1', (route) => route.fulfill({ status: 204 }));
+		await page.route(`${API_TOKENS_API}/t1`, (route) => route.fulfill({ status: 204 }));
 		await page.goto(`${SIGNED_IN}${PODCAST_PATH}/tokens`);
 
 		await page.getByRole('button', { name: 'Révoquer le jeton « n8n »' }).click();

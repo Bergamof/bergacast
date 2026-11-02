@@ -6,6 +6,8 @@ export const SIGNED_OUT = `http://localhost:${SIGNED_OUT_PORT}`;
 export const SIGNED_IN = `http://localhost:${SIGNED_IN_PORT}`;
 export const PODCAST_PATH = '/podcasts/mon-podcast';
 export const PODCAST_API = '**/api/v1/podcasts/mon-podcast';
+export const EPISODES_API = '**/api/v1/mon-podcast/episodes';
+export const API_TOKENS_API = `${PODCAST_API}/api-tokens`;
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
 

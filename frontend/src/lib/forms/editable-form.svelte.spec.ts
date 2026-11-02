@@ -12,7 +12,10 @@ interface Values {
 /** Page data that a save or a refresh replaces, as `invalidate` does. */
 function storedResource(title: string) {
 	const stored = { current: { title } };
-	return { stored, form: new EditableForm<Values>(() => stored.current) };
+	return {
+		stored,
+		form: new EditableForm<Values>(() => stored.current, 'Modifications enregistrées.')
+	};
 }
 
 describe('EditableForm', () => {
@@ -31,7 +34,7 @@ describe('EditableForm', () => {
 			stored.current = { title: values.title.trim() };
 		});
 
-		await form.save(noValidation, action, 'Modifications enregistrées.');
+		await form.save(noValidation, action);
 
 		expect(action).toHaveBeenCalledWith({ title: '  Edited  ' });
 		expect(form.values).toEqual({ title: 'Edited' });
@@ -45,10 +48,10 @@ describe('EditableForm', () => {
 			values.title ? {} : { title: 'obligatoire' }
 		);
 
-		await form.save(validate, vi.fn(), 'Enregistré.');
+		await form.save(validate, vi.fn());
 
 		expect(validate).toHaveBeenCalledWith({ title: '' });
-		expect(form.state.fieldErrors).toEqual({ title: 'obligatoire' });
+		expect(form.submission.fieldErrors).toEqual({ title: 'obligatoire' });
 	});
 
 	it('keeps the edited values and announces nothing when the save fails', async () => {
@@ -56,25 +59,17 @@ describe('EditableForm', () => {
 		form.statusMessage = 'Modifications enregistrées.';
 		form.values.title = 'Edited';
 
-		await form.save(
-			noValidation,
-			() => Promise.reject(new ApiError(412, { title: 'Conflit' })),
-			'Modifications enregistrées.'
-		);
+		await form.save(noValidation, () => Promise.reject(new ApiError(412, { title: 'Conflit' })));
 
 		expect(form.values.title).toBe('Edited');
 		expect(form.statusMessage).toBe('');
-		expect(form.state.problem?.status).toBe(412);
+		expect(form.submission.problem?.status).toBe(412);
 	});
 
 	it('reloads the latest version, clears the problem and focuses the first control', async () => {
 		const { stored, form } = storedResource('Initial');
 		form.values.title = 'Edited';
-		await form.save(
-			noValidation,
-			() => Promise.reject(new ApiError(412, { title: 'Conflit' })),
-			'Enregistré.'
-		);
+		await form.save(noValidation, () => Promise.reject(new ApiError(412, { title: 'Conflit' })));
 		const { container, control } = fakeControlContainer();
 
 		await form.reload(async () => {
@@ -82,7 +77,7 @@ describe('EditableForm', () => {
 		}, container);
 
 		expect(form.values.title).toBe('Changed elsewhere');
-		expect(form.state.problem).toBeNull();
+		expect(form.submission.problem).toBeNull();
 		expect(form.statusMessage).toBe(RELOADED_MESSAGE);
 		expect(container.querySelector).toHaveBeenCalledWith('input, select, textarea');
 		expect(control.focus).toHaveBeenCalledOnce();

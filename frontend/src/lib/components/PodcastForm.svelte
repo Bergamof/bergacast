@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import type { FeedPublication } from '../api/resources';
 	import { EditableForm } from '../forms/editable-form.svelte';
 	import {
@@ -37,13 +38,16 @@
 		onPublishFeed
 	}: Props = $props();
 
-	const editable = new EditableForm(() => initialValues);
-	const errors = $derived(editable.state.fieldErrors);
+	const editable = new EditableForm(
+		() => initialValues,
+		untrack(() => successMessage)
+	);
+	const errors = $derived(editable.submission.fieldErrors);
 	let formElement: HTMLFormElement | undefined = $state();
 
 	async function handleSubmit(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
-		await editable.save(validatePodcastForm, onSubmit, successMessage, formElement);
+		await editable.save(validatePodcastForm, onSubmit, formElement);
 	}
 </script>
 
@@ -244,14 +248,18 @@
 		</label>
 	</fieldset>
 
-	<ProblemAlert problem={editable.state.problem} inlineFields={Object.keys(editable.values)} />
+	<ProblemAlert problem={editable.submission.problem} inlineFields={Object.keys(editable.values)} />
 	<RecoveryActions
-		problem={editable.state.problem}
+		problem={editable.submission.problem}
 		onReload={onReload ? () => editable.reload(onReload, formElement) : undefined}
 		{onPublishFeed}
 	/>
 	<div class="actions">
-		<PendingButton type="submit" pending={editable.state.pending} pendingLabel="Enregistrement…">
+		<PendingButton
+			type="submit"
+			pending={editable.submission.pending}
+			pendingLabel="Enregistrement…"
+		>
 			{submitLabel}
 		</PendingButton>
 		<StatusMessage message={editable.statusMessage} />

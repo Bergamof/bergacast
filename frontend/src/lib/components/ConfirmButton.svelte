@@ -16,7 +16,7 @@
 		 * Called once the dialog is closed after the action succeeded, e.g. to move the focus to a
 		 * stable element when the opening button is gone with what it deleted.
 		 */
-		afterConfirm?: () => void;
+		afterConfirm?: () => void | Promise<void>;
 		children: Snippet;
 	}
 
@@ -71,13 +71,15 @@
 		problem = null;
 		try {
 			await onConfirm();
-			dialog?.close();
-			afterConfirm?.();
 		} catch (error) {
 			problem = problemFromError(error);
+			return;
 		} finally {
+			// Before closing: a dialog closed while pending is reopened (`reopenWhilePending`).
 			pending = false;
 		}
+		dialog?.close();
+		await afterConfirm?.();
 	}
 </script>
 
@@ -88,7 +90,7 @@
 	role="alertdialog"
 	aria-labelledby={titleId}
 	aria-describedby={descriptionId}
-	closedby={pending ? 'none' : 'any'}
+	closedby={pending ? 'none' : 'closerequest'}
 	oncancel={preventCancelWhilePending}
 	onclose={reopenWhilePending}
 >

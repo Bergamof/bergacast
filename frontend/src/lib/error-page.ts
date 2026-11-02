@@ -1,5 +1,6 @@
 const SERVER_ERROR = 500;
 
+// HTTP statuses as table keys: the literals read better than constants.
 const TITLES: Record<number, string> = {
 	403: 'Accès refusé',
 	404: 'Page introuvable',

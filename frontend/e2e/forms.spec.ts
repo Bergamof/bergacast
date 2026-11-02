@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import {
+	EPISODES_API,
 	PODCAST_API,
 	PODCAST_PATH,
 	SIGNED_IN,
@@ -144,7 +145,7 @@ test.describe('episode upload', () => {
 	});
 
 	test('focuses the first field the API rejects', async ({ page }) => {
-		await page.route('**/api/v1/mon-podcast/episodes', (route) =>
+		await page.route(EPISODES_API, (route) =>
 			route.request().method() === 'POST'
 				? route.fulfill({
 						status: 422,

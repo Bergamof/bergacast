@@ -18,7 +18,7 @@ export interface ProblemDetails {
 export const NETWORK_ERROR_STATUS = 0;
 /** Concurrent change: the `If-Match` version is no longer the stored one. */
 export const PRECONDITION_FAILED = 412;
-/** 503 Service Unavailable. */
+/** Also answered after a saved change whose feed could not be written (see `changeThenRefresh`). */
 export const SERVICE_UNAVAILABLE = 503;
 
 export class ApiError extends Error {

@@ -11,33 +11,37 @@ export const RELOADED_MESSAGE = 'Dernière version chargée : refaites vos chang
  * never re-created, so that the focus stays where it was.
  */
 export class EditableForm<T> {
-	readonly state = new FormState();
+	readonly submission = new FormState();
 	values: T = $state() as T;
 	statusMessage = $state('');
 	readonly #initialValues: () => T;
+	readonly #successMessage: string;
 
-	/** `initialValues` reads the current page data, e.g. a prop of the form component. */
-	constructor(initialValues: () => T) {
+	/**
+	 * `initialValues` reads the current page data, e.g. a prop of the form component;
+	 * `successMessage` is announced once saved.
+	 */
+	constructor(initialValues: () => T, successMessage: string) {
 		this.#initialValues = initialValues;
+		this.#successMessage = successMessage;
 		this.values = structuredClone(initialValues());
 	}
 
-	/** Submits the values; once saved, reloads them and announces `successMessage`. */
+	/** Submits the values; once saved, reloads them and announces the success message. */
 	async save(
 		validate: (values: T) => FieldErrors,
 		action: (values: T) => Promise<void>,
-		successMessage: string,
 		formElement?: ControlContainer
 	): Promise<void> {
 		this.statusMessage = '';
-		const saved = await this.state.submit(
+		const saved = await this.submission.submit(
 			() => validate(this.values),
 			() => action($state.snapshot(this.values) as T),
 			formElement
 		);
 		if (saved) {
 			await this.#loadInitialValues();
-			this.statusMessage = successMessage;
+			this.statusMessage = this.#successMessage;
 		}
 	}
 
@@ -45,7 +49,7 @@ export class EditableForm<T> {
 	async reload(refresh: () => Promise<void>, formElement?: ControlContainer): Promise<void> {
 		await refresh();
 		await this.#loadInitialValues();
-		this.state.reset();
+		this.submission.reset();
 		this.statusMessage = RELOADED_MESSAGE;
 		focusFirstControl(formElement);
 	}

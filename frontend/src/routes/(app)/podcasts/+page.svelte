@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import Pagination from '#lib/components/Pagination.svelte';
+	import { formatEpisodeCount } from '#lib/format/count.ts';
 	import { formatDateTime } from '#lib/format/date-time.ts';
 	import { imagePreviewUrl } from '#lib/forms/podcast-image.ts';
 	import type { PageProps } from './$types';
@@ -58,11 +59,11 @@
 						<td><code>{podcast.slug}</code></td>
 						<td>{podcast.language}</td>
 						<td>
-							<a href={resolve('/(app)/podcasts/[slug]/episodes', { slug: podcast.slug })}>
+							<a
+								href={resolve('/(app)/podcasts/[slug]/episodes', { slug: podcast.slug })}
+								aria-label="{formatEpisodeCount(podcast.episodeCount)} de « {podcast.title} »"
+							>
 								{podcast.episodeCount}
-								<span class="visually-hidden"
-									>{podcast.episodeCount > 1 ? 'épisodes' : 'épisode'} de « {podcast.title} »</span
-								>
 							</a>
 						</td>
 						<td>{formatDateTime(podcast.updatedAt)}</td>
