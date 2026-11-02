@@ -26,4 +26,3 @@ Liste de constats : sévérité (bloquant / majeur / mineur), élément concern�
 
 ## Pièges connus
 - TypeScript 7 refusé en peer par `@sveltejs/kit`, `svelte-check` et `typescript-eslint` : Dependabot ignore ses majeures (`.github/dependabot.yml`).
-- `setup-java` lit `.sdkmanrc` `25.0.4.1-tem` comme `25.0.4` (suffisant).

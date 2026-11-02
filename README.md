@@ -70,7 +70,7 @@ Dépendances externes : PostgreSQL (métadonnées) et un stockage objet compatib
 
 | Outil | Version | Installation |
 |-------|---------|--------------|
-| [SDKMAN!](https://sdkman.io/) | récent | <https://sdkman.io/install> — fournit Java 25 (Temurin `25.0.4.1-tem`, épinglé dans `.sdkmanrc`) |
+| [SDKMAN!](https://sdkman.io/) | récent | <https://sdkman.io/install> — fournit Java 25 (Temurin `25.0.5-tem`, épinglé dans `.sdkmanrc`) |
 | [nvm](https://github.com/nvm-sh/nvm) | récent | <https://github.com/nvm-sh/nvm#installing-and-updating> — fournit Node 24 (épinglé dans `.nvmrc`) |
 | npm | 12.2.1 | épinglé par `packageManager` dans `frontend/package.json` (voir ci-dessous) |
 | [Docker](https://www.docker.com/) avec Docker Compose v2 | récent | <https://docs.docker.com/get-started/get-docker/> — requis pour la base locale, les tests backend (Testcontainers) et l’image |
@@ -88,7 +88,7 @@ pris en charge.
 Depuis la racine du dépôt :
 
 ```sh
-sdk env install   # installe la version de .sdkmanrc (25.0.4.1-tem) si elle manque
+sdk env install   # installe la version de .sdkmanrc (25.0.5-tem) si elle manque
 sdk env           # active cette version dans le shell courant
 ```
 
@@ -104,7 +104,7 @@ puis ouvrir un nouveau terminal. SDKMAN! active alors la version de `.sdkmanrc` 
 Vérification :
 
 ```sh
-java -version   # doit afficher : openjdk version "25.0.4" … (Temurin)
+java -version   # doit afficher : openjdk version "25.0.5" … (Temurin)
 ```
 
 ### Node avec nvm
@@ -240,7 +240,7 @@ L’image frontend ne prend que `BERGACAST_API_URL` (obligatoire : origine publi
 
 Avec Docker Compose s’ajoutent `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` (base du conteneur `db`),
 `BERGACAST_ADMIN_URL` (URL de la SPA, autorisée en CORS), `BERGACAST_PORT`, `BERGACAST_ADMIN_PORT` et
-`BERGACAST_MEDIA_PORT` (ports publiés sur l’hôte, `8080`, `8081` et `9090` par défaut) ; le stockage objet y est un
+`BERGACAST_MEDIA_PORT` (ports publiés sur l’hôte, sur `127.0.0.1` seulement, `8080`, `8081` et `9090` par défaut) ; le stockage objet y est un
 S3Mock local (bucket `bergacast`, sans authentification). Modèle : [`.env.example`](.env.example).
 
 ## Lancer en local (développement)
