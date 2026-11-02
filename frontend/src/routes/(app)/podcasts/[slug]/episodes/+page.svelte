@@ -4,9 +4,12 @@
 	import { page } from '$app/state';
 	import { api } from '#lib/app.ts';
 	import type { Episode } from '#lib/api/resources.ts';
+	import { withRefreshOnUnavailable } from '#lib/api/storage-unavailable.ts';
 	import ConfirmButton from '#lib/components/ConfirmButton.svelte';
 	import EpisodeUploadForm from '#lib/components/EpisodeUploadForm.svelte';
+	import NewTabNotice from '#lib/components/NewTabNotice.svelte';
 	import Pagination from '#lib/components/Pagination.svelte';
+	import StatusMessage from '#lib/components/StatusMessage.svelte';
 	import { toUploadMetadata, type EpisodeFormValues } from '#lib/forms/episode-form.ts';
 	import { formatDateTime, isInFuture } from '#lib/format/date-time.ts';
 	import { formatDuration } from '#lib/format/duration.ts';
@@ -17,6 +20,8 @@
 	let { data }: PageProps = $props();
 
 	const podcast = $derived(data.podcast.resource);
+	let listHeading: HTMLElement | undefined = $state();
+	let deletionMessage = $state('');
 
 	async function refresh(): Promise<void> {
 		await Promise.all([invalidate(LoadDependency.episodes), invalidate(LoadDependency.podcast)]);
@@ -27,17 +32,23 @@
 		audio: File,
 		idempotencyKey: string
 	): Promise<void> {
-		await api.uploadEpisode(podcast, {
-			metadata: toUploadMetadata(values),
-			audio,
-			idempotencyKey
-		});
+		await withRefreshOnUnavailable(
+			() =>
+				api.uploadEpisode(podcast, {
+					metadata: toUploadMetadata(values),
+					audio,
+					idempotencyKey
+				}),
+			refresh
+		);
 		await refresh();
 	}
 
 	async function deleteEpisode(episode: Episode): Promise<void> {
-		await api.deleteEpisode(episode);
+		deletionMessage = '';
+		await withRefreshOnUnavailable(() => api.deleteEpisode(episode), refresh);
 		await refresh();
+		deletionMessage = `Épisode « ${episode.title} » supprimé.`;
 	}
 </script>
 
@@ -47,23 +58,27 @@
 
 <details class="card">
 	<summary>Publier un épisode depuis l’interface</summary>
-	<EpisodeUploadForm onSubmit={uploadEpisode} />
+	<EpisodeUploadForm onSubmit={uploadEpisode} onPublishFeed={() => api.publishFeed(podcast)} />
 </details>
+
+<!-- Receives the focus after a deletion, the button that started it being gone. -->
+<h2 id="episodes-title" tabindex="-1" bind:this={listHeading}>Épisodes</h2>
+<StatusMessage message={deletionMessage} />
 
 {#if data.episodes.items.length === 0}
 	<p class="card">Aucun épisode pour l’instant.</p>
 {:else}
-	<ul class="episodes">
+	<ul class="episodes" aria-labelledby="episodes-title">
 		{#each data.episodes.items as episode (episode.id)}
 			<li class="card">
 				<article aria-labelledby="episode-{episode.id}">
 					<div class="toolbar">
-						<h2 id="episode-{episode.id}">
+						<h3 id="episode-{episode.id}">
 							{episode.title}
 							{#if isInFuture(episode.publicationDate)}
 								<span class="badge">programmé</span>
 							{/if}
-						</h2>
+						</h3>
 						<div class="actions">
 							<a
 								class="button secondary"
@@ -80,6 +95,7 @@
 								accessibleLabel="Supprimer « {episode.title} »"
 								title="Supprimer « {episode.title} » ?"
 								onConfirm={() => deleteEpisode(episode)}
+								afterConfirm={() => listHeading?.focus()}
 							>
 								<p>L’épisode et son fichier audio seront définitivement supprimés.</p>
 							</ConfirmButton>
@@ -109,7 +125,10 @@
 							<a href={episode.audio.url}>Télécharger le fichier audio</a>
 						</audio>
 						<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- public audio file served by the backend -->
-						<a href={episode.audio.url} target="_blank" rel="noopener">Fichier audio</a>
+						<a href={episode.audio.url} target="_blank" rel="noopener">
+							Fichier audio<span class="visually-hidden"> de « {episode.title} »</span><NewTabNotice
+							/>
+						</a>
 					</div>
 				</article>
 			</li>
@@ -134,7 +153,7 @@
 		list-style: none;
 	}
 
-	h2 {
+	h3 {
 		font-size: 1.15rem;
 	}
 

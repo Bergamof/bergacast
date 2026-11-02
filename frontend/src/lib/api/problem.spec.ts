@@ -52,6 +52,13 @@ describe('ApiError', () => {
 	});
 });
 
+describe('ApiError', () => {
+	it('tells a 503, after which the change may be saved', () => {
+		expect(new ApiError(503, {}).isServiceUnavailable).toBe(true);
+		expect(new ApiError(500, {}).isServiceUnavailable).toBe(false);
+	});
+});
+
 describe('problemFromError', () => {
 	it('returns the problem of an API error', () => {
 		const problem = { title: 'Conflit', status: 409 };
@@ -64,6 +71,7 @@ describe('problemFromError', () => {
 
 		expect(problem.title).toBe('Modification concurrente');
 		expect(problem.detail).toContain('Rechargez');
+		expect(problem.status).toBe(412);
 	});
 
 	it('wraps unexpected errors', () => {

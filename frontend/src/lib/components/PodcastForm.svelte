@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { tick, untrack } from 'svelte';
+	import type { FeedPublication } from '../api/resources';
 	import {
 		SLUG_MAX_LENGTH,
 		validatePodcastForm,
@@ -7,34 +8,74 @@
 	} from '../forms/podcast-form';
 	import { FormState } from '../forms/form-state.svelte';
 	import FormField from './FormField.svelte';
+	import PendingButton from './PendingButton.svelte';
 	import ProblemAlert from './ProblemAlert.svelte';
+	import RecoveryActions from './RecoveryActions.svelte';
+	import RequiredFieldsLegend from './RequiredFieldsLegend.svelte';
+	import StatusMessage from './StatusMessage.svelte';
 
 	interface Props {
 		initialValues: PodcastFormValues;
 		/** The slug can only be chosen at creation time. */
 		slugEditable: boolean;
 		submitLabel: string;
+		/** Announced next to the button once saved; none when the page navigates away. */
+		successMessage?: string;
 		onSubmit: (values: PodcastFormValues) => Promise<void>;
+		/** Reloads the latest version of the podcast, offered after a concurrent change (412). */
+		onReload?: () => Promise<void>;
+		/** Offered after a 503, when the change may be saved but the feed not written. */
+		onPublishFeed?: () => Promise<FeedPublication>;
 	}
 
-	let { initialValues, slugEditable, submitLabel, onSubmit }: Props = $props();
+	let {
+		initialValues,
+		slugEditable,
+		submitLabel,
+		successMessage = '',
+		onSubmit,
+		onReload,
+		onPublishFeed
+	}: Props = $props();
 
-	// The form edits its own copy; parents re-create the form (`{#key}`) to load new values.
+	// The form edits its own copy, reloaded from `initialValues` once saved or reloaded. It is never
+	// re-created, so that the focus stays where it was.
 	let values = $state(untrack(() => structuredClone(initialValues)));
+	let statusMessage = $state('');
+	let formElement: HTMLFormElement | undefined = $state();
 	const form = new FormState();
 	const errors = $derived(form.fieldErrors);
 
+	async function loadInitialValues(): Promise<void> {
+		await tick();
+		values = structuredClone(initialValues);
+	}
+
 	async function handleSubmit(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
-		await form.submit(
+		statusMessage = '';
+		const saved = await form.submit(
 			() => validatePodcastForm(values),
-			() => onSubmit($state.snapshot(values))
+			() => onSubmit($state.snapshot(values)),
+			formElement
 		);
+		if (saved) {
+			await loadInitialValues();
+			statusMessage = successMessage;
+		}
+	}
+
+	async function reload(): Promise<void> {
+		await onReload?.();
+		await loadInitialValues();
+		form.reset();
+		statusMessage = 'Dernière version chargée : refaites vos changements.';
+		formElement?.querySelector<HTMLElement>('input, select, textarea')?.focus();
 	}
 </script>
 
-<form novalidate onsubmit={handleSubmit}>
-	<ProblemAlert problem={form.problem} inlineFields={Object.keys(values)} />
+<form novalidate onsubmit={handleSubmit} bind:this={formElement}>
+	<RequiredFieldsLegend />
 
 	<fieldset>
 		<legend>Informations générales</legend>
@@ -215,10 +256,17 @@
 		</label>
 	</fieldset>
 
+	<ProblemAlert problem={form.problem} inlineFields={Object.keys(values)} />
+	<RecoveryActions
+		problem={form.problem}
+		onReload={onReload ? reload : undefined}
+		{onPublishFeed}
+	/>
 	<div class="actions">
-		<button type="submit" disabled={form.pending}>
-			{form.pending ? 'Enregistrement…' : submitLabel}
-		</button>
+		<PendingButton type="submit" pending={form.pending} pendingLabel="Enregistrement…">
+			{submitLabel}
+		</PendingButton>
+		<StatusMessage message={statusMessage} />
 	</div>
 </form>
 

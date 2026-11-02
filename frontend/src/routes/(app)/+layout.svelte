@@ -1,11 +1,25 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { page } from '$app/state';
+	import { navigating, page } from '$app/state';
 	import { api, apiDocumentationHref, logOut } from '#lib/app.ts';
+	import NewTabNotice from '#lib/components/NewTabNotice.svelte';
 	import { spaVersion } from '#lib/version.ts';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
+
+	// Quick navigations show nothing; a slow one (cold start of the backend) is shown and announced.
+	const LOADING_INDICATOR_DELAY_MS = 300;
+	let loading = $state(false);
+
+	$effect(() => {
+		if (navigating.to === null) {
+			loading = false;
+			return;
+		}
+		const timeout = setTimeout(() => (loading = true), LOADING_INDICATOR_DELAY_MS);
+		return () => clearTimeout(timeout);
+	});
 
 	// Not awaited by the layout load: the footer must not delay or break the page.
 	const serverVersion = api.getServerVersion().catch(() => null);
@@ -30,6 +44,8 @@
 </script>
 
 <a class="skip-link" href="#main-content">Aller au contenu</a>
+<div class="loading-bar" class:visible={loading} aria-hidden="true"></div>
+<p class="visually-hidden" role="status">{loading ? 'Chargement…' : ''}</p>
 <header>
 	<div class="header-content">
 		<a class="brand" href={resolve('/(app)/podcasts')}>Bergacast</a>
@@ -44,7 +60,9 @@
 				{/each}
 				<li>
 					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- served by the backend, outside the SPA -->
-					<a href={apiDocumentationHref} target="_blank" rel="noopener">Documentation API</a>
+					<a href={apiDocumentationHref} target="_blank" rel="noopener">
+						Documentation API<NewTabNotice />
+					</a>
 				</li>
 			</ul>
 		</nav>
@@ -55,7 +73,7 @@
 	</div>
 </header>
 
-<main id="main-content">
+<main id="main-content" aria-busy={loading ? 'true' : undefined}>
 	{@render children()}
 </main>
 
@@ -119,6 +137,38 @@
 
 	footer {
 		font-size: 0.875rem;
+	}
+
+	.loading-bar {
+		position: fixed;
+		inset: 0 0 auto;
+		height: 4px;
+		background: var(--color-primary);
+		transform-origin: left;
+		transform: scaleX(0);
+		opacity: 0;
+	}
+
+	.loading-bar.visible {
+		opacity: 1;
+		animation: loading 2s ease-out infinite;
+	}
+
+	@keyframes loading {
+		from {
+			transform: scaleX(0);
+		}
+
+		to {
+			transform: scaleX(0.9);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.loading-bar.visible {
+			animation: none;
+			transform: scaleX(1);
+		}
 	}
 
 	.skip-link {

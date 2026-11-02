@@ -14,7 +14,7 @@
 </svelte:head>
 
 <div class="toolbar">
-	<h1>Podcasts</h1>
+	<h1 id="podcasts-title">Podcasts</h1>
 	<a class="button" href={resolve('/(app)/podcasts/new')}>Nouveau podcast</a>
 </div>
 
@@ -22,7 +22,7 @@
 	<p class="card">Aucun podcast pour l’instant. Créez le premier !</p>
 {:else}
 	<div class="table-wrapper">
-		<table>
+		<table aria-labelledby="podcasts-title">
 			<thead>
 				<tr>
 					<th scope="col">Titre</th>
@@ -59,7 +59,9 @@
 						<td>{podcast.language}</td>
 						<td>
 							<a href={resolve('/(app)/podcasts/[slug]/episodes', { slug: podcast.slug })}>
-								{podcast.episodeCount}
+								{podcast.episodeCount}<span class="visually-hidden">
+									épisode(s) de « {podcast.title} »</span
+								>
 							</a>
 						</td>
 						<td>{formatDateTime(podcast.updatedAt)}</td>

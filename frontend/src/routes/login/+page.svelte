@@ -9,7 +9,9 @@
 		safeRedirectTarget
 	} from '#lib/auth/login-redirect.ts';
 	import FormField from '#lib/components/FormField.svelte';
+	import PendingButton from '#lib/components/PendingButton.svelte';
 	import ProblemAlert from '#lib/components/ProblemAlert.svelte';
+	import RequiredFieldsLegend from '#lib/components/RequiredFieldsLegend.svelte';
 	import { FormState } from '#lib/forms/form-state.svelte.ts';
 	import { REQUIRED_MESSAGE, isBlank } from '#lib/forms/validators.ts';
 	import type { FieldErrors } from '#lib/forms/field-errors.ts';
@@ -17,6 +19,7 @@
 	let username = $state('');
 	let password = $state('');
 	const form = new FormState();
+	let formElement: HTMLFormElement | undefined = $state();
 	const sessionExpired = $derived(page.url.searchParams.has(EXPIRED_PARAMETER));
 
 	function validate(): FieldErrors {
@@ -32,17 +35,21 @@
 
 	async function handleSubmit(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
-		await form.submit(validate, async () => {
-			const token = await api.logIn(username.trim(), password);
-			sessionStore.save(token.accessToken, username.trim(), token.expiresIn);
-			const target = safeRedirectTarget(
-				page.url.searchParams.get(REDIRECT_PARAMETER),
-				resolve('/(app)'),
-				resolve('/(app)/podcasts')
-			);
-			// eslint-disable-next-line svelte/no-navigation-without-resolve -- target is either resolved or checked to stay under the base path
-			await goto(target, { replaceState: true });
-		});
+		await form.submit(
+			validate,
+			async () => {
+				const token = await api.logIn(username.trim(), password);
+				sessionStore.save(token.accessToken, username.trim(), token.expiresIn);
+				const target = safeRedirectTarget(
+					page.url.searchParams.get(REDIRECT_PARAMETER),
+					resolve('/(app)'),
+					resolve('/(app)/podcasts')
+				);
+				// eslint-disable-next-line svelte/no-navigation-without-resolve -- target is either resolved or checked to stay under the base path
+				await goto(target, { replaceState: true });
+			},
+			formElement
+		);
 	}
 </script>
 
@@ -57,8 +64,8 @@
 		{#if sessionExpired}
 			<p class="notice warning" role="status">Votre session a expiré. Reconnectez-vous.</p>
 		{/if}
-		<form novalidate onsubmit={handleSubmit}>
-			<ProblemAlert problem={form.problem} inlineFields={['username', 'password']} />
+		<form novalidate onsubmit={handleSubmit} bind:this={formElement}>
+			<RequiredFieldsLegend />
 			<FormField id="username" label="Identifiant" required error={form.fieldErrors.username}>
 				{#snippet control(attributes)}
 					<input {...attributes} bind:value={username} autocomplete="username" />
@@ -74,9 +81,10 @@
 					/>
 				{/snippet}
 			</FormField>
-			<button type="submit" disabled={form.pending}>
-				{form.pending ? 'Connexion…' : 'Se connecter'}
-			</button>
+			<ProblemAlert problem={form.problem} inlineFields={['username', 'password']} />
+			<PendingButton type="submit" pending={form.pending} pendingLabel="Connexion…">
+				Se connecter
+			</PendingButton>
 		</form>
 	</section>
 </main>

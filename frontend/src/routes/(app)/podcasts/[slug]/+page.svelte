@@ -2,6 +2,7 @@
 	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/app.ts';
+	import { withRefreshOnUnavailable } from '#lib/api/storage-unavailable.ts';
 	import ConfirmButton from '#lib/components/ConfirmButton.svelte';
 	import PodcastForm from '#lib/components/PodcastForm.svelte';
 	import PodcastImageForm from '#lib/components/PodcastImageForm.svelte';
@@ -17,24 +18,28 @@
 	let { data }: PageProps = $props();
 
 	const podcast = $derived(data.podcast.resource);
-	let savedMessage = $state('');
+
+	function refreshPodcast(): Promise<void> {
+		return invalidate(LoadDependency.podcast);
+	}
 
 	async function savePodcast(values: PodcastFormValues): Promise<void> {
-		savedMessage = '';
-		await api.updatePodcast(data.podcast, toPodcastPatch(values));
-		await invalidate(LoadDependency.podcast);
-		savedMessage = 'Modifications enregistrées.';
+		await withRefreshOnUnavailable(
+			() => api.updatePodcast(data.podcast, toPodcastPatch(values)),
+			refreshPodcast
+		);
+		await refreshPodcast();
 	}
 
 	// The image changes the podcast version (ETag): reload it before any further update.
 	async function uploadImage(file: File): Promise<void> {
-		await api.uploadPodcastImage(podcast, file);
-		await invalidate(LoadDependency.podcast);
+		await withRefreshOnUnavailable(() => api.uploadPodcastImage(podcast, file), refreshPodcast);
+		await refreshPodcast();
 	}
 
 	async function deleteImage(): Promise<void> {
-		await api.deletePodcastImage(podcast);
-		await invalidate(LoadDependency.podcast);
+		await withRefreshOnUnavailable(() => api.deletePodcastImage(podcast), refreshPodcast);
+		await refreshPodcast();
 	}
 
 	async function deletePodcast(): Promise<void> {
@@ -55,17 +60,15 @@
 
 <section class="card" aria-labelledby="settings-title">
 	<h2 id="settings-title">Réglages du podcast</h2>
-	{#if savedMessage}
-		<p class="notice success" role="status">{savedMessage}</p>
-	{/if}
-	{#key data.podcast}
-		<PodcastForm
-			initialValues={podcastFormValues(podcast)}
-			slugEditable={false}
-			submitLabel="Enregistrer"
-			onSubmit={savePodcast}
-		/>
-	{/key}
+	<PodcastForm
+		initialValues={podcastFormValues(podcast)}
+		slugEditable={false}
+		submitLabel="Enregistrer"
+		successMessage="Modifications enregistrées."
+		onSubmit={savePodcast}
+		onReload={refreshPodcast}
+		onPublishFeed={() => api.publishFeed(podcast)}
+	/>
 </section>
 
 <section class="card" aria-labelledby="image-title">

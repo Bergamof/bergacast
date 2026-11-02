@@ -1,11 +1,10 @@
 <script lang="ts">
 	import { apiDocumentationHref } from '../app';
-	import { problemFromError, type ProblemDetails } from '../api/problem';
 	import type { FeedPublication, Podcast } from '../api/resources';
 	import { buildPublishCurlExample } from '../publishing/curl-example';
-	import { feedPublicationMessage } from '../publishing/feed-publication';
 	import CopyableText from './CopyableText.svelte';
-	import ProblemAlert from './ProblemAlert.svelte';
+	import FeedPublishButton from './FeedPublishButton.svelte';
+	import NewTabNotice from './NewTabNotice.svelte';
 
 	interface Props {
 		podcast: Podcast;
@@ -17,23 +16,6 @@
 	let { podcast, apiTokensHref, onPublishFeed }: Props = $props();
 
 	const curlExample = $derived(buildPublishCurlExample(podcast.publishUrl));
-
-	let publishing = $state(false);
-	let publicationMessage = $state('');
-	let publicationProblem = $state<ProblemDetails | null>(null);
-
-	async function publishFeed(): Promise<void> {
-		publishing = true;
-		publicationMessage = '';
-		publicationProblem = null;
-		try {
-			publicationMessage = feedPublicationMessage(await onPublishFeed());
-		} catch (error) {
-			publicationProblem = problemFromError(error);
-		} finally {
-			publishing = false;
-		}
-	}
 </script>
 
 <section class="card" aria-labelledby="publishing-title">
@@ -47,24 +29,14 @@
 	<CopyableText value={podcast.feedUrl} label="URL du flux RSS" />
 	<p>
 		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- public feed served by the object storage, outside the SPA -->
-		<a href={podcast.feedUrl} target="_blank" rel="noopener">Ouvrir le flux</a>
+		<a href={podcast.feedUrl} target="_blank" rel="noopener">Ouvrir le flux<NewTabNotice /></a>
 	</p>
 	<p class="muted">
 		Le flux est réécrit automatiquement après chaque modification du podcast ou de ses épisodes. Un
 		épisode programmé n’y apparaît qu’à la première réécriture suivant sa date de publication :
 		réécrivez le flux pour l’y faire figurer sans attendre.
 	</p>
-	<div aria-live="polite">
-		{#if publicationMessage}
-			<p class="notice success" role="status">{publicationMessage}</p>
-		{/if}
-	</div>
-	<ProblemAlert problem={publicationProblem} />
-	<div class="actions">
-		<button type="button" class="secondary" disabled={publishing} onclick={publishFeed}>
-			{publishing ? 'Réécriture en cours…' : 'Réécrire le flux'}
-		</button>
-	</div>
+	<FeedPublishButton {onPublishFeed} />
 
 	<h3>Publication automatisée</h3>
 	<p class="muted">
@@ -85,7 +57,7 @@
 	<p>
 		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- API documentation served by the backend, outside the SPA -->
 		<a href={apiDocumentationHref} target="_blank" rel="noopener">
-			Documentation OpenAPI de l’API
+			Documentation OpenAPI de l’API<NewTabNotice />
 		</a>
 	</p>
 </section>
@@ -93,14 +65,6 @@
 <style>
 	h3 {
 		margin-top: var(--space-l);
-	}
-
-	.notice {
-		margin-bottom: var(--space-m);
-	}
-
-	.actions {
-		margin-top: var(--space-m);
 	}
 
 	h4 {

@@ -13,7 +13,10 @@
 	} from '../forms/podcast-image';
 	import ConfirmButton from './ConfirmButton.svelte';
 	import FormField from './FormField.svelte';
+	import PendingButton from './PendingButton.svelte';
 	import ProblemAlert from './ProblemAlert.svelte';
+	import RequiredFieldsLegend from './RequiredFieldsLegend.svelte';
+	import StatusMessage from './StatusMessage.svelte';
 
 	interface Props {
 		image: PodcastImage | null;
@@ -26,6 +29,7 @@
 
 	let files = $state<FileList | undefined>();
 	let fileInput: HTMLInputElement | undefined = $state();
+	let formElement: HTMLFormElement | undefined = $state();
 	let statusMessage = $state('');
 	const form = new FormState();
 
@@ -41,11 +45,15 @@
 		statusMessage = '';
 		const file = files?.[0];
 		const replacing = image !== null;
-		const uploaded = await form.submit(validate, async () => {
-			if (file) {
-				await onUpload(file);
-			}
-		});
+		const uploaded = await form.submit(
+			validate,
+			async () => {
+				if (file) {
+					await onUpload(file);
+				}
+			},
+			formElement
+		);
 		if (uploaded) {
 			statusMessage = replacing ? 'Image remplacée.' : 'Image enregistrée.';
 			if (fileInput) {
@@ -69,12 +77,6 @@
 	Podcasts recommande une image carrée de 1400 à 3000 px de côté.
 </p>
 
-<div aria-live="polite">
-	{#if statusMessage}
-		<p class="notice success" role="status">{statusMessage}</p>
-	{/if}
-</div>
-
 {#if image}
 	<div class="current">
 		<img
@@ -92,6 +94,12 @@
 			<dd>{formatFileSize(image.sizeBytes)}</dd>
 		</dl>
 	</div>
+{:else}
+	<p>Aucune image envoyée : le flux utilise l’URL d’image externe, si elle est renseignée.</p>
+{/if}
+
+<!-- Announced when an upload brings them; always rendered, as a live region must be. -->
+<div role="status">
 	{#if warnings.length > 0}
 		<div class="notice warning">
 			{#each warnings as warning (warning)}
@@ -99,12 +107,10 @@
 			{/each}
 		</div>
 	{/if}
-{:else}
-	<p>Aucune image envoyée : le flux utilise l’URL d’image externe, si elle est renseignée.</p>
-{/if}
+</div>
 
-<form novalidate onsubmit={handleSubmit}>
-	<ProblemAlert problem={form.problem} inlineFields={['image']} />
+<form novalidate onsubmit={handleSubmit} bind:this={formElement}>
+	<RequiredFieldsLegend />
 	<FormField
 		id="podcast-image"
 		label={image ? 'Nouvelle image' : 'Image'}
@@ -121,23 +127,22 @@
 			/>
 		{/snippet}
 	</FormField>
+	<ProblemAlert problem={form.problem} inlineFields={['image']} />
 	<div class="actions">
-		<button type="submit" disabled={form.pending}>
-			{#if form.pending}
-				Envoi en cours…
-			{:else}
-				{image ? 'Remplacer l’image' : 'Envoyer l’image'}
-			{/if}
-		</button>
+		<PendingButton type="submit" pending={form.pending} pendingLabel="Envoi en cours…">
+			{image ? 'Remplacer l’image' : 'Envoyer l’image'}
+		</PendingButton>
 		{#if image}
 			<ConfirmButton
 				label="Supprimer l’image"
 				title="Supprimer l’image de « {podcastTitle} » ?"
 				onConfirm={deleteImage}
+				afterConfirm={() => fileInput?.focus()}
 			>
 				<p>Le flux RSS utilisera de nouveau l’URL d’image externe, si elle est renseignée.</p>
 			</ConfirmButton>
 		{/if}
+		<StatusMessage message={statusMessage} />
 	</div>
 </form>
 
