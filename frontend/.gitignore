@@ -24,3 +24,4 @@ vite.config.ts.timestamp-*
 
 # Tests
 /coverage
+.lighthouseci
