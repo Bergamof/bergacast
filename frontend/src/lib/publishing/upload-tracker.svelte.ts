@@ -41,7 +41,7 @@ export class UploadTracker {
 	}
 
 	get sent(): boolean {
-		return this.total > 0 && this.#loaded >= this.#total;
+		return this.#total > 0 && this.#loaded >= this.#total;
 	}
 
 	get cancellable(): boolean {

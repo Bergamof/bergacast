@@ -84,11 +84,25 @@ export async function installControllableUploads(page: Page): Promise<UploadDriv
 			}
 		});
 	});
-	const call = (script: string) => page.evaluate(script).then(() => undefined);
 	return {
-		progress: (loaded, total) => call(`uploadDriver.progress(${loaded}, ${total})`),
+		progress: (loaded, total) =>
+			page.evaluate(([sent, size]) => window.uploadDriver.progress(sent, size), [loaded, total]),
 		respond: (status, body) =>
-			call(`uploadDriver.respond(${status}, ${JSON.stringify(JSON.stringify(body))})`),
-		failNetwork: () => call('uploadDriver.failNetwork()')
+			page.evaluate(([code, text]) => window.uploadDriver.respond(code, text), [
+				status,
+				JSON.stringify(body)
+			] as const),
+		failNetwork: () => page.evaluate(() => window.uploadDriver.failNetwork())
 	};
+}
+
+declare global {
+	interface Window {
+		/** Set by `installControllableUploads`. */
+		uploadDriver: {
+			progress(loaded: number, total: number): void;
+			respond(status: number, body: string): void;
+			failNetwork(): void;
+		};
+	}
 }

@@ -27,8 +27,10 @@
 
 	/** Closes the dialog whatever `dismissible` says: the page decided it. */
 	export function close(): void {
-		closingOnPurpose = true;
-		dialog?.close();
+		if (dialog?.open) {
+			closingOnPurpose = true;
+			dialog.close();
+		}
 	}
 
 	export function isOpen(): boolean {

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { navigating, page } from '$app/state';
-	import { api, apiDocumentationHref, logOut, sessionStore } from '#lib/app.ts';
+	import { api, apiDocumentationHref, logIn, logOut } from '#lib/app.ts';
 	import NewTabNotice from '#lib/components/NewTabNotice.svelte';
 	import SessionRenewalDialog from '#lib/components/SessionRenewalDialog.svelte';
 	import { spaVersion } from '#lib/version.ts';
@@ -38,8 +38,7 @@
 	let session = $derived(data.session);
 
 	async function renewSession(password: string): Promise<void> {
-		const token = await api.logIn(session.username, password);
-		session = sessionStore.save(token.accessToken, session.username, token.expiresIn);
+		session = await logIn(session.username, password);
 	}
 </script>
 

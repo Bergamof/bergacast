@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { api, sessionStore } from '#lib/app.ts';
+	import { logIn } from '#lib/app.ts';
 	import {
 		EXPIRED_PARAMETER,
 		REDIRECT_PARAMETER,
@@ -48,8 +48,7 @@
 		await form.submit(
 			validate,
 			async () => {
-				const token = await api.logIn(username.trim(), password);
-				sessionStore.save(token.accessToken, username.trim(), token.expiresIn);
+				await logIn(username.trim(), password);
 				const target = safeRedirectTarget(
 					page.url.searchParams.get(REDIRECT_PARAMETER),
 					resolve('/(app)'),

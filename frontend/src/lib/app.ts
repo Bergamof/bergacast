@@ -6,7 +6,7 @@ import { createXhrUploadTransport } from './api/upload-transport';
 import { BergacastApi, OPENAPI_DOCUMENTATION_PATH } from './api/bergacast-api';
 import { ApiError, SERVICE_UNAVAILABLE } from './api/problem';
 import { EXPIRED_PARAMETER, REDIRECT_PARAMETER } from './auth/login-redirect';
-import { SessionStore } from './auth/session-store';
+import { SessionStore, type Session } from './auth/session-store';
 import { apiOriginOf } from './runtime-config';
 
 /** Application-wide singletons, wired to the browser (the SPA never renders on a server). */
@@ -29,6 +29,12 @@ export async function logOut(options: { expired?: boolean } = {}): Promise<void>
 	const returnTo = options.expired ? `${location.pathname}${location.search}` : undefined;
 	// eslint-disable-next-line svelte/no-navigation-without-resolve -- loginPageHref() is built with resolve()
 	await goto(loginPageHref({ returnTo, expired: options.expired }));
+}
+
+/** Logs in (or renews the session of) `username` and stores the new session. */
+export async function logIn(username: string, password: string): Promise<Session> {
+	const token = await api.logIn(username, password);
+	return sessionStore.save(token.accessToken, username, token.expiresIn);
 }
 
 const apiOrigin = apiOriginOf(globalThis.bergacastConfig);

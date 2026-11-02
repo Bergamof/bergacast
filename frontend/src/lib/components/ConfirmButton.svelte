@@ -68,8 +68,7 @@
 <button type="button" class="danger" aria-label={accessibleLabel} onclick={open}>{label}</button>
 
 <!-- Not dismissible while the request runs: closing would hide the error it may end with. -->
-<ModalDialog bind:this={modal} {title} dismissible={!pending}>
-	{#snippet description()}{@render children()}{/snippet}
+<ModalDialog bind:this={modal} {title} dismissible={!pending} description={children}>
 	<div class="problem"><ProblemAlert {problem} /></div>
 	<div class="actions">
 		<PendingButton

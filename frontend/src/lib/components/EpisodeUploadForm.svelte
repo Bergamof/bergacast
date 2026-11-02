@@ -44,8 +44,9 @@
 	const upload = new UploadTracker();
 	const LEAVE_WARNING =
 		'Un fichier audio est en cours d’envoi. Quitter la page et abandonner l’envoi ?';
-	let submitButton: HTMLButtonElement | undefined = $state();
 	const uid = $props.id();
+	let submitButton: HTMLButtonElement | undefined = $state();
+	let cancelButton: HTMLButtonElement | undefined = $state();
 
 	const chosenFile = $derived(files?.[0]);
 
@@ -62,8 +63,6 @@
 		upload.cancel();
 	});
 
-	let cancelButton: HTMLButtonElement | undefined = $state();
-
 	// « Annuler l’envoi » disappears once the file is sent, cancelled or failed: a keyboard user on
 	// it would fall back to the page, so the focus moves to the submit button first.
 	$effect.pre(() => {
@@ -73,7 +72,6 @@
 	});
 
 	function cancelUpload(): void {
-		submitButton?.focus();
 		upload.cancel();
 	}
 

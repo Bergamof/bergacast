@@ -28,15 +28,11 @@ async function startUpload(page: Page): Promise<void> {
 	await page.getByRole('button', { name: 'Publier l’épisode' }).click();
 }
 
-/** Starts an upload whose request stays pending (Playwright then reports no progress). */
-async function startHeldUpload(page: Page): Promise<void> {
-	const response = heldResponse();
-	await page.route(EPISODES_API, async (route) => {
-		if (route.request().method() !== 'POST') {
-			return route.continue();
-		}
-		await response.released;
-	});
+/** Starts an upload whose request never gets an answer (Playwright then reports no progress). */
+async function startPendingUpload(page: Page): Promise<void> {
+	await page.route(EPISODES_API, (route) =>
+		route.request().method() === 'POST' ? new Promise<void>(() => {}) : route.continue()
+	);
 	await startUpload(page);
 }
 
@@ -44,7 +40,7 @@ const status = (page: Page, text: string) => page.getByRole('status').filter({ h
 
 test.describe('audio upload', () => {
 	test('shows the chosen file and an upload in progress', async ({ page }) => {
-		await startHeldUpload(page);
+		await startPendingUpload(page);
 
 		await expect(page.getByText('episode.mp3 · 2 Mio')).toBeVisible();
 		await expect(page.getByRole('progressbar', { name: 'Envoi du fichier audio' })).toBeVisible();
@@ -86,7 +82,7 @@ test.describe('audio upload', () => {
 	});
 
 	test('cancels the upload, says nothing was published and keeps the focus', async ({ page }) => {
-		await startHeldUpload(page);
+		await startPendingUpload(page);
 
 		await page.getByRole('button', { name: 'Annuler l’envoi' }).click();
 
@@ -96,7 +92,7 @@ test.describe('audio upload', () => {
 	});
 
 	test('asks before leaving the page during an upload', async ({ page }) => {
-		await startHeldUpload(page);
+		await startPendingUpload(page);
 		const navigation = page.getByRole('navigation', { name: 'Navigation principale' });
 
 		page.once('dialog', (dialog) => dialog.dismiss());
@@ -114,17 +110,16 @@ const RENEWED_TOKEN = { accessToken: 'renewed-jwt', tokenType: 'Bearer', expires
 const BEFORE_EXPIRY = SESSION_LIFETIME_MILLISECONDS - 50_000;
 const AFTER_EXPIRY = SESSION_LIFETIME_MILLISECONDS + 1_000;
 
-async function renewalSucceeds(page: Page) {
-	const response = heldResponse();
+/** The login answers a renewed token, once `answered` resolves (at once by default). */
+async function renewalSucceeds(page: Page, answered: Promise<void> = Promise.resolve()) {
 	await page.route('**/api/v1/access-tokens', async (route) => {
-		await response.released;
+		await answered;
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify(RENEWED_TOKEN)
 		});
 	});
-	return response.release;
 }
 
 async function expectRenewedInPlace(page: Page): Promise<void> {
@@ -145,7 +140,8 @@ test.describe('session renewal', () => {
 	});
 
 	test('offers to stay logged in before the expiry, without leaving the page', async ({ page }) => {
-		const release = await renewalSucceeds(page);
+		const response = heldResponse();
+		await renewalSucceeds(page, response.released);
 		await page.clock.fastForward(BEFORE_EXPIRY);
 
 		const dialog = page.getByRole('alertdialog', { name: 'Session bientôt expirée' });
@@ -156,7 +152,7 @@ test.describe('session renewal', () => {
 		await dialog.getByRole('button', { name: 'Rester connecté' }).click();
 		await page.keyboard.press('Escape');
 		await expect(dialog).toBeVisible();
-		release();
+		response.release();
 
 		await expectRenewedInPlace(page);
 	});
@@ -174,8 +170,7 @@ test.describe('session renewal', () => {
 	});
 
 	test('lets the user log in again in place once expired', async ({ page }) => {
-		const release = await renewalSucceeds(page);
-		release();
+		await renewalSucceeds(page);
 		await page.clock.fastForward(AFTER_EXPIRY);
 
 		const dialog = page.getByRole('alertdialog', { name: 'Session expirée' });
