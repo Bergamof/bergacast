@@ -527,7 +527,7 @@ GitHub sont épinglées par SHA de commit (mis à jour par Dependabot).
 | `backend-dependencies` | Trivy sur le jar (dépendances Java) : échec sur toute CVE critique ou haute (nuit comprise) |
 | `frontend-dependencies` | `npm audit` de toutes les dépendances : échec sur toute vulnérabilité haute ou critique (nuit comprise) |
 | `secrets` | gitleaks sur tout l’historique (faux positifs dans `.gitleaksignore`, nuit comprise) |
-| `codeql` | CodeQL (Java, TypeScript, workflows ; requêtes `security-extended`) : échec sur toute alerte **ouverte** de sévérité haute ou critique (onglet *Security*) ; un faux positif s’écarte dans GitHub (*Dismiss alert*, avec la raison) |
+| `codeql` | CodeQL (Java, TypeScript, workflows ; requêtes `security-extended`) : échec sur toute alerte de sévérité haute ou critique non écartée (onglet *Security*) ; un faux positif s’écarte dans GitHub (*Dismiss alert*, avec la raison) |
 | `frontend-lighthouse` | Lighthouse CI (`frontend/lighthouserc.json`) sur 8 pages servies avec une API simulée (`frontend/lighthouse/`) : Accessibilité et Bonnes pratiques ≥ 90 |
 | `backend-image` | Build de l’image native (non publiée), démarrage contre PostgreSQL puis `backend/scripts/smoke-test.sh`, Trivy sur l’image |
 | `frontend-image` | Build de l’image (non publiée), vérification du service (`config.js`, repli SPA, cache, refus d’une URL d’API invalide), Trivy sur l’image (nuit comprise) |

@@ -702,9 +702,10 @@ jobs:
       - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           output: ${{ runner.temp }}/codeql
-      # Every alert of the analysis is printed below and listed in the Security tab. The check fails on the OPEN high
-      # or critical alerts (security-severity >= 7.0) of this ref, read from the code scanning API: a false positive
-      # is dismissed by a maintainer in GitHub (with a reason), never silenced in the repository.
+      # Every alert of the analysis is printed below and listed in the Security tab. The check fails on each high or
+      # critical result (security-severity >= 7.0) unless code scanning reports its alert as dismissed or fixed on this
+      # ref: a false positive is dismissed by a maintainer in GitHub (with a reason), never silenced in the repository,
+      # and a result the API does not know (yet) blocks rather than passes.
       - name: Summarize
         id: summary
         if: always()
@@ -713,46 +714,49 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           REF: ${{ github.ref }}
           SARIF_DIR: ${{ runner.temp }}/codeql
-          ALERTS_FILE: ${{ runner.temp }}/codeql-open-alerts.jsonl
+          ALERTS_FILE: ${{ runner.temp }}/codeql-alerts.jsonl
         run: |
           gh api --paginate --jq '.[]' \
-            "repos/$REPOSITORY/code-scanning/alerts?ref=$REF&state=open&tool_name=CodeQL&per_page=100" > "$ALERTS_FILE"
+            "repos/$REPOSITORY/code-scanning/alerts?ref=$REF&tool_name=CodeQL&per_page=100" > "$ALERTS_FILE"
           python3 - <<'PY'
           import glob, json, os, sys
 
-          parts = []
+          HIGH = 7.0
+          states = {}
+          for line in open(os.environ["ALERTS_FILE"], encoding="utf-8"):
+              alert = json.loads(line)
+              location = alert["most_recent_instance"]["location"]
+              states[(alert["rule"]["id"], location["path"], location.get("start_line"))] = alert["state"]
+          print(f"Code scanning knows {len(states)} alert(s) on this ref")
+
+          parts, blocking = [], []
           for path in sorted(glob.glob(os.path.join(os.environ["SARIF_DIR"], "*.sarif"))):
               for run in json.load(open(path, encoding="utf-8")).get("runs", []):
                   rules = {}
                   for component in [run["tool"]["driver"], *run["tool"].get("extensions", [])]:
                       for rule in component.get("rules", []):
-                          rules[rule["id"]] = rule.get("properties", {}).get("security-severity", "-")
+                          rules[rule["id"]] = float(rule.get("properties", {}).get("security-severity", 0))
                   results = run.get("results", [])
                   language = os.path.basename(path).removesuffix(".sarif")
                   for result in results:
                       location = result["locations"][0]["physicalLocation"]
-                      print(
-                          f"{language}: {result.get('ruleId')} (security-severity {rules.get(result.get('ruleId'), '-')})"
-                          f" {location['artifactLocation']['uri']}:{location.get('region', {}).get('startLine', '?')}"
-                      )
+                      key = (result.get("ruleId"), location["artifactLocation"]["uri"], location.get("region", {}).get("startLine"))
+                      severity = rules.get(key[0], 0)
+                      state = states.get(key, "unknown")
+                      print(f"{language}: {key[0]} (security-severity {severity}) {key[1]}:{key[2]} [{state}]")
+                      if severity >= HIGH and state not in ("dismissed", "fixed"):
+                          blocking.append(f"{key[0]} {key[1]}:{key[2]} [{state}]")
                   parts.append(f"{language} {len(results)}")
 
-          blocking = []
-          for line in open(os.environ["ALERTS_FILE"], encoding="utf-8"):
-              alert = json.loads(line)
-              if alert["rule"].get("security_severity_level") in ("high", "critical"):
-                  location = alert["most_recent_instance"]["location"]
-                  blocking.append(f"{alert['rule']['id']} {location['path']}:{location.get('start_line', '?')} {alert['html_url']}")
-          print("Open high or critical alerts:", *blocking or ["none"], sep="\n  ")
-
           summary = (
-              f"CodeQL: alerts {' · '.join(parts)} · {len(blocking)} open high+" if parts else "CodeQL: no result"
+              f"CodeQL: alerts {' · '.join(parts)} · {len(blocking)} high+ not dismissed" if parts else "CodeQL: no result"
           )
           print(summary)
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
               out.write(f"summary={summary}\n")
           if blocking or not parts:
-              sys.exit("Open high or critical CodeQL alerts (or no analysis): fix them, or dismiss a false positive in GitHub")
+              print("Blocking:", *blocking, sep="\n  ")
+              sys.exit("High or critical CodeQL alerts (or no analysis): fix them, or dismiss a false positive in GitHub")
           PY
       - name: Upload the SARIF reports
         if: always()
