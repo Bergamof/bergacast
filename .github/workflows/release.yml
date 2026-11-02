@@ -29,8 +29,11 @@ env:
 jobs:
   plan:
     name: Plan the release
-    # Only CI runs of pushes to main that succeeded (not pull requests targeting main).
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    # Only CI runs of pushes to main of this repository that succeeded: never code from a pull request (a fork
+    # branch named main runs CI as a pull_request event), so the checkouts below only fetch verified main commits.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:

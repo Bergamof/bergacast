@@ -723,6 +723,13 @@ jobs:
                           rules[rule["id"]] = float(rule.get("properties", {}).get("security-severity", 0))
                   results = run.get("results", [])
                   language = os.path.basename(path).removesuffix(".sarif")
+                  for result in results:
+                      location = result["locations"][0]["physicalLocation"]
+                      print(
+                          f"{language}: {result.get('ruleId')} (security-severity {rules.get(result.get('ruleId'), 0)})"
+                          f" {location['artifactLocation']['uri']}:{location.get('region', {}).get('startLine', '?')}"
+                          f" {result['message']['text'][:200]}"
+                      )
                   severe = sum(1 for result in results if rules.get(result.get("ruleId"), 0) >= HIGH)
                   high += severe
                   parts.append(f"{language} {len(results)} alert(s), {severe} high+")
@@ -733,6 +740,14 @@ jobs:
           if high or not parts:
               sys.exit("High or critical CodeQL alerts (or no analysis): see the Security tab")
           PY
+      - name: Upload the SARIF reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: codeql-sarif
+          path: ${{ runner.temp }}/codeql/
+          if-no-files-found: ignore
+          retention-days: 7
 
   frontend-lighthouse:
     name: Frontend Lighthouse
