@@ -32,6 +32,9 @@ RUN npm pkg set version="${VERSION}" && npm run build
 FROM joseluisq/static-web-server:${STATIC_WEB_SERVER_VERSION}-alpine AS runtime
 ENV SPA_ROOT=/srv/admin
 USER root
+# The image is rebuilt upstream only at each static-web-server release: pick up the Alpine security fixes
+# (OpenSSL, zlib, musl) published since.
+RUN apk upgrade --no-cache
 
 COPY docker/static-web-server.toml /etc/static-web-server.toml
 COPY docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

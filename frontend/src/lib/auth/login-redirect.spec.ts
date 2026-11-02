@@ -11,14 +11,30 @@ describe('safeRedirectTarget', () => {
 		);
 	});
 
-	it.each([null, 'https://evil.example/admin/', '/api/v1', '/administrator', '//evil.example'])(
-		'rejects %s',
+	it.each([
+		null,
+		'',
+		'admin/podcasts',
+		'https://evil.example/admin/',
+		'/api/v1',
+		'/administrator',
+		'//evil.example',
+		'/\\evil.example/admin/',
+		'/admin/../api/v1'
+	])('rejects %s', (candidate) => {
+		expect(safeRedirectTarget(candidate, ROOT, FALLBACK)).toBe(FALLBACK);
+	});
+
+	it('keeps the query string and the fragment', () => {
+		expect(safeRedirectTarget('/admin/podcasts?page=2#episodes', ROOT, FALLBACK)).toBe(
+			'/admin/podcasts?page=2#episodes'
+		);
+	});
+
+	it.each(['//evil.example', '/\\evil.example'])(
+		'rejects %s even when served at the root',
 		(candidate) => {
-			expect(safeRedirectTarget(candidate, ROOT, FALLBACK)).toBe(FALLBACK);
+			expect(safeRedirectTarget(candidate, '/', '/podcasts')).toBe('/podcasts');
 		}
 	);
-
-	it('rejects protocol-relative URLs even when served at the root', () => {
-		expect(safeRedirectTarget('//evil.example', '/', '/podcasts')).toBe('/podcasts');
-	});
 });

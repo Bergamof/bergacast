@@ -2,7 +2,7 @@ plugins {
     java
     jacoco
     checkstyle
-    id("org.springframework.boot") version "4.1.1"
+    id("org.springframework.boot") version "4.1.2"
     id("com.diffplug.spotless") version "8.10.4"
     id("org.graalvm.buildtools.native") version "1.1.16"
 }
@@ -28,6 +28,10 @@ val jacocoVersion = "0.8.15"
 val palantirJavaFormatVersion = "2.102.0"
 val awsSdkVersion = "2.55.16"
 
+// swagger-core (springdoc) imports jackson-bom 2.22.1, which wins over the Jackson 2 managed by Spring Boot and has
+// known vulnerabilities. Remove once springdoc ships a swagger-core built on Jackson >= 2.22.3.
+val jackson2Version = "2.22.4"
+
 dependencies {
     implementation(platform(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES))
     testImplementation(platform(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES))
@@ -42,6 +46,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:$springdocVersion")
+    implementation(platform("com.fasterxml.jackson:jackson-bom:$jackson2Version"))
     implementation("org.postgresql:postgresql")
     // Object storage (Scaleway, S3 API): the JDK HttpURLConnection client keeps the native image small (no Netty, no Apache client).
     implementation(platform("software.amazon.awssdk:bom:$awsSdkVersion"))

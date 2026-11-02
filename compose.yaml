@@ -33,7 +33,7 @@ services:
     volumes:
       - storage-data:/data
     ports:
-      - "${BERGACAST_MEDIA_PORT:-9090}:9090"
+      - "127.0.0.1:${BERGACAST_MEDIA_PORT:-9090}:9090"
 
   backend:
     build: ./backend
@@ -61,7 +61,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-bergacast}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     ports:
-      - "${BERGACAST_PORT:-8080}:8080"
+      - "127.0.0.1:${BERGACAST_PORT:-8080}:8080"
 
   frontend:
     build: ./frontend
@@ -70,7 +70,7 @@ services:
     environment:
       BERGACAST_API_URL: ${BERGACAST_PUBLIC_BASE_URL:-http://localhost:8080}
     ports:
-      - "${BERGACAST_ADMIN_PORT:-8081}:8080"
+      - "127.0.0.1:${BERGACAST_ADMIN_PORT:-8081}:8080"
 
 volumes:
   db-data:
