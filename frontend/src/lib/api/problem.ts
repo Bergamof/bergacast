@@ -1,4 +1,4 @@
-import { isAbortError } from './upload-transport';
+import { isAbortError } from './abort';
 
 /** A single invalid field, as listed in the `errors` member of a validation problem. */
 export interface FieldViolation {
@@ -102,6 +102,7 @@ export function problemFromError(error: unknown): ProblemDetails {
 	if (error instanceof ApiError) {
 		return error.problem;
 	}
+	// Only uploads can be cancelled from the interface (`UploadTracker`).
 	if (isAbortError(error)) {
 		return { title: 'Envoi annulé', detail: 'Rien n’a été publié.' };
 	}

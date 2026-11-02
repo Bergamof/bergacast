@@ -42,8 +42,10 @@
 	let idempotencyKey = newIdempotencyKey();
 	const form = new FormState();
 	const upload = new UploadTracker();
-	const LEAVE_WARNING = 'Un fichier audio est en cours d’envoi. Quitter la page annule l’envoi.';
-	let submitArea: HTMLElement | undefined = $state();
+	const LEAVE_WARNING =
+		'Un fichier audio est en cours d’envoi. Quitter la page et abandonner l’envoi ?';
+	let submitButton: HTMLButtonElement | undefined = $state();
+	const uid = $props.id();
 
 	const chosenFile = $derived(files?.[0]);
 
@@ -60,9 +62,18 @@
 		upload.cancel();
 	});
 
+	let cancelButton: HTMLButtonElement | undefined = $state();
+
+	// « Annuler l’envoi » disappears once the file is sent, cancelled or failed: a keyboard user on
+	// it would fall back to the page, so the focus moves to the submit button first.
+	$effect.pre(() => {
+		if (!upload.cancellable && cancelButton && document.activeElement === cancelButton) {
+			submitButton?.focus();
+		}
+	});
+
 	function cancelUpload(): void {
-		// The cancel button disappears with the upload: keep the focus in the form.
-		submitArea?.querySelector<HTMLElement>('button[type="submit"]')?.focus();
+		submitButton?.focus();
 		upload.cancel();
 	}
 
@@ -127,19 +138,32 @@
 	<RecoveryActions problem={form.problem} {onPublishFeed} />
 	{#if upload.active}
 		<div class="upload-progress">
-			<label for="episode-upload-progress">Envoi du fichier audio</label>
-			<progress id="episode-upload-progress" max={upload.total || 1} value={upload.loaded}
+			<label for="{uid}-progress">Envoi du fichier audio</label>
+			<!-- Indeterminate (no value) until the size is known and while the server stores the episode. -->
+			<progress
+				id="{uid}-progress"
+				aria-describedby="{uid}-progress-label"
+				max={upload.total || 1}
+				value={upload.total > 0 && !upload.sent ? upload.loaded : undefined}
 			></progress>
-			<span class="muted">{upload.sent ? 'Enregistrement de l’épisode…' : upload.label}</span>
+			<span id="{uid}-progress-label" class="muted">{upload.label}</span>
 		</div>
 	{/if}
+	<!-- Not a StatusMessage: heard only, the progress bar already shows the state. -->
 	<p class="visually-hidden" role="status">{upload.announcement}</p>
-	<div class="actions" bind:this={submitArea}>
-		<PendingButton type="submit" pending={form.pending} pendingLabel="Envoi en cours…">
+	<div class="actions">
+		<PendingButton
+			type="submit"
+			pending={form.pending}
+			pendingLabel="Envoi en cours…"
+			bind:element={submitButton}
+		>
 			Publier l’épisode
 		</PendingButton>
 		{#if upload.cancellable}
-			<button type="button" class="secondary" onclick={cancelUpload}>Annuler l’envoi</button>
+			<button type="button" class="secondary" bind:this={cancelButton} onclick={cancelUpload}>
+				Annuler l’envoi
+			</button>
 		{/if}
 		<StatusMessage message={successMessage} />
 	</div>

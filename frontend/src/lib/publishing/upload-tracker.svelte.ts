@@ -12,12 +12,25 @@ const ANNOUNCEMENT_STEP_PERCENT = 10;
  * longer offered.
  */
 export class UploadTracker {
-	loaded = $state(0);
-	total = $state(0);
-	/** Text of a live region: changes only at each 10 % step. */
-	announcement = $state('');
+	#loaded = $state(0);
+	#total = $state(0);
+	#announcement = $state('');
 	#controller = $state<AbortController | null>(null);
-	#announcedStep = -1;
+	// The first step heard is 10 %: the button already says the upload started.
+	#announcedStep = 0;
+
+	get loaded(): number {
+		return this.#loaded;
+	}
+
+	get total(): number {
+		return this.#total;
+	}
+
+	/** Text of a live region: changes only at each 10 % step. */
+	get announcement(): string {
+		return this.#announcement;
+	}
 
 	get active(): boolean {
 		return this.#controller !== null;
@@ -28,17 +41,20 @@ export class UploadTracker {
 	}
 
 	get sent(): boolean {
-		return this.total > 0 && this.loaded >= this.total;
+		return this.total > 0 && this.#loaded >= this.#total;
 	}
 
 	get cancellable(): boolean {
 		return this.active && !this.sent;
 	}
 
-	/** « 120 Mio / 480 Mio (25 %) », once the browser has reported the size to send. */
+	/** « 120 Mio / 480 Mio (25 %) » while the file is sent. */
 	get label(): string {
 		if (this.total === 0) {
 			return 'Démarrage de l’envoi…';
+		}
+		if (this.sent) {
+			return 'Enregistrement de l’épisode…';
 		}
 		return `${formatFileSize(this.loaded)} / ${formatFileSize(this.total)} (${this.percent} %)`;
 	}
@@ -46,10 +62,10 @@ export class UploadTracker {
 	/** Starts following a new upload: pass the returned transfer to the request. */
 	start(): Required<UploadTransfer> {
 		this.#controller = new AbortController();
-		this.loaded = 0;
-		this.total = 0;
-		this.announcement = '';
-		this.#announcedStep = -1;
+		this.#loaded = 0;
+		this.#total = 0;
+		this.#announcement = '';
+		this.#announcedStep = 0;
 		return {
 			signal: this.#controller.signal,
 			onUploadProgress: (loaded, total) => this.#progress(loaded, total)
@@ -64,16 +80,16 @@ export class UploadTracker {
 
 	finish(): void {
 		this.#controller = null;
-		this.announcement = '';
+		this.#announcement = '';
 	}
 
 	#progress(loaded: number, total: number): void {
-		this.loaded = loaded;
-		this.total = total;
+		this.#loaded = loaded;
+		this.#total = total;
 		const step = Math.floor(this.percent / ANNOUNCEMENT_STEP_PERCENT);
 		if (step > this.#announcedStep) {
 			this.#announcedStep = step;
-			this.announcement = this.sent
+			this.#announcement = this.sent
 				? 'Fichier envoyé, enregistrement de l’épisode…'
 				: `Envoi du fichier audio : ${this.percent} %`;
 		}

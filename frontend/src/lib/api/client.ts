@@ -1,9 +1,6 @@
 import { ApiError, NETWORK_ERROR_STATUS, toProblemDetails } from './problem';
-import {
-	isAbortError,
-	type UploadProgressListener,
-	type UploadTransport
-} from './upload-transport';
+import { isAbortError } from './abort';
+import type { UploadProgressListener, UploadTransport } from './upload-transport';
 
 const HAL_JSON = 'application/hal+json';
 const JSON_TYPE = 'application/json';
@@ -58,6 +55,14 @@ export interface ApiClientOptions {
 
 /** Follows (`onUploadProgress`) or cancels (`signal`) the upload of a request body. */
 export type UploadTransfer = Pick<RequestOptions, 'signal' | 'onUploadProgress'>;
+
+interface OutgoingRequest {
+	method: string;
+	headers: Record<string, string>;
+	body?: BodyInit;
+	signal?: AbortSignal;
+	onUploadProgress?: UploadProgressListener;
+}
 
 interface EncodedBody {
 	body?: BodyInit;
@@ -152,7 +157,8 @@ export class ApiClient {
 
 		const responseBody = await readBody(response);
 		if (!response.ok) {
-			if (response.status === 401 && accessToken) {
+			// Without a token too: the session store forgets an expired one before sending.
+			if (response.status === 401 && !options.anonymous) {
 				this.#options.onUnauthorized();
 			}
 			throw new ApiError(response.status, toProblemDetails(response.status, responseBody));
@@ -165,22 +171,15 @@ export class ApiClient {
 		};
 	}
 
-	#send(
-		url: string,
-		init: RequestInit & {
-			headers: Record<string, string>;
-			onUploadProgress?: UploadProgressListener;
-		}
-	): Promise<Response> {
+	#send(url: string, init: OutgoingRequest): Promise<Response> {
 		const { onUploadProgress, ...fetchInit } = init;
 		if (onUploadProgress === undefined) {
 			return this.#options.fetch(url, fetchInit);
 		}
 		return this.#options.uploadTransport(url, {
-			method: fetchInit.method ?? 'GET',
-			headers: fetchInit.headers,
+			...fetchInit,
+			// Only `formData` requests report their progress, and XMLHttpRequest sends FormData.
 			body: fetchInit.body as XMLHttpRequestBodyInit | undefined,
-			signal: fetchInit.signal ?? undefined,
 			onUploadProgress
 		});
 	}

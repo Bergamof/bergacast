@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RENEWAL_NOTICE_MS, expiryDelay, latestSession, renewalDelay } from './session-renewal';
+import { expiryDelay, renewalDelay } from './session-renewal';
 
 const NOW = 1_000_000;
 
@@ -9,7 +9,6 @@ function session(expiresAt: number) {
 
 describe('session renewal timing', () => {
 	it('offers the renewal one minute before the expiry', () => {
-		expect(RENEWAL_NOTICE_MS).toBe(60_000);
 		expect(renewalDelay(session(NOW + 15 * 60_000), NOW)).toBe(14 * 60_000);
 	});
 
@@ -21,14 +20,5 @@ describe('session renewal timing', () => {
 	it('counts down to the expiry, never below zero', () => {
 		expect(expiryDelay(session(NOW + 5_000), NOW)).toBe(5_000);
 		expect(expiryDelay(session(NOW - 5_000), NOW)).toBe(0);
-	});
-
-	it('keeps the session expiring last', () => {
-		const stored = session(NOW + 1_000);
-		const renewed = session(NOW + 900_000);
-
-		expect(latestSession(stored, null)).toBe(stored);
-		expect(latestSession(stored, renewed)).toBe(renewed);
-		expect(latestSession(renewed, stored)).toBe(renewed);
 	});
 });

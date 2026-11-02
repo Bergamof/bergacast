@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isAbortError } from '../api/upload-transport';
+import { isAbortError } from '../api/abort';
 import { UploadTracker } from './upload-tracker.svelte';
 
 const MIB = 1024 * 1024;
@@ -41,7 +41,7 @@ describe('UploadTracker', () => {
 		}
 
 		expect([...new Set(announcements)]).toEqual([
-			'Envoi du fichier audio : 1 %',
+			'',
 			'Envoi du fichier audio : 10 %',
 			'Envoi du fichier audio : 20 %',
 			'Envoi du fichier audio : 99 %'
@@ -56,6 +56,7 @@ describe('UploadTracker', () => {
 		tracker.cancel();
 
 		expect(tracker.announcement).toBe('Fichier envoyé, enregistrement de l’épisode…');
+		expect(tracker.label).toBe('Enregistrement de l’épisode…');
 		expect(tracker.cancellable).toBe(false);
 		expect(transfer.signal.aborted).toBe(false);
 	});

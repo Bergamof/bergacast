@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createXhrUploadTransport, isAbortError } from './upload-transport';
+import { isAbortError } from './abort';
+import { createXhrUploadTransport } from './upload-transport';
 
 /** The part of XMLHttpRequest the transport uses, driven by the test. */
 class FakeXhr {
@@ -125,6 +126,23 @@ describe('createXhrUploadTransport', () => {
 		expect(xhr.abort).toHaveBeenCalledOnce();
 	});
 
+	it('stops listening to the signal once the request is over', async () => {
+		const xhr = new FakeXhr();
+		const controller = new AbortController();
+		const response = transportWith(xhr)('/x', {
+			method: 'POST',
+			headers: {},
+			signal: controller.signal,
+			onUploadProgress: vi.fn()
+		});
+		xhr.respond(200, '');
+		await response;
+
+		controller.abort();
+
+		expect(xhr.abort).not.toHaveBeenCalled();
+	});
+
 	it('does not send a request whose signal already fired', async () => {
 		const xhr = new FakeXhr();
 		const controller = new AbortController();
@@ -139,12 +157,5 @@ describe('createXhrUploadTransport', () => {
 			})
 		).rejects.toSatisfy(isAbortError);
 		expect(xhr.sent).toBeUndefined();
-	});
-});
-
-describe('isAbortError', () => {
-	it('tells a cancellation from other failures', () => {
-		expect(isAbortError(new DOMException('x', 'AbortError'))).toBe(true);
-		expect(isAbortError(new TypeError('x'))).toBe(false);
 	});
 });

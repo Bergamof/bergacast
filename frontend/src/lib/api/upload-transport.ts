@@ -1,3 +1,5 @@
+import { abortError } from './abort';
+
 /** Bytes sent so far and in total, as reported by the browser while uploading a request body. */
 export type UploadProgressListener = (loaded: number, total: number) => void;
 
@@ -26,14 +28,6 @@ function parseHeaders(rawHeaders: string): Headers {
 	return headers;
 }
 
-export function abortError(): DOMException {
-	return new DOMException('The upload was cancelled', 'AbortError');
-}
-
-export function isAbortError(error: unknown): boolean {
-	return error instanceof DOMException && error.name === 'AbortError';
-}
-
 /**
  * `fetch` cannot report upload progress: XMLHttpRequest can (`upload.onprogress`), and aborts
  * through the same `AbortSignal` as `fetch`. Network failures reject with a `TypeError` and
@@ -58,16 +52,26 @@ export function createXhrUploadTransport(
 					init.onUploadProgress(event.loaded, event.total);
 				}
 			};
-			request.onload = () =>
+			const abort = () => request.abort();
+			const settle = () => init.signal?.removeEventListener('abort', abort);
+			request.onload = () => {
+				settle();
 				resolve(
 					new Response(NULL_BODY_STATUSES.has(request.status) ? null : request.responseText, {
 						status: request.status,
 						headers: parseHeaders(request.getAllResponseHeaders())
 					})
 				);
-			request.onerror = () => reject(new TypeError('Network request failed'));
-			request.onabort = () => reject(abortError());
-			init.signal?.addEventListener('abort', () => request.abort(), { once: true });
+			};
+			request.onerror = () => {
+				settle();
+				reject(new TypeError('Network request failed'));
+			};
+			request.onabort = () => {
+				settle();
+				reject(abortError());
+			};
+			init.signal?.addEventListener('abort', abort, { once: true });
 			request.send(init.body ?? null);
 		});
 }

@@ -12,8 +12,3 @@ export function renewalDelay(session: Session, now: number): number {
 export function expiryDelay(session: Session, now: number): number {
 	return Math.max(0, session.expiresAt - now);
 }
-
-/** The session expiring last: a renewal made on this page, or a newer one read from the store. */
-export function latestSession(stored: Session, renewed: Session | null): Session {
-	return renewed !== null && renewed.expiresAt > stored.expiresAt ? renewed : stored;
-}

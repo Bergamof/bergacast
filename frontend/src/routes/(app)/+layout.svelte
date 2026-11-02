@@ -1,9 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { navigating, page } from '$app/state';
-	import { api, apiDocumentationHref, logOut } from '#lib/app.ts';
-	import { latestSession } from '#lib/auth/session-renewal.ts';
-	import type { Session } from '#lib/auth/session-store.ts';
+	import { api, apiDocumentationHref, logOut, sessionStore } from '#lib/app.ts';
 	import NewTabNotice from '#lib/components/NewTabNotice.svelte';
 	import SessionRenewalDialog from '#lib/components/SessionRenewalDialog.svelte';
 	import { spaVersion } from '#lib/version.ts';
@@ -36,9 +34,13 @@
 		return page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
 	}
 
-	// A renewal made on this page; the store keeps it for the next loads.
-	let renewedSession = $state<Session | null>(null);
-	const session = $derived(latestSession(data.session, renewedSession));
+	// Follows the layout data (read from the store at each navigation) and a renewal made in place.
+	let session = $derived(data.session);
+
+	async function renewSession(password: string): Promise<void> {
+		const token = await api.logIn(session.username, password);
+		session = sessionStore.save(token.accessToken, session.username, token.expiresIn);
+	}
 </script>
 
 <a class="skip-link" href="#main-content">Aller au contenu</a>
@@ -75,11 +77,7 @@
 	{@render children()}
 </main>
 
-<SessionRenewalDialog
-	{session}
-	onRenewed={(renewed) => (renewedSession = renewed)}
-	onLogOut={() => logOut()}
-/>
+<SessionRenewalDialog {session} onRenew={renewSession} onLogOut={() => logOut()} />
 
 <footer class="muted">
 	Interface {spaVersion} · Serveur

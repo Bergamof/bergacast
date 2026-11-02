@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { createFakeFetch, emptyResponse, jsonResponse } from '../testing/fake-fetch';
 import { ApiClient, withQuery } from './client';
 import { ApiError, NETWORK_ERROR_STATUS } from './problem';
-import { abortError, isAbortError, type UploadTransport } from './upload-transport';
+import { abortError, isAbortError } from './abort';
+import type { UploadTransport } from './upload-transport';
 
 const API_ORIGIN = 'https://api.example';
 
@@ -282,12 +283,12 @@ describe('ApiClient', () => {
 		expect(onUnauthorized).toHaveBeenCalledOnce();
 	});
 
-	it('does not treat failed logins as an expired session', async () => {
-		const { fetch } = createFakeFetch(jsonResponse(401, { title: 'Bad credentials' }));
+	it('notifies the application when the session has expired locally (no token sent)', async () => {
+		const { fetch } = createFakeFetch(jsonResponse(401, { title: 'Unauthorized' }));
 		const { client, onUnauthorized } = createClient(fetch, null);
 
-		await expect(client.post('/api/v1/access-tokens', {})).rejects.toBeInstanceOf(ApiError);
-		expect(onUnauthorized).not.toHaveBeenCalled();
+		await expect(client.get('/api/v1/podcasts')).rejects.toBeInstanceOf(ApiError);
+		expect(onUnauthorized).toHaveBeenCalledOnce();
 	});
 
 	it('reports network failures as an unreachable server', async () => {
