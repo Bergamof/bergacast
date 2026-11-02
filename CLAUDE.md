@@ -131,7 +131,7 @@ Docker (racine) : `cp .env.example .env` (renseigner `BERGACAST_JWT_SECRET`, mot
 - `docker compose` exige un `.env` (`POSTGRES_PASSWORD`, `BERGACAST_JWT_SECRET` en `:?`) même pour démarrer seulement `db`. Volume PostgreSQL 18 monté sur `/var/lib/postgresql` (et non `/var/lib/postgresql/data`).
 ## État du projet
 - Fait : API complète, flux, SPA d’administration, Docker, CI (PR #1) ; images de production (natif GraalVM + static-web-server) et releases automatiques vers le registry Scaleway (PR #6) ; médias et flux sur stockage objet S3 (PR #17), base Serverless SQL et bucket en production ; ancien contenu des médias supprimé de la base (`V4`, PR #18) ; équipe d’agents en lecture seule, dépendances vulnérables corrigées, contrôles de sécurité et Lighthouse en CI, limitation des connexions admin et taille des corps JSON, accessibilité de la SPA, suivi de l’envoi audio et reconnexion avant l’expiration du JWT (2026-11-02).
-- Prochaines étapes : constats mineurs restants des audits du 2026-11-02 (images de base épinglées par digest, etc.).
+- Prochaines étapes (issues GitHub ouvertes) : images de base épinglées par digest (#37), 401 en arrière-plan pendant la fenêtre « Session expirée » (#38), e2e de l’avertissement à la fermeture de l’onglet pendant un envoi (#39), API simulée qui refuse les écritures non interceptées (#40) ; réglages GitHub à faire par Adrien : alerte CodeQL CSRF, protection de `main` (#41).
 ## Licence
 AGPL-3.0 — tout nouveau fichier et toute dépendance restent compatibles avec elle.
 ## Règles de code
