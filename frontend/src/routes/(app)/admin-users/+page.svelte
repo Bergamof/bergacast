@@ -12,6 +12,7 @@
 	import { MINIMUM_PASSWORD_LENGTH, validateAdminUserForm } from '#lib/forms/admin-user-form.ts';
 	import { FormState } from '#lib/forms/form-state.svelte.ts';
 	import { formatDateTime } from '#lib/format/date-time.ts';
+	import { focusThenAnnounce } from '#lib/forms/focus.ts';
 	import { LoadDependency } from '#lib/load-dependencies.ts';
 	import type { PageProps } from './$types';
 
@@ -22,10 +23,11 @@
 	let creationMessage = $state('');
 	let deletionMessage = $state('');
 	let usersHeading: HTMLElement | undefined = $state();
-	let formElement: HTMLFormElement | undefined = $state();
 	const form = new FormState();
 
-	async function handleCreate(event: SubmitEvent): Promise<void> {
+	async function handleCreate(
+		event: SubmitEvent & { currentTarget: EventTarget & HTMLFormElement }
+	): Promise<void> {
 		event.preventDefault();
 		creationMessage = '';
 		const newUsername = username.trim();
@@ -35,7 +37,7 @@
 				await api.createAdminUser(newUsername, password);
 				await invalidate(LoadDependency.adminUsers);
 			},
-			formElement
+			event.currentTarget
 		);
 		if (created) {
 			username = '';
@@ -52,7 +54,6 @@
 		deletionMessage = '';
 		await api.deleteAdminUser(user);
 		await invalidate(LoadDependency.adminUsers);
-		deletionMessage = `Compte « ${user.username} » supprimé.`;
 	}
 </script>
 
@@ -82,7 +83,11 @@
 						accessibleLabel="Supprimer le compte « {user.username} »"
 						title="Supprimer le compte « {user.username} » ?"
 						onConfirm={() => deleteUser(user)}
-						afterConfirm={() => usersHeading?.focus()}
+						afterConfirm={() =>
+							focusThenAnnounce(
+								usersHeading,
+								() => (deletionMessage = `Compte « ${user.username} » supprimé.`)
+							)}
 					>
 						<p>
 							Ce compte ne pourra plus se connecter. Il est impossible de supprimer son propre
@@ -92,7 +97,7 @@
 				</div>
 				<details>
 					<summary>
-						Changer le mot de passe<span class="visually-hidden"> de « {user.username} »</span>
+						Changer le mot de passe <span class="visually-hidden">de « {user.username} »</span>
 					</summary>
 					<PasswordChangeForm
 						idPrefix="user-{user.id}"
@@ -107,7 +112,7 @@
 
 <section class="card" aria-labelledby="new-admin-title">
 	<h2 id="new-admin-title">Nouvel administrateur</h2>
-	<form novalidate onsubmit={handleCreate} bind:this={formElement}>
+	<form novalidate onsubmit={handleCreate}>
 		<RequiredFieldsLegend />
 		<div class="form-grid">
 			<FormField id="new-username" label="Identifiant" required error={form.fieldErrors.username}>

@@ -25,3 +25,5 @@ vite.config.ts.timestamp-*
 # Tests
 /coverage
 .lighthouseci
+/test-results
+/playwright-report

@@ -6,8 +6,7 @@ import {
 	hasFieldErrors,
 	type FieldErrors
 } from './field-errors';
-
-const INVALID_CONTROL_SELECTOR = '[aria-invalid="true"]';
+import { focusFirstInvalidControl, type ControlContainer } from './focus';
 
 /** Submission state shared by every form: pending flag, problem and per-field errors. */
 export class FormState {
@@ -24,15 +23,16 @@ export class FormState {
 	async submit(
 		validate: () => FieldErrors,
 		action: () => Promise<void>,
-		formElement?: ParentNode
+		formElement?: ControlContainer
 	): Promise<boolean> {
 		if (this.pending) {
 			return false;
 		}
 		const succeeded = await this.#validateThenRun(validate, action);
 		if (!succeeded && hasFieldErrors(this.fieldErrors)) {
+			// The errors reach the DOM (`aria-invalid`) on the next update.
 			await tick();
-			formElement?.querySelector<HTMLElement>(INVALID_CONTROL_SELECTOR)?.focus();
+			focusFirstInvalidControl(formElement);
 		}
 		return succeeded;
 	}

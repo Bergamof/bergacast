@@ -52,9 +52,17 @@
 	}
 
 	// Escape would hide the dialog while the request runs, and with it the error it may end with.
+	// `closedby` prevents it; browsers without it only let `cancel` be prevented once per user
+	// activation, hence reopening a dialog closed while pending.
 	function preventCancelWhilePending(event: Event): void {
 		if (pending) {
 			event.preventDefault();
+		}
+	}
+
+	function reopenWhilePending(): void {
+		if (pending) {
+			dialog?.showModal();
 		}
 	}
 
@@ -80,7 +88,9 @@
 	role="alertdialog"
 	aria-labelledby={titleId}
 	aria-describedby={descriptionId}
+	closedby={pending ? 'none' : 'any'}
 	oncancel={preventCancelWhilePending}
+	onclose={reopenWhilePending}
 >
 	<h2 id={titleId}>{title}</h2>
 	<div class="content">

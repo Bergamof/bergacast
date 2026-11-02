@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -12,6 +13,7 @@
 	import PendingButton from '#lib/components/PendingButton.svelte';
 	import ProblemAlert from '#lib/components/ProblemAlert.svelte';
 	import RequiredFieldsLegend from '#lib/components/RequiredFieldsLegend.svelte';
+	import StatusMessage from '#lib/components/StatusMessage.svelte';
 	import { FormState } from '#lib/forms/form-state.svelte.ts';
 	import { REQUIRED_MESSAGE, isBlank } from '#lib/forms/validators.ts';
 	import type { FieldErrors } from '#lib/forms/field-errors.ts';
@@ -19,8 +21,14 @@
 	let username = $state('');
 	let password = $state('');
 	const form = new FormState();
-	let formElement: HTMLFormElement | undefined = $state();
-	const sessionExpired = $derived(page.url.searchParams.has(EXPIRED_PARAMETER));
+	let expiryMessage = $state('');
+
+	// Written once mounted, into a status region already in the page, so that it is announced.
+	onMount(() => {
+		if (page.url.searchParams.has(EXPIRED_PARAMETER)) {
+			expiryMessage = 'Votre session a expiré. Reconnectez-vous.';
+		}
+	});
 
 	function validate(): FieldErrors {
 		const errors: FieldErrors = {};
@@ -33,7 +41,9 @@
 		return errors;
 	}
 
-	async function handleSubmit(event: SubmitEvent): Promise<void> {
+	async function handleSubmit(
+		event: SubmitEvent & { currentTarget: EventTarget & HTMLFormElement }
+	): Promise<void> {
 		event.preventDefault();
 		await form.submit(
 			validate,
@@ -48,7 +58,7 @@
 				// eslint-disable-next-line svelte/no-navigation-without-resolve -- target is either resolved or checked to stay under the base path
 				await goto(target, { replaceState: true });
 			},
-			formElement
+			event.currentTarget
 		);
 	}
 </script>
@@ -61,10 +71,8 @@
 	<h1>Bergacast</h1>
 	<section class="card" aria-labelledby="login-title">
 		<h2 id="login-title">Connexion à l’administration</h2>
-		{#if sessionExpired}
-			<p class="notice warning" role="status">Votre session a expiré. Reconnectez-vous.</p>
-		{/if}
-		<form novalidate onsubmit={handleSubmit} bind:this={formElement}>
+		<StatusMessage message={expiryMessage} tone="warning" />
+		<form novalidate onsubmit={handleSubmit}>
 			<RequiredFieldsLegend />
 			<FormField id="username" label="Identifiant" required error={form.fieldErrors.username}>
 				{#snippet control(attributes)}

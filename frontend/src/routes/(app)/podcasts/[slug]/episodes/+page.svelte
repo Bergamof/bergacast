@@ -4,7 +4,7 @@
 	import { page } from '$app/state';
 	import { api } from '#lib/app.ts';
 	import type { Episode } from '#lib/api/resources.ts';
-	import { withRefreshOnUnavailable } from '#lib/api/storage-unavailable.ts';
+	import { changeThenRefresh } from '#lib/api/change-then-refresh.ts';
 	import ConfirmButton from '#lib/components/ConfirmButton.svelte';
 	import EpisodeUploadForm from '#lib/components/EpisodeUploadForm.svelte';
 	import NewTabNotice from '#lib/components/NewTabNotice.svelte';
@@ -14,6 +14,7 @@
 	import { formatDateTime, isInFuture } from '#lib/format/date-time.ts';
 	import { formatDuration } from '#lib/format/duration.ts';
 	import { formatFileSize } from '#lib/format/file-size.ts';
+	import { focusThenAnnounce } from '#lib/forms/focus.ts';
 	import { LoadDependency } from '#lib/load-dependencies.ts';
 	import type { PageProps } from './$types';
 
@@ -27,12 +28,12 @@
 		await Promise.all([invalidate(LoadDependency.episodes), invalidate(LoadDependency.podcast)]);
 	}
 
-	async function uploadEpisode(
+	function uploadEpisode(
 		values: EpisodeFormValues,
 		audio: File,
 		idempotencyKey: string
 	): Promise<void> {
-		await withRefreshOnUnavailable(
+		return changeThenRefresh(
 			() =>
 				api.uploadEpisode(podcast, {
 					metadata: toUploadMetadata(values),
@@ -41,14 +42,11 @@
 				}),
 			refresh
 		);
-		await refresh();
 	}
 
 	async function deleteEpisode(episode: Episode): Promise<void> {
 		deletionMessage = '';
-		await withRefreshOnUnavailable(() => api.deleteEpisode(episode), refresh);
-		await refresh();
-		deletionMessage = `Épisode « ${episode.title} » supprimé.`;
+		await changeThenRefresh(() => api.deleteEpisode(episode), refresh);
 	}
 </script>
 
@@ -95,7 +93,11 @@
 								accessibleLabel="Supprimer « {episode.title} »"
 								title="Supprimer « {episode.title} » ?"
 								onConfirm={() => deleteEpisode(episode)}
-								afterConfirm={() => listHeading?.focus()}
+								afterConfirm={() =>
+									focusThenAnnounce(
+										listHeading,
+										() => (deletionMessage = `Épisode « ${episode.title} » supprimé.`)
+									)}
 							>
 								<p>L’épisode et son fichier audio seront définitivement supprimés.</p>
 							</ConfirmButton>
@@ -126,8 +128,8 @@
 						</audio>
 						<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- public audio file served by the backend -->
 						<a href={episode.audio.url} target="_blank" rel="noopener">
-							Fichier audio<span class="visually-hidden"> de « {episode.title} »</span><NewTabNotice
-							/>
+							Fichier audio <span class="visually-hidden">de « {episode.title} »</span>
+							<NewTabNotice />
 						</a>
 					</div>
 				</article>

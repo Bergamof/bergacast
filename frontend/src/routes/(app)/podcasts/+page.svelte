@@ -59,8 +59,9 @@
 						<td>{podcast.language}</td>
 						<td>
 							<a href={resolve('/(app)/podcasts/[slug]/episodes', { slug: podcast.slug })}>
-								{podcast.episodeCount}<span class="visually-hidden">
-									épisode(s) de « {podcast.title} »</span
+								{podcast.episodeCount}
+								<span class="visually-hidden"
+									>{podcast.episodeCount > 1 ? 'épisodes' : 'épisode'} de « {podcast.title} »</span
 								>
 							</a>
 						</td>

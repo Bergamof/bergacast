@@ -14,6 +14,7 @@
 	import { FormState } from '#lib/forms/form-state.svelte.ts';
 	import { REQUIRED_MESSAGE, isBlank } from '#lib/forms/validators.ts';
 	import { formatDateTime } from '#lib/format/date-time.ts';
+	import { focusThenAnnounce } from '#lib/forms/focus.ts';
 	import { LoadDependency } from '#lib/load-dependencies.ts';
 	import type { PageProps } from './$types';
 
@@ -26,10 +27,11 @@
 	let tokenNameInput: HTMLInputElement | undefined = $state();
 	let tokensHeading: HTMLElement | undefined = $state();
 	let revocationMessage = $state('');
-	let formElement: HTMLFormElement | undefined = $state();
 	const form = new FormState();
 
-	async function handleCreate(event: SubmitEvent): Promise<void> {
+	async function handleCreate(
+		event: SubmitEvent & { currentTarget: EventTarget & HTMLFormElement }
+	): Promise<void> {
 		event.preventDefault();
 		const created = await form.submit(
 			() => singleFieldError('name', isBlank(tokenName) ? REQUIRED_MESSAGE : null),
@@ -38,7 +40,7 @@
 				tokenName = '';
 				await invalidate(LoadDependency.apiTokens);
 			},
-			formElement
+			event.currentTarget
 		);
 		if (created) {
 			// Read in full once focused, instead of a live region holding a button and the token.
@@ -59,7 +61,6 @@
 			createdToken = null;
 		}
 		await invalidate(LoadDependency.apiTokens);
-		revocationMessage = `Jeton « ${token.name} » révoqué.`;
 	}
 </script>
 
@@ -75,10 +76,20 @@
 	</p>
 
 	{#if createdToken}
-		<div class="notice warning" tabindex="-1" bind:this={createdTokenNotice}>
+		<div
+			class="notice warning"
+			role="group"
+			aria-labelledby="created-token-title"
+			aria-describedby="created-token-warning"
+			tabindex="-1"
+			bind:this={createdTokenNotice}
+		>
 			<p>
-				<strong>Jeton « {createdToken.name} » créé.</strong> Copiez-le maintenant : il ne sera plus jamais
-				affiché. En cas de perte, révoquez-le et créez-en un autre.
+				<strong id="created-token-title">Jeton « {createdToken.name} » créé.</strong>
+				<span id="created-token-warning">
+					Copiez-le maintenant : il ne sera plus jamais affiché. En cas de perte, révoquez-le et
+					créez-en un autre.
+				</span>
 			</p>
 			<CopyableText value={createdToken.token} label="Jeton d’API en clair" />
 			<button type="button" class="secondary" onclick={dismissCreatedToken}>
@@ -87,7 +98,7 @@
 		</div>
 	{/if}
 
-	<form novalidate onsubmit={handleCreate} bind:this={formElement}>
+	<form novalidate onsubmit={handleCreate}>
 		<RequiredFieldsLegend />
 		<FormField
 			id="token-name"
@@ -146,7 +157,11 @@
 									title="Révoquer le jeton « {token.name} » ?"
 									confirmLabel="Révoquer"
 									onConfirm={() => revokeToken(token)}
-									afterConfirm={() => tokensHeading?.focus()}
+									afterConfirm={() =>
+										focusThenAnnounce(
+											tokensHeading,
+											() => (revocationMessage = `Jeton « ${token.name} » révoqué.`)
+										)}
 								>
 									<p>Les outils qui l’utilisent ne pourront plus publier d’épisodes.</p>
 								</ConfirmButton>

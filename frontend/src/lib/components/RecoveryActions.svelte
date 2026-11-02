@@ -1,20 +1,23 @@
 <script lang="ts">
 	import type { ProblemDetails } from '../api/problem';
 	import type { FeedPublication } from '../api/resources';
-	import { PRECONDITION_FAILED, SERVICE_UNAVAILABLE } from '../api/problem';
+	import { recoveryActionFor } from '../forms/recovery-action';
 	import FeedPublishButton from './FeedPublishButton.svelte';
 	import PendingButton from './PendingButton.svelte';
 
 	interface Props {
 		problem: ProblemDetails | null;
-		/** Offered on a 412: loads the latest version of the resource into the form. */
+		/** Loads the latest version of the resource into the form. */
 		onReload?: () => Promise<void>;
-		/** Offered on a 503: the change may be saved while the feed could not be written. */
+		/** Rewrites the feed on the object storage now. */
 		onPublishFeed?: () => Promise<FeedPublication>;
 	}
 
 	let { problem, onReload, onPublishFeed }: Props = $props();
 
+	const action = $derived(
+		recoveryActionFor(problem, { reload: !!onReload, publishFeed: !!onPublishFeed })
+	);
 	let reloading = $state(false);
 
 	async function reload(): Promise<void> {
@@ -27,7 +30,7 @@
 	}
 </script>
 
-{#if problem?.status === PRECONDITION_FAILED && onReload}
+{#if action === 'reload'}
 	<div class="actions">
 		<PendingButton
 			type="button"
@@ -39,6 +42,6 @@
 			Recharger la dernière version
 		</PendingButton>
 	</div>
-{:else if problem?.status === SERVICE_UNAVAILABLE && onPublishFeed}
+{:else if action === 'publish-feed' && onPublishFeed}
 	<FeedPublishButton {onPublishFeed} />
 {/if}

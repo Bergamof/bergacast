@@ -19,16 +19,17 @@
 
 	let password = $state('');
 	let successMessage = $state('');
-	let formElement: HTMLFormElement | undefined = $state();
 	const form = new FormState();
 
-	async function handleSubmit(event: SubmitEvent): Promise<void> {
+	async function handleSubmit(
+		event: SubmitEvent & { currentTarget: EventTarget & HTMLFormElement }
+	): Promise<void> {
 		event.preventDefault();
 		successMessage = '';
 		const changed = await form.submit(
 			() => singleFieldError('password', validatePassword(password)),
 			() => onSubmit(password),
-			formElement
+			event.currentTarget
 		);
 		if (changed) {
 			password = '';
@@ -37,7 +38,7 @@
 	}
 </script>
 
-<form novalidate onsubmit={handleSubmit} bind:this={formElement}>
+<form novalidate onsubmit={handleSubmit}>
 	<FormField
 		id="{idPrefix}-new-password"
 		label="Nouveau mot de passe de « {username} »"
@@ -52,7 +53,7 @@
 	<ProblemAlert problem={form.problem} inlineFields={['password']} />
 	<div class="actions">
 		<PendingButton type="submit" pending={form.pending} pendingLabel="Modification…">
-			Changer le mot de passe<span class="visually-hidden"> de « {username} »</span>
+			Changer le mot de passe <span class="visually-hidden">de « {username} »</span>
 		</PendingButton>
 		<StatusMessage message={successMessage} />
 	</div>

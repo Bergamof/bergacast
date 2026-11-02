@@ -2,7 +2,7 @@
 	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/app.ts';
-	import { withRefreshOnUnavailable } from '#lib/api/storage-unavailable.ts';
+	import { changeThenRefresh } from '#lib/api/change-then-refresh.ts';
 	import ConfirmButton from '#lib/components/ConfirmButton.svelte';
 	import EpisodeEditForm from '#lib/components/EpisodeEditForm.svelte';
 	import {
@@ -25,12 +25,11 @@
 		return invalidate(LoadDependency.episode);
 	}
 
-	async function saveEpisode(values: EpisodeFormValues): Promise<void> {
-		await withRefreshOnUnavailable(
+	function saveEpisode(values: EpisodeFormValues): Promise<void> {
+		return changeThenRefresh(
 			() => api.updateEpisode(data.episode, toEpisodeMetadata(values)),
 			refreshEpisode
 		);
-		await refreshEpisode();
 	}
 
 	async function deleteEpisode(): Promise<void> {
@@ -53,12 +52,16 @@
 			episode.audio.sizeBytes
 		)}. Le fichier audio ne peut pas être remplacé : supprimez l’épisode et publiez-le de nouveau.
 	</p>
-	<EpisodeEditForm
-		initialValues={episodeFormValues(episode)}
-		onSubmit={saveEpisode}
-		onReload={refreshEpisode}
-		onPublishFeed={() => api.publishFeed(podcast)}
-	/>
+	<!-- Keyed by identity only: a save keeps the form, and with it the focus. -->
+	{#key episode.id}
+		<EpisodeEditForm
+			initialValues={episodeFormValues(episode)}
+			successMessage="Modifications enregistrées."
+			onSubmit={saveEpisode}
+			onReload={refreshEpisode}
+			onPublishFeed={() => api.publishFeed(podcast)}
+		/>
+	{/key}
 </section>
 
 <section class="card" aria-labelledby="episode-danger-title">

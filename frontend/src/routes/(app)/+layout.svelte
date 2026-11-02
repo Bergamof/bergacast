@@ -61,7 +61,7 @@
 				<li>
 					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- served by the backend, outside the SPA -->
 					<a href={apiDocumentationHref} target="_blank" rel="noopener">
-						Documentation API<NewTabNotice />
+						Documentation API <NewTabNotice />
 					</a>
 				</li>
 			</ul>

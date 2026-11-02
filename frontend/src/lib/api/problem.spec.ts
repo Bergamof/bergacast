@@ -50,10 +50,10 @@ describe('ApiError', () => {
 		expect(new ApiError(400, { title: 'Bad' }).message).toBe('Bad');
 		expect(new ApiError(400, {}).message).toBe('Erreur HTTP 400');
 	});
-});
 
-describe('ApiError', () => {
-	it('tells a 503, after which the change may be saved', () => {
+	it('tells a concurrent change (412) and an unavailable service (503)', () => {
+		expect(new ApiError(412, {}).isPreconditionFailed).toBe(true);
+		expect(new ApiError(409, {}).isPreconditionFailed).toBe(false);
 		expect(new ApiError(503, {}).isServiceUnavailable).toBe(true);
 		expect(new ApiError(500, {}).isServiceUnavailable).toBe(false);
 	});

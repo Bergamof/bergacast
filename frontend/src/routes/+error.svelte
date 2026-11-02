@@ -1,9 +1,9 @@
 <script lang="ts">
-	import ErrorMessage from '#lib/components/ErrorMessage.svelte';
+	import ErrorPageContent from '#lib/components/ErrorPageContent.svelte';
 </script>
 
 <main class="error-page">
-	<ErrorMessage />
+	<ErrorPageContent />
 </main>
 
 <style>

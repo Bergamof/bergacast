@@ -27,7 +27,6 @@
 	let values = $state(emptyEpisodeFormValues());
 	let files = $state<FileList | undefined>();
 	let fileInput: HTMLInputElement | undefined = $state();
-	let formElement: HTMLFormElement | undefined = $state();
 	let successMessage = $state('');
 	// Kept across retries of the same upload so that a request that actually succeeded despite a
 	// network error does not create a duplicate episode; renewed once the upload is confirmed.
@@ -40,7 +39,9 @@
 		return audioError === null ? errors : { ...errors, audio: audioError };
 	}
 
-	async function handleSubmit(event: SubmitEvent): Promise<void> {
+	async function handleSubmit(
+		event: SubmitEvent & { currentTarget: EventTarget & HTMLFormElement }
+	): Promise<void> {
 		event.preventDefault();
 		successMessage = '';
 		const title = values.title;
@@ -52,7 +53,7 @@
 					await onSubmit($state.snapshot(values), audio, idempotencyKey);
 				}
 			},
-			formElement
+			event.currentTarget
 		);
 		if (uploaded) {
 			idempotencyKey = newIdempotencyKey();
@@ -66,7 +67,7 @@
 	}
 </script>
 
-<form novalidate onsubmit={handleSubmit} bind:this={formElement}>
+<form novalidate onsubmit={handleSubmit}>
 	<RequiredFieldsLegend />
 	<FormField id="episode-audio" label="Fichier audio" required error={form.fieldErrors.audio}>
 		{#snippet control(attributes)}

@@ -1,11 +1,9 @@
-import { SERVICE_UNAVAILABLE } from './api/problem';
-
 const SERVER_ERROR = 500;
 
 const TITLES: Record<number, string> = {
 	403: 'Accès refusé',
 	404: 'Page introuvable',
-	[SERVICE_UNAVAILABLE]: 'Service indisponible'
+	503: 'Service indisponible'
 };
 
 /** Heading and page title of the error page; a `load` that could not reach the API ends in a 503. */

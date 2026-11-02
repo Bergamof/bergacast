@@ -29,7 +29,7 @@
 	<CopyableText value={podcast.feedUrl} label="URL du flux RSS" />
 	<p>
 		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- public feed served by the object storage, outside the SPA -->
-		<a href={podcast.feedUrl} target="_blank" rel="noopener">Ouvrir le flux<NewTabNotice /></a>
+		<a href={podcast.feedUrl} target="_blank" rel="noopener">Ouvrir le flux <NewTabNotice /></a>
 	</p>
 	<p class="muted">
 		Le flux est réécrit automatiquement après chaque modification du podcast ou de ses épisodes. Un
@@ -57,7 +57,7 @@
 	<p>
 		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- API documentation served by the backend, outside the SPA -->
 		<a href={apiDocumentationHref} target="_blank" rel="noopener">
-			Documentation OpenAPI de l’API<NewTabNotice />
+			Documentation OpenAPI de l’API <NewTabNotice />
 		</a>
 	</p>
 </section>

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../api/problem';
+import { fakeControlContainer } from '../testing/fake-control-container';
 import { INVALID_FORM_PROBLEM } from './field-errors';
 import { FormState, noValidation } from './form-state.svelte';
 
@@ -44,7 +45,7 @@ describe('FormState', () => {
 		expect(form.pending).toBe(false);
 	});
 
-	it('ignores a submission while another one is pending', async () => {
+	it('ignores any submission while another one is pending, then accepts the next one', async () => {
 		const form = new FormState();
 		let finish: () => void = () => {};
 		const first = form.submit(
@@ -52,49 +53,59 @@ describe('FormState', () => {
 			() => new Promise<void>((resolve) => (finish = resolve))
 		);
 		const second = vi.fn();
+		const invalid = vi.fn(() => ({ title: 'obligatoire' }));
 
 		const ignored = await form.submit(noValidation, second);
-		finish();
+		const ignoredInvalid = await form.submit(invalid, second);
 
-		expect(ignored).toBe(false);
+		expect([ignored, ignoredInvalid]).toEqual([false, false]);
 		expect(second).not.toHaveBeenCalled();
+		expect(invalid).not.toHaveBeenCalled();
+		expect(form.pending).toBe(true);
+		expect(form.problem).toBeNull();
+		expect(form.fieldErrors).toEqual({});
+		finish();
 		expect(await first).toBe(true);
+		expect(await form.submit(noValidation, second)).toBe(true);
+		expect(second).toHaveBeenCalledOnce();
 	});
 
 	it('focuses the first invalid control after a client validation failure', async () => {
-		const control = { focus: vi.fn() };
-		const formElement = { querySelector: vi.fn(() => control) };
+		const { container, control } = fakeControlContainer();
 
-		await new FormState().submit(() => ({ title: 'obligatoire' }), vi.fn(), formElement as never);
+		const succeeded = await new FormState().submit(
+			() => ({ title: 'obligatoire' }),
+			vi.fn(),
+			container
+		);
 
-		expect(formElement.querySelector).toHaveBeenCalledWith('[aria-invalid="true"]');
+		expect(succeeded).toBe(false);
+		expect(container.querySelector).toHaveBeenCalledWith('[aria-invalid="true"]');
 		expect(control.focus).toHaveBeenCalledOnce();
 	});
 
 	it('focuses the first invalid control after a validation problem of the API', async () => {
-		const control = { focus: vi.fn() };
-		const formElement = { querySelector: vi.fn(() => control) };
+		const { container, control } = fakeControlContainer();
 		const problem = { title: 'Données invalides', errors: [{ field: 'title', message: 'vide' }] };
 
 		await new FormState().submit(
 			noValidation,
 			() => Promise.reject(new ApiError(422, problem)),
-			formElement as never
+			container
 		);
 
 		expect(control.focus).toHaveBeenCalledOnce();
 	});
 
-	it('leaves the focus alone on a problem without field errors', async () => {
-		const formElement = { querySelector: vi.fn() };
+	it.each([
+		new ApiError(503, { title: 'Indisponible' }),
+		new ApiError(422, { title: 'Données invalides' })
+	])('leaves the focus alone on a problem without field errors: %s', async (failure) => {
+		const { container } = fakeControlContainer();
 
-		await new FormState().submit(
-			noValidation,
-			() => Promise.reject(new ApiError(503, { title: 'Indisponible' })),
-			formElement as never
-		);
+		await new FormState().submit(noValidation, () => Promise.reject(failure), container);
 
-		expect(formElement.querySelector).not.toHaveBeenCalled();
+		expect(container.querySelector).not.toHaveBeenCalled();
 	});
 
 	it('resets its errors', async () => {

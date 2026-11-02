@@ -29,7 +29,6 @@
 
 	let files = $state<FileList | undefined>();
 	let fileInput: HTMLInputElement | undefined = $state();
-	let formElement: HTMLFormElement | undefined = $state();
 	let statusMessage = $state('');
 	const form = new FormState();
 
@@ -40,7 +39,9 @@
 		return error === null ? {} : { image: error };
 	}
 
-	async function handleSubmit(event: SubmitEvent): Promise<void> {
+	async function handleSubmit(
+		event: SubmitEvent & { currentTarget: EventTarget & HTMLFormElement }
+	): Promise<void> {
 		event.preventDefault();
 		statusMessage = '';
 		const file = files?.[0];
@@ -52,7 +53,7 @@
 					await onUpload(file);
 				}
 			},
-			formElement
+			event.currentTarget
 		);
 		if (uploaded) {
 			statusMessage = replacing ? 'Image remplacée.' : 'Image enregistrée.';
@@ -109,7 +110,7 @@
 	{/if}
 </div>
 
-<form novalidate onsubmit={handleSubmit} bind:this={formElement}>
+<form novalidate onsubmit={handleSubmit}>
 	<RequiredFieldsLegend />
 	<FormField
 		id="podcast-image"

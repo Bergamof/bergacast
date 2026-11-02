@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { tick, untrack } from 'svelte';
 	import type { FeedPublication } from '../api/resources';
+	import { EditableForm } from '../forms/editable-form.svelte';
 	import { validateEpisodeForm, type EpisodeFormValues } from '../forms/episode-form';
-	import { FormState } from '../forms/form-state.svelte';
 	import EpisodeFields from './EpisodeFields.svelte';
 	import PendingButton from './PendingButton.svelte';
 	import ProblemAlert from './ProblemAlert.svelte';
@@ -12,6 +11,8 @@
 
 	interface Props {
 		initialValues: EpisodeFormValues;
+		/** Announced next to the button once saved. */
+		successMessage: string;
 		onSubmit: (values: EpisodeFormValues) => Promise<void>;
 		/** Reloads the latest version of the episode, offered after a concurrent change (412). */
 		onReload: () => Promise<void>;
@@ -19,57 +20,43 @@
 		onPublishFeed: () => Promise<FeedPublication>;
 	}
 
-	let { initialValues, onSubmit, onReload, onPublishFeed }: Props = $props();
+	let { initialValues, successMessage, onSubmit, onReload, onPublishFeed }: Props = $props();
 
-	// The form edits its own copy, reloaded from `initialValues` once saved or reloaded. It is never
-	// re-created, so that the focus stays where it was.
-	let values = $state(untrack(() => structuredClone(initialValues)));
-	let statusMessage = $state('');
+	const editable = new EditableForm(() => initialValues);
 	let formElement: HTMLFormElement | undefined = $state();
-	const form = new FormState();
-
-	async function loadInitialValues(): Promise<void> {
-		await tick();
-		values = structuredClone(initialValues);
-	}
 
 	async function handleSubmit(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
-		statusMessage = '';
-		const saved = await form.submit(
-			() => validateEpisodeForm(values, { publicationDateRequired: true }),
-			() => onSubmit($state.snapshot(values)),
+		await editable.save(
+			(values) => validateEpisodeForm(values, { publicationDateRequired: true }),
+			onSubmit,
+			successMessage,
 			formElement
 		);
-		if (saved) {
-			await loadInitialValues();
-			statusMessage = 'Modifications enregistrées.';
-		}
-	}
-
-	async function reload(): Promise<void> {
-		await onReload();
-		await loadInitialValues();
-		form.reset();
-		statusMessage = 'Dernière version chargée : refaites vos changements.';
-		formElement?.querySelector<HTMLElement>('input, select, textarea')?.focus();
 	}
 </script>
 
 <form novalidate onsubmit={handleSubmit} bind:this={formElement}>
 	<RequiredFieldsLegend />
 	<EpisodeFields
-		bind:values
-		errors={form.fieldErrors}
+		bind:values={editable.values}
+		errors={editable.state.fieldErrors}
 		publicationDateRequired={true}
 		guidEditable={false}
 	/>
-	<ProblemAlert problem={form.problem} inlineFields={[...Object.keys(values), 'durationSeconds']} />
-	<RecoveryActions problem={form.problem} onReload={reload} {onPublishFeed} />
+	<ProblemAlert
+		problem={editable.state.problem}
+		inlineFields={[...Object.keys(editable.values), 'durationSeconds']}
+	/>
+	<RecoveryActions
+		problem={editable.state.problem}
+		onReload={() => editable.reload(onReload, formElement)}
+		{onPublishFeed}
+	/>
 	<div class="actions">
-		<PendingButton type="submit" pending={form.pending} pendingLabel="Enregistrement…">
+		<PendingButton type="submit" pending={editable.state.pending} pendingLabel="Enregistrement…">
 			Enregistrer
 		</PendingButton>
-		<StatusMessage message={statusMessage} />
+		<StatusMessage message={editable.statusMessage} />
 	</div>
 </form>
