@@ -50,6 +50,13 @@ describe('ApiError', () => {
 		expect(new ApiError(400, { title: 'Bad' }).message).toBe('Bad');
 		expect(new ApiError(400, {}).message).toBe('Erreur HTTP 400');
 	});
+
+	it('tells a concurrent change (412) and an unavailable service (503)', () => {
+		expect(new ApiError(412, {}).isPreconditionFailed).toBe(true);
+		expect(new ApiError(409, {}).isPreconditionFailed).toBe(false);
+		expect(new ApiError(503, {}).isServiceUnavailable).toBe(true);
+		expect(new ApiError(500, {}).isServiceUnavailable).toBe(false);
+	});
 });
 
 describe('problemFromError', () => {
@@ -64,6 +71,7 @@ describe('problemFromError', () => {
 
 		expect(problem.title).toBe('Modification concurrente');
 		expect(problem.detail).toContain('Rechargez');
+		expect(problem.status).toBe(412);
 	});
 
 	it('wraps unexpected errors', () => {

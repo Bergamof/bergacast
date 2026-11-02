@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import Pagination from '#lib/components/Pagination.svelte';
+	import { formatEpisodeCount } from '#lib/format/count.ts';
 	import { formatDateTime } from '#lib/format/date-time.ts';
 	import { imagePreviewUrl } from '#lib/forms/podcast-image.ts';
 	import type { PageProps } from './$types';
@@ -14,7 +15,7 @@
 </svelte:head>
 
 <div class="toolbar">
-	<h1>Podcasts</h1>
+	<h1 id="podcasts-title">Podcasts</h1>
 	<a class="button" href={resolve('/(app)/podcasts/new')}>Nouveau podcast</a>
 </div>
 
@@ -22,7 +23,7 @@
 	<p class="card">Aucun podcast pour l’instant. Créez le premier !</p>
 {:else}
 	<div class="table-wrapper">
-		<table>
+		<table aria-labelledby="podcasts-title">
 			<thead>
 				<tr>
 					<th scope="col">Titre</th>
@@ -58,7 +59,10 @@
 						<td><code>{podcast.slug}</code></td>
 						<td>{podcast.language}</td>
 						<td>
-							<a href={resolve('/(app)/podcasts/[slug]/episodes', { slug: podcast.slug })}>
+							<a
+								href={resolve('/(app)/podcasts/[slug]/episodes', { slug: podcast.slug })}
+								aria-label="{formatEpisodeCount(podcast.episodeCount)} de « {podcast.title} »"
+							>
 								{podcast.episodeCount}
 							</a>
 						</td>

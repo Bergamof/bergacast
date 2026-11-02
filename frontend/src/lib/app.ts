@@ -3,7 +3,7 @@ import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { ApiClient } from './api/client';
 import { BergacastApi, OPENAPI_DOCUMENTATION_PATH } from './api/bergacast-api';
-import { ApiError } from './api/problem';
+import { ApiError, SERVICE_UNAVAILABLE } from './api/problem';
 import { EXPIRED_PARAMETER, REDIRECT_PARAMETER } from './auth/login-redirect';
 import { SessionStore } from './auth/session-store';
 import { apiOriginOf } from './runtime-config';
@@ -43,8 +43,6 @@ export const api = new BergacastApi(
 
 /** Swagger UI of the backend, which may be served from another origin than the SPA. */
 export const apiDocumentationHref = `${apiOrigin ?? ''}${OPENAPI_DOCUMENTATION_PATH}`;
-
-const SERVICE_UNAVAILABLE = 503;
 
 /** Turns an API failure in a `load` function into a SvelteKit redirect (401) or error page. */
 export function throwAsPageError(cause: unknown, url: URL): never {

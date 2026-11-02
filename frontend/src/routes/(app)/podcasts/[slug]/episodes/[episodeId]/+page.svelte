@@ -2,6 +2,7 @@
 	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/app.ts';
+	import { changeThenRefresh } from '#lib/api/change-then-refresh.ts';
 	import ConfirmButton from '#lib/components/ConfirmButton.svelte';
 	import EpisodeEditForm from '#lib/components/EpisodeEditForm.svelte';
 	import {
@@ -19,13 +20,16 @@
 	const podcast = $derived(data.podcast.resource);
 	const episode = $derived(data.episode.resource);
 	const episodesHref = $derived(resolve('/(app)/podcasts/[slug]/episodes', { slug: podcast.slug }));
-	let savedMessage = $state('');
 
-	async function saveEpisode(values: EpisodeFormValues): Promise<void> {
-		savedMessage = '';
-		await api.updateEpisode(data.episode, toEpisodeMetadata(values));
-		await invalidate(LoadDependency.episode);
-		savedMessage = 'Modifications enregistrées.';
+	function refreshEpisode(): Promise<void> {
+		return invalidate(LoadDependency.episode);
+	}
+
+	function saveEpisode(values: EpisodeFormValues): Promise<void> {
+		return changeThenRefresh(
+			() => api.updateEpisode(data.episode, toEpisodeMetadata(values)),
+			refreshEpisode
+		);
 	}
 
 	async function deleteEpisode(): Promise<void> {
@@ -42,17 +46,21 @@
 <p><a href={episodesHref}>← Retour aux épisodes</a></p>
 
 <section class="card" aria-labelledby="episode-title">
-	<h2 id="episode-title">Modifier l’épisode</h2>
+	<h2 id="episode-title">Modifier l’épisode « {episode.title} »</h2>
 	<p class="muted">
 		Ajouté le {formatDateTime(episode.addedAt)} · {episode.audio.mimeType} · {formatFileSize(
 			episode.audio.sizeBytes
 		)}. Le fichier audio ne peut pas être remplacé : supprimez l’épisode et publiez-le de nouveau.
 	</p>
-	{#if savedMessage}
-		<p class="notice success" role="status">{savedMessage}</p>
-	{/if}
-	{#key data.episode}
-		<EpisodeEditForm initialValues={episodeFormValues(episode)} onSubmit={saveEpisode} />
+	<!-- Keyed by identity only: a save keeps the form, and with it the focus. -->
+	{#key episode.id}
+		<EpisodeEditForm
+			initialValues={episodeFormValues(episode)}
+			successMessage="Modifications enregistrées."
+			onSubmit={saveEpisode}
+			onReload={refreshEpisode}
+			onPublishFeed={() => api.publishFeed(podcast)}
+		/>
 	{/key}
 </section>
 

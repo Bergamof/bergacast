@@ -16,6 +16,10 @@ export interface ProblemDetails {
 
 /** Status used when the server could not be reached at all (no HTTP response). */
 export const NETWORK_ERROR_STATUS = 0;
+/** Concurrent change: the `If-Match` version is no longer the stored one. */
+export const PRECONDITION_FAILED = 412;
+/** Also answered after a saved change whose feed could not be written (see `changeThenRefresh`). */
+export const SERVICE_UNAVAILABLE = 503;
 
 export class ApiError extends Error {
 	readonly status: number;
@@ -33,7 +37,11 @@ export class ApiError extends Error {
 	}
 
 	get isPreconditionFailed(): boolean {
-		return this.status === 412;
+		return this.status === PRECONDITION_FAILED;
+	}
+
+	get isServiceUnavailable(): boolean {
+		return this.status === SERVICE_UNAVAILABLE;
 	}
 }
 
@@ -82,10 +90,11 @@ export function problemFromError(error: unknown): ProblemDetails {
 	if (error instanceof ApiError && error.isPreconditionFailed) {
 		return {
 			...error.problem,
+			status: error.status,
 			title: 'Modification concurrente',
 			detail:
 				'Cette ressource a été modifiée ailleurs depuis l’ouverture de la page. ' +
-				'Rechargez-la pour partir de la dernière version, puis refaites vos changements.'
+				'Rechargez la dernière version, puis refaites vos changements.'
 		};
 	}
 	if (error instanceof ApiError) {

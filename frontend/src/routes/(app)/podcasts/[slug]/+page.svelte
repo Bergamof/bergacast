@@ -2,6 +2,7 @@
 	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/app.ts';
+	import { changeThenRefresh } from '#lib/api/change-then-refresh.ts';
 	import ConfirmButton from '#lib/components/ConfirmButton.svelte';
 	import PodcastForm from '#lib/components/PodcastForm.svelte';
 	import PodcastImageForm from '#lib/components/PodcastImageForm.svelte';
@@ -17,24 +18,25 @@
 	let { data }: PageProps = $props();
 
 	const podcast = $derived(data.podcast.resource);
-	let savedMessage = $state('');
 
-	async function savePodcast(values: PodcastFormValues): Promise<void> {
-		savedMessage = '';
-		await api.updatePodcast(data.podcast, toPodcastPatch(values));
-		await invalidate(LoadDependency.podcast);
-		savedMessage = 'Modifications enregistrées.';
+	function refreshPodcast(): Promise<void> {
+		return invalidate(LoadDependency.podcast);
+	}
+
+	function savePodcast(values: PodcastFormValues): Promise<void> {
+		return changeThenRefresh(
+			() => api.updatePodcast(data.podcast, toPodcastPatch(values)),
+			refreshPodcast
+		);
 	}
 
 	// The image changes the podcast version (ETag): reload it before any further update.
-	async function uploadImage(file: File): Promise<void> {
-		await api.uploadPodcastImage(podcast, file);
-		await invalidate(LoadDependency.podcast);
+	function uploadImage(file: File): Promise<void> {
+		return changeThenRefresh(() => api.uploadPodcastImage(podcast, file), refreshPodcast);
 	}
 
-	async function deleteImage(): Promise<void> {
-		await api.deletePodcastImage(podcast);
-		await invalidate(LoadDependency.podcast);
+	function deleteImage(): Promise<void> {
+		return changeThenRefresh(() => api.deletePodcastImage(podcast), refreshPodcast);
 	}
 
 	async function deletePodcast(): Promise<void> {
@@ -55,15 +57,16 @@
 
 <section class="card" aria-labelledby="settings-title">
 	<h2 id="settings-title">Réglages du podcast</h2>
-	{#if savedMessage}
-		<p class="notice success" role="status">{savedMessage}</p>
-	{/if}
-	{#key data.podcast}
+	<!-- Keyed by identity only: a save keeps the form, and with it the focus. -->
+	{#key podcast.slug}
 		<PodcastForm
 			initialValues={podcastFormValues(podcast)}
 			slugEditable={false}
 			submitLabel="Enregistrer"
+			successMessage="Modifications enregistrées."
 			onSubmit={savePodcast}
+			onReload={refreshPodcast}
+			onPublishFeed={() => api.publishFeed(podcast)}
 		/>
 	{/key}
 </section>

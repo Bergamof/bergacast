@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { FeedPublication } from '../api/resources';
 	import {
 		emptyEpisodeFormValues,
 		validateAudioFile,
@@ -9,13 +10,19 @@
 	import EpisodeFields from './EpisodeFields.svelte';
 	import { newIdempotencyKey } from '../idempotency-key';
 	import FormField from './FormField.svelte';
+	import PendingButton from './PendingButton.svelte';
 	import ProblemAlert from './ProblemAlert.svelte';
+	import RecoveryActions from './RecoveryActions.svelte';
+	import RequiredFieldsLegend from './RequiredFieldsLegend.svelte';
+	import StatusMessage from './StatusMessage.svelte';
 
 	interface Props {
 		onSubmit: (values: EpisodeFormValues, audio: File, idempotencyKey: string) => Promise<void>;
+		/** Offered after a 503, when the episode may be saved but the feed not written. */
+		onPublishFeed: () => Promise<FeedPublication>;
 	}
 
-	let { onSubmit }: Props = $props();
+	let { onSubmit, onPublishFeed }: Props = $props();
 
 	let values = $state(emptyEpisodeFormValues());
 	let files = $state<FileList | undefined>();
@@ -32,16 +39,22 @@
 		return audioError === null ? errors : { ...errors, audio: audioError };
 	}
 
-	async function handleSubmit(event: SubmitEvent): Promise<void> {
+	async function handleSubmit(
+		event: SubmitEvent & { currentTarget: EventTarget & HTMLFormElement }
+	): Promise<void> {
 		event.preventDefault();
 		successMessage = '';
 		const title = values.title;
 		const audio = files?.[0];
-		const uploaded = await form.submit(validate, async () => {
-			if (audio) {
-				await onSubmit($state.snapshot(values), audio, idempotencyKey);
-			}
-		});
+		const uploaded = await form.submit(
+			validate,
+			async () => {
+				if (audio) {
+					await onSubmit($state.snapshot(values), audio, idempotencyKey);
+				}
+			},
+			event.currentTarget
+		);
 		if (uploaded) {
 			idempotencyKey = newIdempotencyKey();
 			successMessage = `Épisode « ${title} » publié.`;
@@ -55,13 +68,7 @@
 </script>
 
 <form novalidate onsubmit={handleSubmit}>
-	<ProblemAlert
-		problem={form.problem}
-		inlineFields={[...Object.keys(values), 'durationSeconds', 'audio']}
-	/>
-	{#if successMessage}
-		<p class="notice success" role="status">{successMessage}</p>
-	{/if}
+	<RequiredFieldsLegend />
 	<FormField id="episode-audio" label="Fichier audio" required error={form.fieldErrors.audio}>
 		{#snippet control(attributes)}
 			<input {...attributes} type="file" accept="audio/*" bind:files bind:this={fileInput} />
@@ -73,9 +80,15 @@
 		publicationDateRequired={false}
 		guidEditable={true}
 	/>
+	<ProblemAlert
+		problem={form.problem}
+		inlineFields={[...Object.keys(values), 'durationSeconds', 'audio']}
+	/>
+	<RecoveryActions problem={form.problem} {onPublishFeed} />
 	<div class="actions">
-		<button type="submit" disabled={form.pending}>
-			{form.pending ? 'Envoi en cours…' : 'Publier l’épisode'}
-		</button>
+		<PendingButton type="submit" pending={form.pending} pendingLabel="Envoi en cours…">
+			Publier l’épisode
+		</PendingButton>
+		<StatusMessage message={successMessage} />
 	</div>
 </form>

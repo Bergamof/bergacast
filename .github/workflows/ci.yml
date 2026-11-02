@@ -824,6 +824,15 @@ jobs:
             /api/v1/mon-podcast/episodes /api/v1/mon-podcast/episodes/ep-2 /api/v1/admin-users; do
             grep -q "^GET $path 200$" "$REQUEST_LOG" || { echo "No page fetched $path" >&2; exit 1; }
           done
+      # Keyboard and screen reader journeys (focus, status messages, 412/503, error page) and axe-core
+      # on every page, in a real browser on the same build and fake API (own servers, playwright.config.ts).
+      - name: Accessibility journeys (Playwright, axe-core)
+        id: journeys
+        if: ${{ !cancelled() }}
+        working-directory: frontend
+        env:
+          CI: true
+        run: npm run test:e2e
       - name: Upload the Lighthouse reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -832,15 +841,29 @@ jobs:
           path: frontend/.lighthouseci/reports/
           if-no-files-found: ignore
           retention-days: 7
+      - name: Upload the journey traces
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: accessibility-journeys
+          path: frontend/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Summarize
         id: summary
         if: always()
         env:
           MANIFEST: frontend/.lighthouseci/reports/manifest.json
+          JOURNEYS: frontend/test-results/e2e.json
         run: |
           python3 - <<'PY'
           import json, os
 
+          if os.path.isfile(os.environ["JOURNEYS"]):
+              stats = json.load(open(os.environ["JOURNEYS"], encoding="utf-8"))["stats"]
+              journeys = f"journeys: {stats['expected']} passed, {stats['unexpected']} failed"
+          else:
+              journeys = "journeys: no report"
           if os.path.isfile(os.environ["MANIFEST"]):
               runs = [run for run in json.load(open(os.environ["MANIFEST"], encoding="utf-8")) if run.get("isRepresentativeRun")]
               def lowest(category):
@@ -851,6 +874,7 @@ jobs:
               )
           else:
               summary = "Lighthouse: no report"
+          summary = f"{summary} · {journeys}"
           print(summary)
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
               out.write(f"summary={summary}\n")
@@ -1106,7 +1130,7 @@ jobs:
               ['frontend-dependencies', 'Frontend dependencies (npm audit)'],
               ['secrets', 'Secrets (gitleaks)'],
               ['codeql', 'CodeQL (Java, TypeScript, workflows)'],
-              ['frontend-lighthouse', 'Frontend Lighthouse (accessibility, best practices ≥ 90)'],
+              ['frontend-lighthouse', 'Frontend Lighthouse (≥ 90) and accessibility journeys (Playwright, axe)'],
             ];
             const icons = { success: '✅', failure: '❌', cancelled: '⚠️', skipped: '⚠️' };
             try {

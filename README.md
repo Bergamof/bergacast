@@ -317,6 +317,7 @@ Rapports : `build/reports/tests/test/`, `build/reports/jacoco/test/`, `build/rep
 | `npm run lint` | Prettier (vérification) + ESLint. |
 | `npm run check` | svelte-check (types, avertissements bloquants). |
 | `npm run test` | Vitest + couverture (`coverage/`). |
+| `npm run test:e2e` | Parcours clavier et lecteur d’écran + axe-core (Playwright, sur `build/` et l’API simulée de `lighthouse/` ; Chrome installé requis, ou `E2E_CHROMIUM_PATH`). Lancer `npm run build` avant. |
 | `npm run build` | Build statique dans `build/`. |
 
 ## Docker
