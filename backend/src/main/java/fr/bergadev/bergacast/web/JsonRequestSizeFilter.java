@@ -7,7 +7,11 @@ import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.InvalidMediaTypeException;
 import org.springframework.http.MediaType;
@@ -65,6 +69,7 @@ public class JsonRequestSizeFilter extends OncePerRequestFilter {
 
         private final DataSize limit;
         private @Nullable ServletInputStream limitedStream;
+        private @Nullable BufferedReader limitedReader;
 
         SizeLimitedRequest(HttpServletRequest request, DataSize limit) {
             super(request);
@@ -80,6 +85,16 @@ public class JsonRequestSizeFilter extends OncePerRequestFilter {
                 limitedStream = new SizeLimitedInputStream(super.getInputStream(), limit);
             }
             return limitedStream;
+        }
+
+        @Override
+        public BufferedReader getReader() throws IOException {
+            if (limitedReader == null) {
+                String encoding = getCharacterEncoding();
+                Charset charset = encoding == null ? StandardCharsets.UTF_8 : Charset.forName(encoding);
+                limitedReader = new BufferedReader(new InputStreamReader(getInputStream(), charset));
+            }
+            return limitedReader;
         }
     }
 
@@ -117,6 +132,11 @@ public class JsonRequestSizeFilter extends OncePerRequestFilter {
             if (bytesRead > limit.toBytes()) {
                 throw tooLarge(limit);
             }
+        }
+
+        @Override
+        public void close() throws IOException {
+            delegate.close();
         }
 
         @Override

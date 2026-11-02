@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import jakarta.servlet.ServletRequest;
 import java.io.InputStream;
+import java.io.Writer;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -44,6 +45,16 @@ class JsonRequestSizeFilterTest {
         request.setContentType("application/merge-patch+json");
 
         assertThatThrownBy(() -> readThroughFilter(request)).isInstanceOf(ContentTooLargeException.class);
+    }
+
+    @Test
+    void boundsTheReaderToo() throws Exception {
+        MockHttpServletRequest request = jsonRequest("/api/v1/podcasts", new byte[LIMIT + 1], -1);
+        MockFilterChain chain = new MockFilterChain();
+        filter.doFilter(request, new MockHttpServletResponse(), chain);
+
+        assertThatThrownBy(() -> chain.getRequest().getReader().transferTo(Writer.nullWriter()))
+                .isInstanceOf(ContentTooLargeException.class);
     }
 
     @Test

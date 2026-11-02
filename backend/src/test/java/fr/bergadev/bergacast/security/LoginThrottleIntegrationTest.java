@@ -32,7 +32,9 @@ class LoginThrottleIntegrationTest {
     void refusesLoginsWith429AfterThreeFailures() throws Exception {
         String username = "unknown-" + UUID.randomUUID();
         for (int attempt = 0; attempt < 3; attempt++) {
-            logIn(username, "wrong-password").andExpect(status().isUnauthorized());
+            logIn(username, "wrong-password")
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(header().doesNotExist(HttpHeaders.RETRY_AFTER));
         }
 
         logIn(username, "wrong-password")

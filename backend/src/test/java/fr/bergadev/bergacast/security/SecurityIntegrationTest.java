@@ -78,6 +78,16 @@ class SecurityIntegrationTest {
     }
 
     @Test
+    void boundsTheLoginCredentialsLikeTheStoredOnes() throws Exception {
+        mockMvc.perform(post("/api/v1/access-tokens")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"" + "u".repeat(101) + "\",\"password\":\"" + "p".repeat(73) + "\"}"))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.errors[0].field").value("password"))
+                .andExpect(jsonPath("$.errors[1].field").value("username"));
+    }
+
+    @Test
     void requiresABearerTokenOnTheAdminApi() throws Exception {
         mockMvc.perform(get("/api/v1/podcasts"))
                 .andExpect(status().isUnauthorized())

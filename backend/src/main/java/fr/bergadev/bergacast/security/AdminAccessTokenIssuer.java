@@ -6,9 +6,9 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
@@ -46,7 +46,7 @@ class AdminAccessTokenIssuer {
     /**
      * Issues a token for valid credentials.
      *
-     * @throws AuthenticationException when the credentials are invalid
+     * @throws org.springframework.security.core.AuthenticationException when the credentials are invalid
      * @throws fr.bergadev.bergacast.web.TooManyRequestsException while the username is blocked after failures
      */
     AccessTokenResponse issue(AccessTokenRequest credentials) {
@@ -68,18 +68,20 @@ class AdminAccessTokenIssuer {
                 token, TOKEN_TYPE, jwtProperties.lifetime().toSeconds());
     }
 
+    /** Only wrong credentials count as failures: an unavailable database must not block the administrator. */
     private AdminPrincipal authenticate(AccessTokenRequest credentials) {
         String username = credentials.username();
-        loginThrottle.checkAllowed(username);
-        Authentication authentication;
-        try {
-            authentication = adminAuthenticationManager.authenticate(
-                    UsernamePasswordAuthenticationToken.unauthenticated(username, credentials.password()));
-        } catch (AuthenticationException exception) {
-            loginThrottle.recordFailure(username);
-            throw exception;
+        try (LoginThrottle.LoginAttempt attempt = loginThrottle.begin(username)) {
+            Authentication authentication;
+            try {
+                authentication = adminAuthenticationManager.authenticate(
+                        UsernamePasswordAuthenticationToken.unauthenticated(username, credentials.password()));
+            } catch (BadCredentialsException wrongCredentials) {
+                attempt.failed();
+                throw wrongCredentials;
+            }
+            attempt.succeeded();
+            return (AdminPrincipal) authentication.getPrincipal();
         }
-        loginThrottle.recordSuccess(username);
-        return (AdminPrincipal) authentication.getPrincipal();
     }
 }

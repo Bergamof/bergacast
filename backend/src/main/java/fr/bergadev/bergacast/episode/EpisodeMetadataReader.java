@@ -1,6 +1,8 @@
 package fr.bergadev.bergacast.episode;
 
 import fr.bergadev.bergacast.web.BadRequestException;
+import fr.bergadev.bergacast.web.ContentTooLargeException;
+import fr.bergadev.bergacast.web.JsonRequestSizeFilter;
 import fr.bergadev.bergacast.web.RequestValidator;
 import fr.bergadev.bergacast.web.UnsupportedMediaTypeException;
 import jakarta.servlet.http.Part;
@@ -38,11 +40,16 @@ class EpisodeMetadataReader {
 
     /**
      * @throws UnsupportedMediaTypeException when the part declares a content type that cannot hold JSON
+     * @throws ContentTooLargeException when the part is larger than the JSON bodies of the API
      * @throws BadRequestException when the part is not a JSON object of the expected shape
      * @throws fr.bergadev.bergacast.web.UnprocessableContentException when the metadata are invalid
      */
     EpisodeInput read(Part metadata) {
         requireJsonCompatible(metadata.getContentType());
+        if (metadata.getSize() > JsonRequestSizeFilter.MAX_JSON_BODY.toBytes()) {
+            throw new ContentTooLargeException("The metadata part exceeds the maximum size of "
+                    + JsonRequestSizeFilter.MAX_JSON_BODY.toKilobytes() + " KiB");
+        }
         EpisodeInput input;
         try (InputStream content = metadata.getInputStream()) {
             input = jsonMapper.readValue(content, EpisodeInput.class);
