@@ -101,7 +101,7 @@ class CorsIntegrationTest {
     }
 
     @Test
-    void exposesEntityTagAndLocationToTheAllowedOrigin() throws Exception {
+    void exposesEntityTagLocationAndRetryAfterToTheAllowedOrigin() throws Exception {
         String slug = ApiTestClient.uniqueSlug("cors");
         api.createPodcast(slug);
 
@@ -112,7 +112,10 @@ class CorsIntegrationTest {
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN))
                 .andExpect(header().string(
                                 HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS,
-                                allOf(containsString(HttpHeaders.ETAG), containsString(HttpHeaders.LOCATION))))
+                                allOf(
+                                        containsString(HttpHeaders.ETAG),
+                                        containsString(HttpHeaders.LOCATION),
+                                        containsString(HttpHeaders.RETRY_AFTER))))
                 .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS));
     }
 

@@ -14,7 +14,7 @@ import java.util.UUID;
 @Table(name = "admin_user")
 public class AdminUser {
 
-    static final int MAX_USERNAME_LENGTH = 100;
+    public static final int MAX_USERNAME_LENGTH = 100;
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

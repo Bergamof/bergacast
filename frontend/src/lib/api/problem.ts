@@ -45,9 +45,10 @@ const DEFAULT_TITLES: Record<number, string> = {
 	404: 'Ressource introuvable',
 	409: 'Conflit',
 	412: 'Ressource modifiée entre-temps',
-	413: 'Fichier trop volumineux',
+	413: 'Contenu trop volumineux',
 	415: 'Type de contenu non supporté',
-	422: 'Données invalides'
+	422: 'Données invalides',
+	429: 'Trop de tentatives, réessayez plus tard'
 };
 
 function isFieldViolation(value: unknown): value is FieldViolation {

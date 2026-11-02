@@ -27,6 +27,13 @@ describe('toProblemDetails', () => {
 		});
 	});
 
+	it.each([
+		[413, 'Contenu trop volumineux'],
+		[429, 'Trop de tentatives, réessayez plus tard']
+	])('gives a French default title to status %i', (status, title) => {
+		expect(toProblemDetails(status, null).title).toBe(title);
+	});
+
 	it('falls back to a generic title for unknown statuses', () => {
 		expect(toProblemDetails(418, null).title).toBe('Erreur HTTP 418');
 	});

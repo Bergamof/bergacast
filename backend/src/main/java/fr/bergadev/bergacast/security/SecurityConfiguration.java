@@ -128,7 +128,7 @@ class SecurityConfiguration {
                 HttpHeaders.IF_MATCH,
                 HttpHeaders.IF_NONE_MATCH,
                 ApiHeaders.IDEMPOTENCY_KEY));
-        configuration.setExposedHeaders(List.of(HttpHeaders.ETAG, HttpHeaders.LOCATION));
+        configuration.setExposedHeaders(List.of(HttpHeaders.ETAG, HttpHeaders.LOCATION, HttpHeaders.RETRY_AFTER));
         configuration.setMaxAge(CORS_PREFLIGHT_CACHE);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration(API_PREFIX + "**", configuration);
