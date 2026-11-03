@@ -26,7 +26,7 @@ val springdocVersion = "3.2.0"
 val checkstyleVersion = "14.3.0"
 val jacocoVersion = "0.8.15"
 val palantirJavaFormatVersion = "2.102.0"
-val awsSdkVersion = "2.55.16"
+val awsSdkVersion = "2.57.7"
 
 // swagger-core (springdoc) imports jackson-bom 2.22.1, which wins over the Jackson 2 managed by Spring Boot and has
 // known vulnerabilities. Remove once springdoc ships a swagger-core built on Jackson >= 2.22.3.
