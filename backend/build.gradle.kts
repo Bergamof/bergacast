@@ -62,6 +62,14 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers-postgresql")
     // The tests build the schema with the migration module, as the migration job does in production (see settings).
     testImplementation("fr.bergadev:bergacast-migration")
+    constraints {
+        // The Spring Boot BOM manages Liquibase 5 (non-open-source FSL license): keep the version the module ships.
+        // Same version as migration/build.gradle.kts; a mismatch fails the resolution, which says to align them.
+        testImplementation("org.liquibase:liquibase-core") {
+            version { strictly("4.33.0") }
+            because("Liquibase 5 is under the Functional Source License; the migration module stays on 4.x")
+        }
+    }
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
