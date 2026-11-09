@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -29,7 +30,8 @@ class MigratorTest {
     /** What the application depends on: columns, constraints, indexes, triggers and their functions. */
     private static final List<String> SCHEMA_QUERIES = List.of(
             """
-            SELECT table_name, column_name, data_type, is_nullable, column_default
+            SELECT table_name, column_name, data_type, udt_name, character_maximum_length, numeric_precision,
+                   numeric_scale, is_nullable, column_default
             FROM information_schema.columns
             WHERE table_schema = 'public'
               AND table_name NOT IN %s
@@ -47,7 +49,14 @@ class MigratorTest {
             ORDER BY 1, 2""".formatted(TOOL_TABLES),
             "SELECT tgrelid::regclass, pg_get_triggerdef(oid) FROM pg_trigger WHERE NOT tgisinternal ORDER BY 1, 2",
             """
-            SELECT proname, prosrc FROM pg_proc WHERE pronamespace = 'public'::regnamespace ORDER BY 1""");
+            SELECT proname, pg_get_function_identity_arguments(oid), prosrc,
+                   (SELECT lanname FROM pg_language WHERE oid = prolang)
+            FROM pg_proc WHERE pronamespace = 'public'::regnamespace ORDER BY 1""",
+            """
+            SELECT relname, relkind FROM pg_class
+            WHERE relnamespace = 'public'::regnamespace
+              AND relname NOT LIKE ALL (ARRAY['flyway%%', 'databasechangelog%%'])
+            ORDER BY 1""");
 
     @Test
     void createsTheSchemaOfAnEmptyDatabase() throws Exception {
@@ -55,7 +64,8 @@ class MigratorTest {
 
         migrate(url);
 
-        assertThat(execType(url, "baseline-schema")).isEqualTo("EXECUTED");
+        assertThat(query(url, "SELECT id, exectype FROM databasechangelog ORDER BY orderexecuted"))
+                .containsExactly(List.of("baseline-schema", "EXECUTED"), List.of("drop-flyway-history", "MARK_RAN"));
         assertThat(tables(url))
                 .contains("podcast", "episode", "audio_file", "podcast_image", "api_token", "admin_user");
     }
@@ -68,7 +78,8 @@ class MigratorTest {
         migrate(migratedByLiquibase);
         applyFlywayMigrations(migratedByFlyway);
 
-        assertThat(schemaOf(migratedByLiquibase)).isEqualTo(schemaOf(migratedByFlyway));
+        List<List<String>> schema = schemaOf(migratedByLiquibase);
+        assertThat(schema).hasSizeGreaterThan(50).isEqualTo(schemaOf(migratedByFlyway));
     }
 
     @Test
@@ -140,6 +151,21 @@ class MigratorTest {
         assertThatThrownBy(() -> new Migrator().migrate(closed)).isInstanceOf(MigrationFailedException.class);
     }
 
+    /** The changeset runs in one transaction: nothing of a failed baseline stays, and a retry once fixed succeeds. */
+    @Test
+    void failsOnAChangesetThatCannotRunThenResumesOnceFixed() throws Exception {
+        String url = PostgresDatabases.createDatabase();
+        execute(url, "CREATE TABLE admin_user (id integer)");
+
+        assertThatThrownBy(() -> migrate(url)).isInstanceOf(MigrationFailedException.class);
+        assertThat(tables(url)).doesNotContain("podcast");
+
+        execute(url, "DROP TABLE admin_user");
+        migrate(url);
+
+        assertThat(tables(url)).contains("podcast");
+    }
+
     private static void migrate(String url) throws SQLException {
         new Migrator().migrate(PostgresDatabases.connect(url));
     }
@@ -148,7 +174,7 @@ class MigratorTest {
     private static void applyFlywayMigrations(String url) throws IOException, SQLException {
         for (String migration : FLYWAY_MIGRATIONS) {
             try (var script = MigratorTest.class.getResourceAsStream("/legacy-flyway/" + migration)) {
-                execute(url, new String(script.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+                execute(url, new String(script.readAllBytes(), StandardCharsets.UTF_8));
             }
         }
         execute(
