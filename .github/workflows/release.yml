@@ -1,24 +1,29 @@
 name: Release
 
-# Releases every commit of main verified by CI that changes a module (backend/, frontend/):
-# 1. plan: next version from the Conventional Commits since the last vX.Y.Z tag, modules changed since that tag
-#    (.github/scripts/release-plan.sh); nothing to release → stop;
-# 2. publish: image of each changed module, built with that version, pushed to the Scaleway Container Registry with
-#    the tags X.Y.Z, X.Y, X, latest and sha-<short sha>;
-# 3. tag: tag vX.Y.Z on the commit and GitHub release (.github/scripts/release-notes.sh), only once every image is
-#    published, so that a failed release is retried by a re-run or by the next one with the same version.
-# The tag is pushed with GITHUB_TOKEN, which triggers no workflow. Required configuration: secret SCW_SECRET_KEY (an
-# IAM API key allowed to push to the registry namespace).
+# Run by hand from main (Actions → Release → Run workflow). Releases the tip of main:
+# 1. ci: the CI of that commit (its push run) must be green; a CI still running is waited for, a failed, cancelled or
+#    missing one stops the release (.github/scripts/wait-for-ci.sh);
+# 2. plan: next version from every Conventional Commit since the last vX.Y.Z tag, modules changed since that tag
+#    (.github/scripts/release-plan.sh); nothing changed → stop;
+# 3. publish: image of each changed module (migration, backend, frontend), built with that version, pushed to the
+#    Scaleway Container Registry with the tags X.Y.Z, X.Y, X, latest and sha-<short sha>;
+# 4. migrate: when the migration image was published, the migration job runs on it and must succeed;
+# 5. deploy-backend, then deploy-frontend: the published containers are moved to the new images, the backend first, each
+#    only once the migration job (if any) and the previous deployment are over and successful;
+# 6. tag: tag vX.Y.Z on the commit and GitHub release (.github/scripts/release-notes.sh), only once everything above
+#    succeeded, so that a failed release is replayed by running the workflow again (same version, idempotent steps).
+# The tag is pushed with GITHUB_TOKEN, which triggers no workflow. Required configuration: secret SCW_SECRET_KEY (an IAM
+# API key allowed to push to the registry namespace) and the `production` environment, holding the secret
+# SCW_DEPLOY_SECRET_KEY (an IAM API key allowed to manage Serverless Jobs and Containers) and the variables
+# SCW_JOB_DEFINITION_ID, SCW_BACKEND_CONTAINER_ID and SCW_FRONTEND_CONTAINER_ID (optionally SCW_REGION, fr-par by
+# default). Protect the environment with required reviewers to ask for a confirmation before each deployment.
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
-# One release at a time: two merges in a row must not compute the same version.
+# One release at a time: two runs must not compute the same version nor deploy over each other.
 concurrency:
   group: release
   cancel-in-progress: false
@@ -26,14 +31,39 @@ concurrency:
 env:
   IMAGE_PREFIX: rg.fr-par.scw.cloud/bergacast/bergacast
 
+# The commit released is the one the workflow runs on, the tip of main.
 jobs:
+  ci:
+    name: CI of the commit
+    runs-on: ubuntu-latest
+    # CI jobs last up to 45 minutes: waiting for a run in progress must outlast them.
+    timeout-minutes: 100
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # A skipped job would look like a success: stop loudly when the workflow is run from another branch.
+      - name: Require main
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$REF" != refs/heads/main ]; then
+            echo "::error::Releases are made from main, not from $REF"
+            exit 1
+          fi
+      - name: Wait for the CI of the commit and require it green
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: .github/scripts/wait-for-ci.sh "$COMMIT_SHA"
+
   plan:
     name: Plan the release
-    # Only CI runs of pushes to main of this repository that succeeded: never code from a pull request (a fork
-    # branch named main runs CI as a pull_request event), so the checkouts below only fetch verified main commits.
-    if: >-
-      github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
-      && github.event.workflow_run.head_repository.full_name == github.repository
+    needs: ci
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -41,18 +71,17 @@ jobs:
       version: ${{ steps.plan.outputs.version }}
       previous-tag: ${{ steps.plan.outputs.previous-tag }}
       modules: ${{ steps.plan.outputs.modules }}
-      commit: ${{ github.event.workflow_run.head_sha }}
+      commit: ${{ github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
           # Full history and tags: the plan compares the commit with the last release tag.
           fetch-depth: 0
           persist-credentials: false
       - name: Plan
         id: plan
         env:
-          COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
           .github/scripts/release-plan.sh "$COMMIT_SHA" | tee -a "$GITHUB_OUTPUT" >> "$GITHUB_STEP_SUMMARY"
 
@@ -122,9 +151,82 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+  migrate:
+    name: Run the migration job
+    needs: [plan, publish]
+    if: >-
+      !cancelled() && needs.publish.result == 'success'
+      && contains(fromJSON(needs.plan.outputs.modules), 'migration')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.commit }}
+          persist-credentials: false
+      - name: Migrate the database
+        env:
+          SCW_SECRET_KEY: ${{ secrets.SCW_DEPLOY_SECRET_KEY }}
+          SCW_JOB_DEFINITION_ID: ${{ vars.SCW_JOB_DEFINITION_ID }}
+          SCW_REGION: ${{ vars.SCW_REGION || 'fr-par' }}
+          IMAGE: ${{ env.IMAGE_PREFIX }}-migration:${{ needs.plan.outputs.version }}
+        run: .github/scripts/run-migration-job.sh "$IMAGE"
+
+  deploy-backend:
+    name: Deploy the backend
+    needs: [plan, publish, migrate]
+    # The migration job, when it ran, has succeeded: a failed or cancelled one stops the deployments.
+    if: >-
+      !cancelled() && needs.publish.result == 'success' && needs.migrate.result != 'failure'
+      && needs.migrate.result != 'cancelled' && contains(fromJSON(needs.plan.outputs.modules), 'backend')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.commit }}
+          persist-credentials: false
+      - name: Deploy
+        env:
+          SCW_SECRET_KEY: ${{ secrets.SCW_DEPLOY_SECRET_KEY }}
+          SCW_REGION: ${{ vars.SCW_REGION || 'fr-par' }}
+          CONTAINER_ID: ${{ vars.SCW_BACKEND_CONTAINER_ID }}
+          IMAGE: ${{ env.IMAGE_PREFIX }}-backend:${{ needs.plan.outputs.version }}
+        run: .github/scripts/deploy-container.sh "$CONTAINER_ID" "$IMAGE"
+
+  deploy-frontend:
+    name: Deploy the frontend
+    needs: [plan, publish, migrate, deploy-backend]
+    # After the backend (when it is deployed) and only if nothing before failed.
+    if: >-
+      !cancelled() && needs.publish.result == 'success' && needs.migrate.result != 'failure'
+      && needs.migrate.result != 'cancelled' && needs.deploy-backend.result != 'failure'
+      && needs.deploy-backend.result != 'cancelled' && contains(fromJSON(needs.plan.outputs.modules), 'frontend')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.commit }}
+          persist-credentials: false
+      - name: Deploy
+        env:
+          SCW_SECRET_KEY: ${{ secrets.SCW_DEPLOY_SECRET_KEY }}
+          SCW_REGION: ${{ vars.SCW_REGION || 'fr-par' }}
+          CONTAINER_ID: ${{ vars.SCW_FRONTEND_CONTAINER_ID }}
+          IMAGE: ${{ env.IMAGE_PREFIX }}-frontend:${{ needs.plan.outputs.version }}
+        run: .github/scripts/deploy-container.sh "$CONTAINER_ID" "$IMAGE"
+
   tag:
     name: Tag v${{ needs.plan.outputs.version }}
-    needs: [plan, publish]
+    needs: [plan, publish, migrate, deploy-backend, deploy-frontend]
+    # Every step that ran succeeded (the others were skipped because their module did not change).
+    if: >-
+      !cancelled() && needs.plan.outputs.release == 'true' && !contains(needs.*.result, 'failure')
+      && !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
