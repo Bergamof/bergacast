@@ -65,7 +65,7 @@ Chaque module produit sa propre image. Le backend et le frontend sont déployés
   anciennes URL (`/{slug}.xml`, `/{slug}/image.{ext}`, `/{slug}/episodes/{id}/audio.{ext}`) vers le stockage ;
 - **frontend** (`frontend/Dockerfile`) : SPA statique servie par static-web-server à la racine de son domaine ; elle
   appelle l’API du backend (autre origine, CORS) dont l’URL est donnée au démarrage du conteneur ;
-- **migration** (`migration/Dockerfile`) : JRE sur distroless ; applique à la base les changements de schéma qu’elle n’a
+- **migration** (`migration/Dockerfile`) : JRE réduit (`jlink`) sur distroless ; applique à la base les changements de schéma qu’elle n’a
   pas encore reçus puis s’arrête (code de sortie `0` si la base est à jour). Le backend ne migre rien et ne lit pas la
   base pour démarrer.
 
@@ -358,7 +358,7 @@ Trois images, une par module, construites chacune depuis son dossier (contexte `
 | Image | Étapes | Taille / mémoire |
 |-------|--------|------------------|
 | `bergacast-backend` | `ghcr.io/graalvm/native-image-community:25` (AOT Spring + `nativeCompile`) → `gcr.io/distroless/base-debian13:nonroot` (glibc seule, pas de shell, utilisateur `nonroot`) | ~ 190 Mo, ~ 110–120 Mo de RAM (tient dans 256 Mo, upload de 200 Mo compris), démarrage ~ 1 s |
-| `bergacast-migration` | `eclipse-temurin:25-jdk` (Gradle `installDist`) → `gcr.io/distroless/java25-debian13:nonroot` (JRE seul, pas de shell) | s’arrête une fois la base à jour |
+| `bergacast-migration` | `eclipse-temurin:25-jdk` (Gradle `installDist`, JRE réduit par `jlink`) → `gcr.io/distroless/base-debian13:nonroot` (comme le backend, pas de shell) | s’arrête une fois la base à jour |
 | `bergacast-frontend` | `node:24-alpine` (build statique, précompressé brotli/gzip) → `joseluisq/static-web-server:2.44.1-alpine` (utilisateur `sws`) | ~ 18 Mo, ~ 10 Mo de RAM |
 
 ```sh
