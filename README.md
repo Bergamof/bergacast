@@ -422,6 +422,16 @@ fois dans la console Scaleway (*Serverless → Jobs → Create job definition*) 
 - aucune planification : le job se lance à la demande, avant chaque mise à jour du backend qui change le schéma
   (`scw jobs definition start <id>`), et le backend ne se redéploie qu’une fois le run terminé avec succès.
 
+Deux rôles de base de données sont recommandés : celui du job possède le schéma (`CREATE`, `ALTER`, `DROP`, et
+l’écriture dans `databasechangelog*`) ; celui du backend n’a que `SELECT`, `INSERT`, `UPDATE`, `DELETE` sur les
+tables, pour qu’une compromission du backend ne puisse pas modifier le schéma. Les tables appartenant au rôle du job,
+le backend ne peut les lire qu’après des `GRANT` (ou `ALTER DEFAULT PRIVILEGES`) qu’aucune migration ne pose : sur
+Serverless SQL, où un seul principal sert souvent aux deux usages, c’est une limite acceptée tant que les deux rôles
+ne sont pas séparés.
+
+Un backend déployé avant la fin du job démarre (la sonde de vivacité ne lit pas la base) et ne signale le schéma
+manquant qu’à la première requête : ne le redéployer qu'une fois le run terminé avec succès.
+
 Liquibase verrouille la base par une ligne de sa table `DATABASECHANGELOGLOCK` (pas par un verrou consultatif
 PostgreSQL) : deux runs simultanés ne migrent pas en même temps. Au premier run sur la base de production, le schéma
 que Flyway avait créé est reconnu et simplement noté comme appliqué (rien n’est recréé), puis la table

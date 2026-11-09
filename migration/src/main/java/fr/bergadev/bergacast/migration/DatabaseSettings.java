@@ -25,9 +25,13 @@ public record DatabaseSettings(String url, String username, String password) {
                 environment.get(URL_VARIABLE), environment.get(USERNAME_VARIABLE), environment.get(PASSWORD_VARIABLE));
     }
 
-    /** The password never ends up in a log through a stray {@code toString}. */
+    /**
+     * Fit for a log: neither the password nor the query string of the URL, which may carry one ({@code ?password=}).
+     */
     @Override
     public String toString() {
-        return "DatabaseSettings[url=" + url + ", username=" + username + "]";
+        int queryStart = url.indexOf('?');
+        String withoutQuery = queryStart < 0 ? url : url.substring(0, queryStart);
+        return "DatabaseSettings[url=" + withoutQuery + ", username=" + username + "]";
     }
 }

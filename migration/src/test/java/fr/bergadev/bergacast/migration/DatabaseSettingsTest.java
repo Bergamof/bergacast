@@ -47,4 +47,14 @@ class DatabaseSettingsTest {
                 .contains("migrator")
                 .doesNotContain("s3cret");
     }
+
+    @Test
+    void neverPrintsTheQueryStringOfTheUrl() {
+        DatabaseSettings settings =
+                new DatabaseSettings("jdbc:postgresql://db/bergacast?user=a&password=leaked", "migrator", "s3cret");
+
+        assertThat(settings.toString())
+                .contains("jdbc:postgresql://db/bergacast")
+                .doesNotContain("leaked");
+    }
 }
