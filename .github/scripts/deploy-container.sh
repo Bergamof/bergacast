@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Points a serverless container at an image (which makes the platform roll out a new revision) and waits until the
-# container serves that image: fails when it ends in error or never gets ready.
+# Points a serverless container at an image (which makes the platform roll out a new revision; a container already on
+# that reference is redeployed instead) and waits until the container serves that image: fails when it ends in error or
+# never gets ready.
 #
 # Usage: SCW_SECRET_KEY=… deploy-container.sh <container uuid> <image reference>
 # Environment: see scaleway.bash; DEPLOY_POLL_SECONDS (10), DEPLOY_TIMEOUT_SECONDS (900), DEPLOY_GRACE_SECONDS (30:
@@ -23,15 +24,22 @@ require_match "region" "$SCW_REGION" "$SCW_REGION_PATTERN"
 container_path="/containers/v1/regions/$SCW_REGION/containers/$container_id"
 
 echo "Container $container_id: image $image"
-container=$(scw_api PATCH "$container_path" "$(jq -nc --arg image "$image" '{image: $image}')")
+current=$(scw_api GET "$container_path")
+if [ "$(jq -r .image <<<"$current")" = "$image" ]; then
+    # Same reference (a replay, or a tag published again): updating it would change nothing, so the platform is asked
+    # to roll out the image the tag points to now.
+    container=$(scw_api POST "$container_path/redeploy" '{}')
+else
+    container=$(scw_api PATCH "$container_path" "$(jq -nc --arg image "$image" '{image: $image}')")
+fi
 
 started=$SECONDS
 rolling_out=false
 while true; do
     status=$(jq -r .status <<<"$container")
     case "$status" in
-        error | locked)
-            echo "Container $container_id is $status: $(jq -r '.error_message // "no error message"' <<<"$container")" >&2
+        error | locked | deleting | unknown_status)
+            echo "Container $container_id is $status: $(error_message_of <<<"$container")" >&2
             exit 1
             ;;
         ready) ;;

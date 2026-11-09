@@ -15,13 +15,21 @@ require_match() {
 }
 
 # scw_api <method> <path> [json body]: prints the response body, fails on an HTTP error (the body goes to stderr).
-# The key goes through a configuration read from a descriptor, so it never shows in a process list.
+# The key goes through a configuration read from a descriptor, so it never shows in a process list. Only reads are
+# retried: replaying a write that went through (a job start) would do it twice.
 scw_api() {
     local method="$1" path="$2" body="${3:-}"
-    local -a data=()
+    local -a data=() retry=()
     [ -z "$body" ] || data=(--data "$body")
-    curl --silent --show-error --fail-with-body --retry 3 --max-time 60 \
+    [ "$method" != GET ] || retry=(--retry 3)
+    curl --silent --show-error --fail-with-body "${retry[@]}" --max-time 60 \
         --config <(printf 'header = "X-Auth-Token: %s"\n' "$SCW_SECRET_KEY") \
         --header 'Content-Type: application/json' \
         --request "$method" "${data[@]}" "$SCW_API_URL$path"
+}
+
+# error_message_of: the error message of the JSON read on the standard input, cut short (it comes from the platform and
+# may quote arbitrary text).
+error_message_of() {
+    jq -r '(.error_message // "no error message")[0:300]'
 }

@@ -21,6 +21,10 @@ jobs_path="/serverless-jobs/v1alpha2/regions/$SCW_REGION"
 definition_path="$jobs_path/job-definitions/$SCW_JOB_DEFINITION_ID"
 
 echo "Migration job: image $image"
+# Two migrations must never run at once (a run of an earlier attempt may still be going on).
+unfinished=$(scw_api GET "$jobs_path/job-runs?job_definition_id=$SCW_JOB_DEFINITION_ID&page_size=100" \
+    | jq '[.job_runs[] | select(.state | IN("succeeded", "failed", "interrupted") | not)] | length')
+[ "$unfinished" -eq 0 ] || { echo "$unfinished run(s) of the migration job are still in progress" >&2; exit 1; }
 scw_api PATCH "$definition_path" "$(jq -nc --arg image "$image" '{image_uri: $image}')" >/dev/null
 run_id=$(scw_api POST "$definition_path/start" '{}' \
     | jq -er '.job_runs | if length == 1 then .[0].id else error("expected one job run") end')
@@ -36,8 +40,8 @@ while true; do
             echo "Migration job run $run_id succeeded"
             exit 0
             ;;
-        failed | interrupted)
-            echo "Migration job run $run_id $state: $(jq -r '.error_message // "no error message"' <<<"$run")" >&2
+        failed | interrupted | canceled)
+            echo "Migration job run $run_id $state: $(error_message_of <<<"$run")" >&2
             exit 1
             ;;
         *) echo "Migration job run $run_id: $state" ;;

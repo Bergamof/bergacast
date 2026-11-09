@@ -22,20 +22,33 @@ container() {
 }
 
 @test "updates the image and waits until the container is ready on it" {
-    stub_command curl "$(container updating "$OLD_IMAGE")" "$(container updating "$IMAGE")" "$(container ready "$IMAGE")"
+    stub_command curl "$(container ready "$OLD_IMAGE")" "$(container updating "$IMAGE")" "$(container updating "$IMAGE")" "$(container ready "$IMAGE")"
 
     deploy "$CONTAINER_ID" "$IMAGE"
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"is ready on $IMAGE"* ]]
-    calls_of curl | sed -n 1p | grep -F -- "--request PATCH"
-    calls_of curl | sed -n 1p | grep -F "/containers/v1/regions/fr-par/containers/$CONTAINER_ID"
-    calls_of curl | sed -n 1p | grep -F "\"image\":\"$IMAGE\""
-    calls_of curl | sed -n 2,3p | grep -F -- "--request GET"
+    calls_of curl | sed -n 1p | grep -F -- "--request GET"
+    calls_of curl | sed -n 2p | grep -F -- "--request PATCH"
+    calls_of curl | sed -n 2p | grep -F "/containers/v1/regions/fr-par/containers/$CONTAINER_ID"
+    calls_of curl | sed -n 2p | grep -F "\"image\":\"$IMAGE\""
+    calls_of curl | sed -n 3,4p | grep -F -- "--request GET"
+}
+
+@test "redeploys a container already on the image reference instead of updating it" {
+    stub_command curl "$(container ready "$IMAGE")" "$(container upgrading "$IMAGE")" "$(container ready "$IMAGE")"
+
+    deploy "$CONTAINER_ID" "$IMAGE"
+
+    [ "$status" -eq 0 ]
+    calls_of curl | sed -n 2p | grep -F -- "--request POST"
+    calls_of curl | sed -n 2p | grep -F "/containers/$CONTAINER_ID/redeploy"
+    ! calls_of curl | grep -F -- "--request PATCH"
 }
 
 @test "does not take the ready container of the old revision for a finished rollout" {
     stub_command curl \
+        "$(container ready "$OLD_IMAGE")" \
         "$(container ready "$OLD_IMAGE")" \
         "$(container ready "$OLD_IMAGE")" \
         "$(container upgrading "$IMAGE")" \
@@ -44,12 +57,12 @@ container() {
     deploy "$CONTAINER_ID" "$IMAGE"
 
     [ "$status" -eq 0 ]
-    [ "$(calls_of curl | wc -l)" -eq 4 ]
+    [ "$(calls_of curl | wc -l)" -eq 5 ]
 }
 
 @test "accepts a ready container on the new image once the grace period is over" {
     export DEPLOY_GRACE_SECONDS=0
-    stub_command curl "$(container ready "$IMAGE")"
+    stub_command curl "$(container ready "$OLD_IMAGE")" "$(container ready "$IMAGE")"
 
     deploy "$CONTAINER_ID" "$IMAGE"
 
@@ -67,7 +80,7 @@ container() {
 }
 
 @test "fails with the message of a container in error" {
-    stub_command curl "$(container updating "$IMAGE")" "$(container error "$IMAGE" '"image not found"')"
+    stub_command curl "$(container ready "$OLD_IMAGE")" "$(container updating "$IMAGE")" "$(container error "$IMAGE" '"image not found"')"
 
     deploy "$CONTAINER_ID" "$IMAGE"
 
@@ -75,8 +88,17 @@ container() {
     [[ "$stderr" == *"is error: image not found"* ]]
 }
 
+@test "fails on a container being deleted" {
+    stub_command curl "$(container ready "$OLD_IMAGE")" "$(container deleting "$IMAGE")"
+
+    deploy "$CONTAINER_ID" "$IMAGE"
+
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"is deleting"* ]]
+}
+
 @test "fails on a locked container" {
-    stub_command curl "$(container locked "$IMAGE")"
+    stub_command curl "$(container ready "$OLD_IMAGE")" "$(container locked "$IMAGE")"
 
     deploy "$CONTAINER_ID" "$IMAGE"
 
@@ -86,7 +108,7 @@ container() {
 
 @test "fails when the rollout does not end in time" {
     export DEPLOY_TIMEOUT_SECONDS=0
-    stub_command curl "$(container updating "$IMAGE")"
+    stub_command curl "$(container ready "$OLD_IMAGE")" "$(container updating "$IMAGE")"
 
     deploy "$CONTAINER_ID" "$IMAGE"
 
@@ -95,12 +117,12 @@ container() {
 }
 
 @test "fails when the API refuses the update" {
-    stub_command curl "FAIL HTTP 403"
+    stub_command curl "$(container ready "$OLD_IMAGE")" "FAIL HTTP 403"
 
     deploy "$CONTAINER_ID" "$IMAGE"
 
     [ "$status" -ne 0 ]
-    [ "$(calls_of curl | wc -l)" -eq 1 ]
+    [ "$(calls_of curl | wc -l)" -eq 2 ]
 }
 
 @test "rejects an invalid container id, image or region before any call" {

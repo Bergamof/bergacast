@@ -16,7 +16,8 @@ name: Release
 # API key allowed to push to the registry namespace) and the `production` environment, holding the secret
 # SCW_DEPLOY_SECRET_KEY (an IAM API key allowed to manage Serverless Jobs and Containers) and the variables
 # SCW_JOB_DEFINITION_ID, SCW_BACKEND_CONTAINER_ID and SCW_FRONTEND_CONTAINER_ID (optionally SCW_REGION, fr-par by
-# default). Protect the environment with required reviewers to ask for a confirmation before each deployment.
+# default). Restrict the environment to the `main` branch (deployment branches) so that no other branch can reach its
+# secrets, and add required reviewers to ask for a confirmation before each deployment.
 on:
   workflow_dispatch:
 
@@ -143,9 +144,10 @@ jobs:
       - name: Summarize
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
+          MODULE: ${{ matrix.module }}
         run: |
           {
-            echo "### bergacast-${{ matrix.module }}"
+            echo "### bergacast-$MODULE"
             echo '```'
             echo "$TAGS"
             echo '```'
@@ -253,6 +255,11 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG: v${{ needs.plan.outputs.version }}
           COMMIT_SHA: ${{ needs.plan.outputs.commit }}
-        run: >-
-          gh release create "$TAG" --target "$COMMIT_SHA" --title "$TAG"
-          --notes-file "$RUNNER_TEMP/release-notes.md" --latest
+        # A replay after the release was created but the job failed since: the release is already there.
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists"
+          else
+            gh release create "$TAG" --target "$COMMIT_SHA" --title "$TAG" \
+              --notes-file "$RUNNER_TEMP/release-notes.md" --latest
+          fi

@@ -426,8 +426,15 @@ Configuration requise :
 - environnement GitHub `production` (*Settings → Environments*), utilisé par la migration et les déploiements :
   secret `SCW_DEPLOY_SECRET_KEY` (clé d’API IAM distincte, autorisée à gérer les Serverless Jobs et les Serverless
   Containers), variables `SCW_JOB_DEFINITION_ID` (job de migration), `SCW_BACKEND_CONTAINER_ID`,
-  `SCW_FRONTEND_CONTAINER_ID` (UUID) et, hors `fr-par`, `SCW_REGION`. Ajouter des *required reviewers* à
-  l’environnement pour confirmer chaque déploiement.
+  `SCW_FRONTEND_CONTAINER_ID` (UUID) et, hors `fr-par`, `SCW_REGION`. Limiter l’environnement à la branche `main`
+  (*Deployment branches*), faute de quoi un workflow modifié sur une autre branche pourrait lire ces secrets, et y
+  ajouter des *required reviewers* pour confirmer chaque déploiement. `SCW_SECRET_KEY` (registry) est un secret de
+  dépôt : protéger `main` par un ruleset (pull request obligatoire) limite qui peut modifier le workflow qui le lit.
+
+Limites connues : un conteneur est déployé par tag (`X.Y.Z`), pas par empreinte (`@sha256:…`) : un tag republié par un
+rejeu depuis un autre commit n’est pris en compte que par un `redeploy`, que le script déclenche quand le conteneur est
+déjà sur ce tag (déploiement par empreinte : à voir avec #37). Une migration réussie suivie d’un déploiement du backend
+en échec laisse le schéma en avance sur le code : d’où des migrations compatibles avec la version précédente.
 
 ### Migration de la base (Scaleway Serverless Job)
 
