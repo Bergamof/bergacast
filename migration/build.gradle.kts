@@ -23,6 +23,9 @@ repositories {
 
 val liquibaseVersion = "4.33.0" // last 4.x line (Apache-2.0): Liquibase 5 moved to the non-open-source FSL license
 val postgresqlDriverVersion = "42.7.14"
+// The same password encoder as the backend (Spring Security delegating encoder), so that it can check what is stored.
+val springSecurityCryptoVersion = "7.1.2"
+val springCoreVersion = "7.0.10"
 val junitVersion = "6.0.3"
 val assertjVersion = "3.27.7"
 val testcontainersVersion = "2.0.5"
@@ -37,6 +40,9 @@ dependencies {
         implementation("org.apache.commons:commons-lang3:3.18.0")
     }
     runtimeOnly("org.postgresql:postgresql:$postgresqlDriverVersion")
+    implementation("org.springframework.security:spring-security-crypto:$springSecurityCryptoVersion")
+    // Spring Security crypto uses its annotations and, through it, commons-logging.
+    implementation("org.springframework:spring-core:$springCoreVersion")
 
     testImplementation(platform("org.junit:junit-bom:$junitVersion"))
     testImplementation("org.junit.jupiter:junit-jupiter")

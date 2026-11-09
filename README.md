@@ -235,13 +235,14 @@ L’application se configure par variables d’environnement (liées aux propri�
 | `BERGACAST_STORAGE_ACCESS_KEY` / `BERGACAST_STORAGE_SECRET_KEY` | *(aucun, obligatoires)* | Clé d’API autorisée à écrire et supprimer dans le bucket. |
 | `BERGACAST_CORS_ALLOWED_ORIGINS` | *(vide : aucune)* | Origines (séparées par des virgules) autorisées à appeler l’API depuis un navigateur : l’URL publique de la SPA d’administration, par ex. `https://admin.example.com`. |
 | `PORT` | `8080` | Port d’écoute (fourni par la plateforme serverless). |
-| `BERGACAST_ADMIN_USERNAME` / `BERGACAST_ADMIN_PASSWORD` | *(vides)* | Administrateur créé au démarrage s’il n’en existe aucun (mot de passe ≥ 12 caractères). Non renseignés : simple avertissement dans les logs. |
 | `BERGACAST_MAX_UPLOAD_SIZE` | `500MB` | Taille maximale d’un upload (fichier et requête multipart). |
 | `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/bergacast` | URL JDBC de PostgreSQL 18. |
 | `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | `bergacast` / `bergacast` | Identifiants PostgreSQL. |
 
 L’image de migration prend `BERGACAST_DATASOURCE_URL` (URL JDBC), `BERGACAST_DATASOURCE_USERNAME` et
-`BERGACAST_DATASOURCE_PASSWORD` (tous obligatoires). L’utilisateur doit pouvoir créer et modifier les tables ;
+`BERGACAST_DATASOURCE_PASSWORD` (tous obligatoires), et `BERGACAST_ADMIN_USERNAME` / `BERGACAST_ADMIN_PASSWORD`
+(ensemble, mot de passe de 12 à 72 octets, au moins 12 caractères) : l’administrateur que le job crée **s’il n’en
+existe aucun** (jamais ensuite : les autres se gèrent par l’API). Non renseignés, le job le signale par un avertissement. L’utilisateur doit pouvoir créer et modifier les tables ;
 `SPRING_DATASOURCE_*` du backend ne lui sert à rien, elle ne migre pas.
 
 L’image frontend ne prend que `BERGACAST_API_URL` (obligatoire : origine publique du backend, par ex.
@@ -276,15 +277,16 @@ S3Mock local (bucket `bergacast`, sans authentification). Modèle : [`.env.examp
    ```sh
    BERGACAST_DATASOURCE_URL=jdbc:postgresql://localhost:5432/bergacast \
    BERGACAST_DATASOURCE_USERNAME=bergacast BERGACAST_DATASOURCE_PASSWORD=bergacast \
+   BERGACAST_ADMIN_USERNAME=admin BERGACAST_ADMIN_PASSWORD=change-me-please-123 \
    ./gradlew run
    ```
+
+   Le job crée aussi l’administrateur (`admin`) s’il n’y en a pas encore.
 
 4. **Backend** (dans `backend/`, Java 25 actif) — le schéma doit déjà exister :
 
    ```sh
    BERGACAST_JWT_SECRET="$(openssl rand -base64 48)" \
-   BERGACAST_ADMIN_USERNAME=admin \
-   BERGACAST_ADMIN_PASSWORD=change-me-please-123 \
    BERGACAST_STORAGE_ENDPOINT=http://localhost:9090 BERGACAST_STORAGE_BUCKET=bergacast \
    BERGACAST_STORAGE_ACCESS_KEY=local BERGACAST_STORAGE_SECRET_KEY=local \
    BERGACAST_MEDIA_BASE_URL=http://localhost:9090/bergacast \
@@ -418,7 +420,8 @@ fois dans la console Scaleway (*Serverless → Jobs → Create job definition*) 
 - image `bergacast-migration`, tag `X.Y.Z` de la version à déployer ; 512 Mo de mémoire (la JVM et Liquibase) ;
 - variables `BERGACAST_DATASOURCE_URL` (`jdbc:postgresql://<hôte>:<port>/<base>`), `BERGACAST_DATASOURCE_USERNAME` et, en
   variable **secrète**, `BERGACAST_DATASOURCE_PASSWORD` (Serverless SQL : utilisateur = ID du principal IAM, mot de passe
-  = secret key d’une clé d’API de ce principal) ;
+  = secret key d’une clé d’API de ce principal) ; `BERGACAST_ADMIN_USERNAME` et, en variable **secrète**,
+  `BERGACAST_ADMIN_PASSWORD` (administrateur créé s’il n’en existe aucun) ;
 - aucune planification : le job se lance à la demande, avant chaque mise à jour du backend qui change le schéma
   (`scw jobs definition start <id>`), et le backend ne se redéploie qu’une fois le run terminé avec succès.
 

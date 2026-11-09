@@ -100,6 +100,3 @@ bergacast:
   cors:
     # Comma-separated origins of the admin SPA, e.g. https://admin.example.com
     allowed-origins: ${BERGACAST_CORS_ALLOWED_ORIGINS:}
-  admin:
-    username: ${BERGACAST_ADMIN_USERNAME:}
-    password: ${BERGACAST_ADMIN_PASSWORD:}

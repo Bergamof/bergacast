@@ -1,8 +1,7 @@
 package fr.bergadev.bergacast.support;
 
-import fr.bergadev.bergacast.migration.Migrator;
-import java.sql.DriverManager;
-import java.sql.SQLException;
+import fr.bergadev.bergacast.migration.MigrationMain;
+import java.util.Map;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
@@ -31,15 +30,18 @@ public class TestcontainersConfiguration {
             .withExposedPorts(S3MOCK_HTTP_PORT)
             .waitingFor(Wait.forHttp("/").forPort(S3MOCK_HTTP_PORT));
 
+    /** The database as the migration job leaves it: migrated, with the administrator the tests log in as. */
     private static PostgreSQLContainer migratedPostgres() {
         PostgreSQLContainer postgres = new PostgreSQLContainer(DockerImageName.parse("postgres:18"));
         postgres.start();
-        try {
-            new Migrator()
-                    .migrate(DriverManager.getConnection(
-                            postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword()));
-        } catch (SQLException e) {
-            throw new IllegalStateException("The test database could not be migrated", e);
+        int status = MigrationMain.run(Map.of(
+                "BERGACAST_DATASOURCE_URL", postgres.getJdbcUrl(),
+                "BERGACAST_DATASOURCE_USERNAME", postgres.getUsername(),
+                "BERGACAST_DATASOURCE_PASSWORD", postgres.getPassword(),
+                "BERGACAST_ADMIN_USERNAME", ApiTestClient.ADMIN_USERNAME,
+                "BERGACAST_ADMIN_PASSWORD", ApiTestClient.ADMIN_PASSWORD));
+        if (status != MigrationMain.SUCCESS) {
+            throw new IllegalStateException("The test database could not be migrated");
         }
         return postgres;
     }

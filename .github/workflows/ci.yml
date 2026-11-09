@@ -949,12 +949,15 @@ jobs:
           tags: bergacast-migration:ci
           cache-from: type=gha,scope=migration-image
           cache-to: type=gha,scope=migration-image,mode=max
+      # The migration job also creates the administrator the smoke test logs in as.
       - name: Migrate the database
         run: >-
           docker run --rm --network host
           -e BERGACAST_DATASOURCE_URL=jdbc:postgresql://localhost:5432/bergacast
           -e BERGACAST_DATASOURCE_USERNAME=bergacast
           -e BERGACAST_DATASOURCE_PASSWORD=bergacast
+          -e BERGACAST_ADMIN_USERNAME="$ADMIN_USERNAME"
+          -e BERGACAST_ADMIN_PASSWORD="$ADMIN_PASSWORD"
           bergacast-migration:ci
       - name: Start the image against PostgreSQL and the object storage
         id: start
@@ -968,8 +971,6 @@ jobs:
             -e BERGACAST_MEDIA_BASE_URL="$MEDIA_URL" \
             -e SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/bergacast \
             -e BERGACAST_JWT_SECRET="$(openssl rand -base64 48)" \
-            -e BERGACAST_ADMIN_USERNAME="$ADMIN_USERNAME" \
-            -e BERGACAST_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
             -e BERGACAST_CORS_ALLOWED_ORIGINS="$CORS_ORIGIN" \
             -e BERGACAST_PUBLIC_BASE_URL=http://localhost:8080 \
             "$IMAGE"
