@@ -127,6 +127,8 @@ jobs:
           cache-dependency-path: |
             backend/*.gradle*
             backend/gradle/wrapper/gradle-wrapper.properties
+            migration/*.gradle*
+            migration/gradle/wrapper/gradle-wrapper.properties
       - name: Spotless and Checkstyle
         working-directory: backend
         run: ./gradlew --continue --console=plain spotlessCheck checkstyleMain checkstyleTest 2>&1 | tee "$RUNNER_TEMP/backend-lint.log"
@@ -184,6 +186,8 @@ jobs:
           cache-dependency-path: |
             backend/*.gradle*
             backend/gradle/wrapper/gradle-wrapper.properties
+            migration/*.gradle*
+            migration/gradle/wrapper/gradle-wrapper.properties
       - name: Tests (Testcontainers PostgreSQL) and JaCoCo report
         working-directory: backend
         run: ./gradlew test
@@ -257,6 +261,8 @@ jobs:
           cache-dependency-path: |
             backend/*.gradle*
             backend/gradle/wrapper/gradle-wrapper.properties
+            migration/*.gradle*
+            migration/gradle/wrapper/gradle-wrapper.properties
       - name: Boot jar
         working-directory: backend
         run: ./gradlew bootJar
@@ -302,6 +308,8 @@ jobs:
           cache-dependency-path: |
             backend/*.gradle*
             backend/gradle/wrapper/gradle-wrapper.properties
+            migration/*.gradle*
+            migration/gradle/wrapper/gradle-wrapper.properties
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
@@ -930,6 +938,24 @@ jobs:
           tags: ${{ env.IMAGE }}
           cache-from: type=gha,scope=backend-image
           cache-to: type=gha,scope=backend-image,mode=max
+      # The backend no longer migrates the database: the migration image does, as the job of the platform does it.
+      - name: Build the migration image (not pushed)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: migration
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: bergacast-migration:ci
+          cache-from: type=gha,scope=migration-image
+          cache-to: type=gha,scope=migration-image,mode=max
+      - name: Migrate the database
+        run: >-
+          docker run --rm --network host
+          -e BERGACAST_DATASOURCE_URL=jdbc:postgresql://localhost:5432/bergacast
+          -e BERGACAST_DATASOURCE_USERNAME=bergacast
+          -e BERGACAST_DATASOURCE_PASSWORD=bergacast
+          bergacast-migration:ci
       - name: Start the image against PostgreSQL and the object storage
         id: start
         run: |
@@ -1080,6 +1106,198 @@ jobs:
             echo "image-size-bytes=$bytes"
           } >> "$GITHUB_OUTPUT"
 
+  migration-check:
+    name: Migration lint and tests
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version-file: .sdkmanrc
+          cache: gradle
+          cache-dependency-path: |
+            migration/*.gradle*
+            migration/gradle/wrapper/gradle-wrapper.properties
+      # Spotless, Checkstyle (rules of the backend) and the tests (Testcontainers PostgreSQL: empty database, database
+      # migrated by Flyway before, idempotence).
+      - name: Check
+        working-directory: migration
+        run: ./gradlew --console=plain check
+      - name: Summarize
+        id: summary
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob, os
+          import xml.etree.ElementTree as ET
+
+          tests = failed = skipped = 0
+          files = glob.glob("migration/build/test-results/test/*.xml")
+          for path in files:
+              try:
+                  root = ET.parse(path).getroot()
+              except ET.ParseError:
+                  continue
+              for suite in [root] if root.tag == "testsuite" else root.iter("testsuite"):
+                  tests += int(suite.get("tests", 0))
+                  failed += int(suite.get("failures", 0)) + int(suite.get("errors", 0))
+                  skipped += int(suite.get("skipped", 0))
+          summary = f"{tests - failed - skipped} passed, {failed} failed, {skipped} skipped" if files else "no test report"
+          print(summary)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"summary={summary}\n")
+          PY
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: migration-test-reports
+          path: |
+            migration/build/reports/tests/test/
+            migration/build/test-results/test/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  migration-dependencies:
+    name: Migration dependencies (CVE)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version-file: .sdkmanrc
+          cache: gradle
+          cache-dependency-path: |
+            migration/*.gradle*
+            migration/gradle/wrapper/gradle-wrapper.properties
+      # The jars the image runs, Liquibase and its dependencies included.
+      - name: Runtime dependencies
+        working-directory: migration
+        run: ./gradlew --console=plain installDist
+      - name: Trivy
+        uses: ./.github/actions/trivy-scan
+        with:
+          scan-type: rootfs
+          target: migration/build/install/bergacast-migration/lib
+          summary-file: ${{ runner.temp }}/trivy.summary
+      - name: Summarize
+        id: summary
+        if: always()
+        env:
+          SUMMARY_FILE: ${{ runner.temp }}/trivy.summary
+        run: |
+          summary=$(cat "$SUMMARY_FILE" 2>/dev/null || echo "Trivy: not run")
+          echo "$summary"
+          echo "summary=$summary" >> "$GITHUB_OUTPUT"
+
+  migration-image:
+    name: Migration image
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+      image-size-bytes: ${{ steps.summary.outputs.image-size-bytes }}
+    env:
+      IMAGE: bergacast-migration:ci
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: bergacast
+          POSTGRES_USER: bergacast
+          POSTGRES_PASSWORD: bergacast
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bergacast -d bergacast"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build the image (not pushed)
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: migration
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: ${{ env.IMAGE }}
+          cache-from: type=gha,scope=migration-image
+          cache-to: type=gha,scope=migration-image,mode=max
+      # Run like the job of the platform: an environment, a database, an exit status. The second run changes nothing.
+      - name: Migrate the database twice
+        id: migrate
+        run: |
+          for run in 1 2; do
+            docker run --rm --network host \
+              -e BERGACAST_DATASOURCE_URL=jdbc:postgresql://localhost:5432/bergacast \
+              -e BERGACAST_DATASOURCE_USERNAME=bergacast \
+              -e BERGACAST_DATASOURCE_PASSWORD=bergacast \
+              "$IMAGE"
+          done
+          tables=$(PGPASSWORD=bergacast psql -h localhost -U bergacast -d bergacast -tA \
+            -c "SELECT count(*) FROM information_schema.tables WHERE table_name IN ('podcast', 'episode', 'audio_file')")
+          [ "$tables" = 3 ]
+      - name: A missing configuration must fail the job
+        run: |
+          if docker run --rm "$IMAGE"; then
+            echo "The image migrated without any database configured" >&2
+            exit 1
+          fi
+      - name: Trivy
+        id: trivy
+        if: always() && steps.build.outcome == 'success'
+        uses: ./.github/actions/trivy-scan
+        with:
+          scan-type: image
+          target: ${{ env.IMAGE }}
+          summary-file: ${{ runner.temp }}/trivy.summary
+      - name: Summarize
+        id: summary
+        if: always()
+        env:
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          MIGRATE_OUTCOME: ${{ steps.migrate.outcome }}
+        run: |
+          bytes=""
+          if [ "$BUILD_OUTCOME" = "success" ] && bytes=$(docker image inspect --format '{{.Size}}' "$IMAGE" 2>/dev/null); then
+            summary="image size $(numfmt --to=iec-i --suffix=B "$bytes")"
+            case "$MIGRATE_OUTCOME" in
+              success) summary="$summary · migration run twice" ;;
+              failure) summary="$summary · migration failed" ;;
+              *) summary="$summary · migration not run" ;;
+            esac
+          else
+            bytes=""
+            summary="image not built"
+          fi
+          if [ -f "$RUNNER_TEMP/trivy.summary" ]; then
+            summary="$summary · $(cat "$RUNNER_TEMP/trivy.summary")"
+          fi
+          echo "$summary"
+          {
+            echo "summary=$summary"
+            echo "image-size-bytes=$bytes"
+          } >> "$GITHUB_OUTPUT"
+
   report:
     name: PR report
     needs:
@@ -1096,6 +1314,9 @@ jobs:
       - frontend-image
       - backend-dependencies
       - frontend-dependencies
+      - migration-check
+      - migration-image
+      - migration-dependencies
       - secrets
       - codeql
       - frontend-lighthouse
@@ -1126,7 +1347,10 @@ jobs:
               ['frontend-build', 'Frontend build'],
               ['backend-image', 'Backend native image (GraalVM, smoke test, Trivy)'],
               ['frontend-image', 'Frontend image (static-web-server, Trivy)'],
+              ['migration-check', 'Migration lint and tests (Liquibase, Testcontainers)'],
+              ['migration-image', 'Migration image (run twice, Trivy)'],
               ['backend-dependencies', 'Backend dependencies (Trivy)'],
+              ['migration-dependencies', 'Migration dependencies (Trivy)'],
               ['frontend-dependencies', 'Frontend dependencies (npm audit)'],
               ['secrets', 'Secrets (gitleaks)'],
               ['codeql', 'CodeQL (Java, TypeScript, workflows)'],

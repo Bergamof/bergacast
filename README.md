@@ -52,17 +52,22 @@ Monorepo :
 
 | Dossier      | Contenu                                                                                                |
 |--------------|--------------------------------------------------------------------------------------------------------|
-| `backend/`   | Spring Boot 4.1 (Java 25, Gradle Kotlin DSL), package `fr.bergadev.bergacast`, découpé par fonctionnalité : `podcast`, `episode`, `audio`, `image`, `feed`, `storage`, `token`, `adminuser`, `security`, `web`, `requestlog`, `config`. Migrations Flyway dans `src/main/resources/db/migration`. |
+| `backend/`   | Spring Boot 4.1 (Java 25, Gradle Kotlin DSL), package `fr.bergadev.bergacast`, découpé par fonctionnalité : `podcast`, `episode`, `audio`, `image`, `feed`, `storage`, `token`, `adminuser`, `security`, `web`, `requestlog`, `config`. Ne migre pas la base. |
+| `migration/` | Migrations du schéma de la base (Liquibase 4.x, Java 25, Gradle Kotlin DSL) : *changelog* dans `src/main/resources/db/changelog`, lancées par une image à part qui s’arrête une fois la base à jour. |
 | `frontend/`  | SPA SvelteKit 3 / Svelte 5 (TypeScript, `adapter-static`), servie par static-web-server (voir [`frontend/README.md`](frontend/README.md)). |
 | racine       | `compose.yaml`, `.env.example`, `.sdkmanrc`, `.nvmrc`, `.spectral.yaml`, `.github/` (CI, Dependabot). |
 
-Chaque module produit sa propre image, déployée comme un conteneur indépendant (Scaleway Serverless Containers) :
+Chaque module produit sa propre image. Le backend et le frontend sont déployés comme des conteneurs indépendants
+(Scaleway Serverless Containers), la migration comme un job (Scaleway Serverless Jobs) :
 
 - **backend** (`backend/Dockerfile`) : exécutable natif GraalVM sur distroless ; sert l’API (`/api/v1`) et la
   documentation OpenAPI, écrit les flux, l’audio et les images sur le stockage objet, et redirige (`301`) leurs
   anciennes URL (`/{slug}.xml`, `/{slug}/image.{ext}`, `/{slug}/episodes/{id}/audio.{ext}`) vers le stockage ;
 - **frontend** (`frontend/Dockerfile`) : SPA statique servie par static-web-server à la racine de son domaine ; elle
-  appelle l’API du backend (autre origine, CORS) dont l’URL est donnée au démarrage du conteneur.
+  appelle l’API du backend (autre origine, CORS) dont l’URL est donnée au démarrage du conteneur ;
+- **migration** (`migration/Dockerfile`) : JRE sur distroless ; applique à la base les changements de schéma qu’elle n’a
+  pas encore reçus puis s’arrête (code de sortie `0` si la base est à jour). Le backend ne migre rien et ne lit pas la
+  base pour démarrer.
 
 Dépendances externes : PostgreSQL (métadonnées) et un stockage objet compatible S3 (médias et flux).
 
@@ -235,6 +240,10 @@ L’application se configure par variables d’environnement (liées aux propri�
 | `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/bergacast` | URL JDBC de PostgreSQL 18. |
 | `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | `bergacast` / `bergacast` | Identifiants PostgreSQL. |
 
+L’image de migration prend `BERGACAST_DATASOURCE_URL` (URL JDBC), `BERGACAST_DATASOURCE_USERNAME` et
+`BERGACAST_DATASOURCE_PASSWORD` (tous obligatoires). L’utilisateur doit pouvoir créer et modifier les tables ;
+`SPRING_DATASOURCE_*` du backend ne lui sert à rien, elle ne migre pas.
+
 L’image frontend ne prend que `BERGACAST_API_URL` (obligatoire : origine publique du backend, par ex.
 `https://api.example.com`, écrite au démarrage dans `/config.js`) et `PORT` (`8080` par défaut).
 
@@ -262,7 +271,15 @@ S3Mock local (bucket `bergacast`, sans authentification). Modèle : [`.env.examp
      -p 9090:9090 adobe/s3mock:5.2.3
    ```
 
-3. **Backend** (dans `backend/`, Java 25 actif) — Flyway crée le schéma au démarrage :
+3. **Schéma** (dans `migration/`, Java 25 actif) — à relancer après chaque `git pull` qui ajoute une migration :
+
+   ```sh
+   BERGACAST_DATASOURCE_URL=jdbc:postgresql://localhost:5432/bergacast \
+   BERGACAST_DATASOURCE_USERNAME=bergacast BERGACAST_DATASOURCE_PASSWORD=bergacast \
+   ./gradlew run
+   ```
+
+4. **Backend** (dans `backend/`, Java 25 actif) — le schéma doit déjà exister :
 
    ```sh
    BERGACAST_JWT_SECRET="$(openssl rand -base64 48)" \
@@ -276,7 +293,7 @@ S3Mock local (bucket `bergacast`, sans authentification). Modèle : [`.env.examp
 
    L’API écoute sur <http://localhost:8080> (identifiants de base par défaut : `bergacast`/`bergacast`).
 
-4. **Frontend** (dans `frontend/`, Node 24 et npm 12.2.1 actifs) :
+5. **Frontend** (dans `frontend/`, Node 24 et npm 12.2.1 actifs) :
 
    ```sh
    npm ci
@@ -307,6 +324,19 @@ les données de la base).
 
 Rapports : `build/reports/tests/test/`, `build/reports/jacoco/test/`, `build/reports/checkstyle/`.
 
+### Migration (dans `migration/`, Java 25)
+
+| Commande | Rôle |
+|----------|------|
+| `./gradlew spotlessApply` / `./gradlew check` | Formatage ; lint (Spotless, Checkstyle du backend) + tests (Testcontainers PostgreSQL 18 : **Docker requis**). |
+| `BERGACAST_DATASOURCE_URL=… BERGACAST_DATASOURCE_USERNAME=… BERGACAST_DATASOURCE_PASSWORD=… ./gradlew run` | Migre la base indiquée. |
+
+Pour changer le schéma, ajouter un fichier dans `src/main/resources/db/changelog/changes/`, l’inclure dans
+`db.changelog-master.yaml` et ne jamais modifier un *changeset* déjà appliqué. Les migrations « avancées » (manipulation
+d’objets du stockage, transformations de données) s’écrivent en Java (`customChange`). Une migration s’exécute **avant**
+le redéploiement du backend : elle doit rester compatible avec la version précédente du backend (ajouter d’abord, ne
+supprimer qu’à la version suivante).
+
 ### Frontend (dans `frontend/`, Node 24, npm 12.2.1)
 
 | Commande | Rôle |
@@ -322,12 +352,13 @@ Rapports : `build/reports/tests/test/`, `build/reports/jacoco/test/`, `build/rep
 
 ## Docker
 
-Deux images, une par module, construites chacune depuis son dossier (contexte `backend/` ou `frontend/`) ; les tests
-ne sont pas lancés dans les builds Docker : ils tournent en CI.
+Trois images, une par module, construites chacune depuis son dossier (contexte `backend/`, `frontend/` ou
+`migration/`) ; les tests ne sont pas lancés dans les builds Docker : ils tournent en CI.
 
 | Image | Étapes | Taille / mémoire |
 |-------|--------|------------------|
 | `bergacast-backend` | `ghcr.io/graalvm/native-image-community:25` (AOT Spring + `nativeCompile`) → `gcr.io/distroless/base-debian13:nonroot` (glibc seule, pas de shell, utilisateur `nonroot`) | ~ 190 Mo, ~ 110–120 Mo de RAM (tient dans 256 Mo, upload de 200 Mo compris), démarrage ~ 1 s |
+| `bergacast-migration` | `eclipse-temurin:25-jdk` (Gradle `installDist`) → `gcr.io/distroless/java25-debian13:nonroot` (JRE seul, pas de shell) | s’arrête une fois la base à jour |
 | `bergacast-frontend` | `node:24-alpine` (build statique, précompressé brotli/gzip) → `joseluisq/static-web-server:2.44.1-alpine` (utilisateur `sws`) | ~ 18 Mo, ~ 10 Mo de RAM |
 
 ```sh
@@ -337,7 +368,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-L’administration est alors sur <http://localhost:8081>, l’API, les flux et l’audio sur <http://localhost:8080>. Les
+Le service `migration` applique le schéma puis s’arrête, avant le démarrage du backend. L’administration est alors sur <http://localhost:8081>, l’API, les flux et l’audio sur <http://localhost:8080>. Les
 données PostgreSQL sont dans le volume `db-data`. La compilation native du backend prend plusieurs minutes.
 
 ```sh
@@ -350,7 +381,7 @@ docker compose down -v           # arrêt et suppression des données
 
 ### Versions et publication
 
-Chaque merge sur `main` dont la CI est verte et qui modifie `backend/` ou `frontend/` produit une version, sans
+Chaque merge sur `main` dont la CI est verte et qui modifie `backend/`, `frontend/` ou `migration/` produit une version, sans
 intervention ([`.github/workflows/release.yml`](.github/workflows/release.yml)) :
 
 1. **Plan** ([`.github/scripts/release-plan.sh`](.github/scripts/release-plan.sh)) : modules modifiés depuis le
@@ -362,6 +393,7 @@ intervention ([`.github/workflows/release.yml`](.github/workflows/release.yml)) 
    architecture des Serverless Containers), avec les tags `X.Y.Z`, `X.Y`, `X`, `latest` et `sha-<sha court>` :
    - `rg.fr-par.scw.cloud/bergacast/bergacast-backend`
    - `rg.fr-par.scw.cloud/bergacast/bergacast-frontend`
+   - `rg.fr-par.scw.cloud/bergacast/bergacast-migration`
 3. **Tag `vX.Y.Z`** sur le commit et **release GitHub** (images publiées, changements groupés par type) : les releases
    GitHub tiennent lieu de journal des modifications.
 
@@ -377,6 +409,24 @@ par `build(deps)`, `build(deps-dev)` ou `ci(deps)`.
 Configuration GitHub requise : secret `SCW_SECRET_KEY` (clé d’API IAM ayant le droit d’écrire dans le registry). En
 cas d’échec, relancer le run : la version est recalculée à l’identique tant que le tag n’est pas posé.
 
+### Migration de la base (Scaleway Serverless Job)
+
+La base est migrée par un **job serverless** qui exécute l’image `rg.fr-par.scw.cloud/bergacast/bergacast-migration`, et
+non par le backend : celui-ci démarre sans toucher à la base (une base serverless peut rester en pause). À créer une
+fois dans la console Scaleway (*Serverless → Jobs → Create job definition*) :
+
+- image `bergacast-migration`, tag `X.Y.Z` de la version à déployer ; 512 Mo de mémoire (la JVM et Liquibase) ;
+- variables `BERGACAST_DATASOURCE_URL` (`jdbc:postgresql://<hôte>:<port>/<base>`), `BERGACAST_DATASOURCE_USERNAME` et, en
+  variable **secrète**, `BERGACAST_DATASOURCE_PASSWORD` (Serverless SQL : utilisateur = ID du principal IAM, mot de passe
+  = secret key d’une clé d’API de ce principal) ;
+- aucune planification : le job se lance à la demande, avant chaque mise à jour du backend qui change le schéma
+  (`scw jobs definition start <id>`), et le backend ne se redéploie qu’une fois le run terminé avec succès.
+
+Liquibase verrouille la base par une ligne de sa table `DATABASECHANGELOGLOCK` (pas par un verrou consultatif
+PostgreSQL) : deux runs simultanés ne migrent pas en même temps. Au premier run sur la base de production, le schéma
+que Flyway avait créé est reconnu et simplement noté comme appliqué (rien n’est recréé), puis la table
+`flyway_schema_history` est supprimée.
+
 ### Déploiement (conteneurs serverless)
 
 Configurer chaque conteneur sur un tag `X.Y.Z` (déploiement explicite, retour arrière possible) ou sur `latest`
@@ -385,7 +435,7 @@ Configurer chaque conteneur sur un tag `X.Y.Z` (déploiement explicite, retour a
 
 - **backend** : port `8080` (la plateforme fournit `PORT`), variables de la section [Configuration](#configuration) ;
   `BERGACAST_PUBLIC_BASE_URL` = URL publique du conteneur backend, `BERGACAST_CORS_ALLOWED_ORIGINS` = URL publique du
-  conteneur frontend, `SPRING_DATASOURCE_*` = base PostgreSQL, `BERGACAST_STORAGE_*` et `BERGACAST_MEDIA_BASE_URL` =
+  conteneur frontend, `SPRING_DATASOURCE_*` = base PostgreSQL (déjà migrée par le job), `BERGACAST_STORAGE_*` et `BERGACAST_MEDIA_BASE_URL` =
   bucket (voir ci-dessous) ; secrets (`BERGACAST_JWT_SECRET`, `BERGACAST_STORAGE_SECRET_KEY`, mots de passe) en
   variables secrètes. Sonde de santé : `/actuator/health/liveness` (n’interroge pas la base). Le pool de
   connexions ne garde aucune connexion inactive (fermée après 30 s) : une base serverless peut se mettre en pause.
@@ -533,6 +583,9 @@ GitHub sont épinglées par SHA de commit (mis à jour par Dependabot).
 | `secrets` | gitleaks sur tout l’historique (faux positifs dans `.gitleaksignore`, nuit comprise) |
 | `codeql` | CodeQL (Java, TypeScript, workflows ; requêtes `security-extended`) : échec sur toute alerte de sévérité haute ou critique non écartée (onglet *Security*) ; un faux positif s’écarte dans GitHub (*Dismiss alert*, avec la raison) |
 | `frontend-lighthouse` | Lighthouse CI (`frontend/lighthouserc.json`) sur 8 pages servies avec une API simulée (`frontend/lighthouse/`) : Accessibilité et Bonnes pratiques ≥ 90 |
+| `migration-check` | Spotless + Checkstyle (règles du backend) et tests JUnit du module de migration : base vide, base que Flyway avait migrée (schéma identique, rien n’est rejoué), idempotence |
+| `migration-image` | Build de l’image (non publiée), exécution deux fois contre PostgreSQL, échec sans configuration, Trivy sur l’image |
+| `migration-dependencies` | Trivy sur les jars que l’image exécute (Liquibase et ses dépendances) : échec sur toute CVE critique ou haute (nuit comprise) |
 | `backend-image` | Build de l’image native (non publiée), démarrage contre PostgreSQL puis `backend/scripts/smoke-test.sh`, Trivy sur l’image |
 | `frontend-image` | Build de l’image (non publiée), vérification du service (`config.js`, repli SPA, cache, refus d’une URL d’API invalide), Trivy sur l’image (nuit comprise) |
 
@@ -546,9 +599,9 @@ ou des images, mémoire…) et le lien du run. Dependabot propose chaque semaine
 Docker).
 
 **Protection de branche recommandée sur `main`** (*Settings → Rules → Rulesets* ou *Branches*) : exiger une pull
-request, exiger que la branche soit à jour, et rendre obligatoires les 16 vérifications : *PR title*, *Release scripts*, *Backend lint*, *Backend
+request, exiger que la branche soit à jour, et rendre obligatoires les 19 vérifications : *PR title*, *Release scripts*, *Backend lint*, *Backend
 tests*, *Backend build*, *OpenAPI lint*, *Frontend lint*, *Frontend tests*, *Frontend build*, *Backend dependencies (CVE)*,
-*Frontend dependencies (CVE)*, *Secrets (gitleaks)*, *CodeQL*, *Frontend Lighthouse*, *Backend native image*, *Frontend
+*Frontend dependencies (CVE)*, *Migration lint and tests*, *Migration image*, *Migration dependencies (CVE)*, *Secrets (gitleaks)*, *CodeQL*, *Frontend Lighthouse*, *Backend native image*, *Frontend
 image* (le job *PR report* ne doit pas être obligatoire : il rend compte, il ne juge pas).
 
 Sécurité : voir [`SECURITY.md`](SECURITY.md) pour signaler une vulnérabilité.

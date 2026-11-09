@@ -35,13 +35,26 @@ services:
     ports:
       - "127.0.0.1:${BERGACAST_MEDIA_PORT:-9090}:9090"
 
+  # Applies the schema changes then exits: in production the same image runs as a Scaleway Serverless Job.
+  migration:
+    build: ./migration
+    image: bergacast-migration:latest
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      BERGACAST_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-bergacast}
+      BERGACAST_DATASOURCE_USERNAME: ${POSTGRES_USER:-bergacast}
+      BERGACAST_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+
   backend:
     build: ./backend
     image: bergacast-backend:latest
     restart: unless-stopped
     depends_on:
-      db:
-        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
       storage:
         condition: service_started
     environment:

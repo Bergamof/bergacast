@@ -14,10 +14,16 @@ spring:
       max-lifetime: 600000
   jpa:
     open-in-view: false
+    # Starting must not reach the database, which a serverless platform may keep paused: the database is declared
+    # instead of detected, the schema is not validated (the integration tests validate it) and Hibernate reads no JDBC
+    # metadata. The schema is migrated by the migration job (see the migration module), not by the backend.
+    database: postgresql
     hibernate:
-      ddl-auto: validate
-  flyway:
-    locations: classpath:db/migration
+      ddl-auto: none
+    properties:
+      hibernate:
+        boot:
+          allow_jdbc_metadata_access: false
   servlet:
     multipart:
       # Maximum audio file size; the request limit adds some room for the metadata (see MultipartConfiguration).

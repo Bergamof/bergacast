@@ -45,6 +45,5 @@ class RobotsIntegrationTest {
     @Test
     void servesNoOtherStaticResource() throws Exception {
         mockMvc.perform(get("/application.yaml")).andExpect(status().isNotFound());
-        mockMvc.perform(get("/db/migration/V1__create_schema.sql")).andExpect(status().isNotFound());
     }
 }
