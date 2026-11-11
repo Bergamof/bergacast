@@ -31,7 +31,7 @@ Dépôt : <https://github.com/Bergamof/bergacast> — licence [AGPL-3.0](LICENSE
 - **Publication d’épisodes** par upload `multipart/form-data` (audio + métadonnées JSON), avec en-tête
   `Idempotency-Key` pour rejouer une requête sans créer de doublon.
 - **Médias sur stockage objet** (S3, Scaleway Object Storage) : audio, images de couverture et flux sont des objets
-  publics dont la clé est le chemin de l’URL (`{slug}.xml`, `{slug}/image.jpg`,
+  publics dont la clé est le chemin de l’URL (`{slug}.xml`, `{slug}/image.jpg`, `{slug}/episodes/{id}/image.jpg`,
   `{slug}/episodes/{id}/audio.mp3`), retrouvables sans la base ; ni le backend ni la base ne sont sollicités par les
   applications d’écoute.
 - **Flux RSS 2.0 public** par podcast avec extensions iTunes/Apple Podcasts, écrit sur le stockage à chaque

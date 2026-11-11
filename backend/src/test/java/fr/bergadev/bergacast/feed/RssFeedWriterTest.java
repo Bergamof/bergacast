@@ -48,7 +48,8 @@ class RssFeedWriterTest {
             EpisodeType.BONUS,
             false,
             new FeedItem.Enclosure(
-                    URI.create("https://podcasts.example.test/tech/episodes/1/audio.mp3"), 123, "audio/mpeg"));
+                    URI.create("https://podcasts.example.test/tech/episodes/1/audio.mp3"), 123, "audio/mpeg"),
+            URI.create("https://podcasts.example.test/tech/episodes/1/image.jpg"));
 
     private static final FeedItem MINIMAL_ITEM = new FeedItem(
             UUID.randomUUID(),
@@ -63,7 +64,8 @@ class RssFeedWriterTest {
             EpisodeType.FULL,
             null,
             new FeedItem.Enclosure(
-                    URI.create("https://podcasts.example.test/tech/episodes/2/audio.m4a"), 456, "audio/mp4"));
+                    URI.create("https://podcasts.example.test/tech/episodes/2/audio.m4a"), 456, "audio/mp4"),
+            null);
 
     private XPath xpath;
     private Document document;
@@ -124,6 +126,8 @@ class RssFeedWriterTest {
         assertThat(text(item + "itunes:episode")).isEqualTo("12");
         assertThat(text(item + "itunes:episodeType")).isEqualTo("bonus");
         assertThat(text(item + "itunes:explicit")).isEqualTo("false");
+        assertThat(text(item + "itunes:image/@href"))
+                .isEqualTo("https://podcasts.example.test/tech/episodes/1/image.jpg");
     }
 
     @Test
@@ -134,6 +138,7 @@ class RssFeedWriterTest {
         assertThat(count(item + "itunes:season")).isZero();
         assertThat(count(item + "itunes:episode")).isZero();
         assertThat(count(item + "itunes:explicit")).isZero();
+        assertThat(count(item + "itunes:image")).isZero();
         assertThat(text(item + "itunes:episodeType")).isEqualTo("full");
     }
 
@@ -192,7 +197,8 @@ class RssFeedWriterTest {
                 null,
                 EpisodeType.FULL,
                 null,
-                new FeedItem.Enclosure(URI.create("https://example.test/a.mp3"), 1, "audio/mpeg"));
+                new FeedItem.Enclosure(URI.create("https://example.test/a.mp3"), 1, "audio/mpeg"),
+                null);
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
         document = factory.newDocumentBuilder()

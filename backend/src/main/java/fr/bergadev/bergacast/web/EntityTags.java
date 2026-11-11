@@ -1,6 +1,7 @@
 package fr.bergadev.bergacast.web;
 
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 
@@ -34,6 +35,16 @@ public final class EntityTags {
             throw new PreconditionFailedException(
                     "The resource has been modified: If-Match does not match the current ETag " + currentEntityTag);
         }
+    }
+
+    /**
+     * Ensures that an optional {@code If-Match} header matches the entity tag of a resource that may not exist.
+     *
+     * @throws PreconditionFailedException when the header is present and the resource is missing or has another tag
+     */
+    public static void requireIfMatch(@Nullable String ifMatchHeader, Optional<String> currentEntityTag) {
+        currentEntityTag.ifPresentOrElse(
+                tag -> requireIfMatch(ifMatchHeader, tag), () -> requireIfMatchOnMissingResource(ifMatchHeader));
     }
 
     /**

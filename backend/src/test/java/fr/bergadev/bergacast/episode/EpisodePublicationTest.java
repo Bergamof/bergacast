@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -15,8 +16,11 @@ import static org.mockito.Mockito.when;
 import fr.bergadev.bergacast.audio.AudioFile;
 import fr.bergadev.bergacast.audio.AudioUploads;
 import fr.bergadev.bergacast.feed.FeedPublicationException;
+import fr.bergadev.bergacast.image.ImageFormat;
+import fr.bergadev.bergacast.image.ProcessedImage;
 import fr.bergadev.bergacast.podcast.PodcastFeedChanged;
 import fr.bergadev.bergacast.storage.ObjectStorageException;
+import fr.bergadev.bergacast.web.UnprocessableContentException;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Instant;
@@ -42,14 +46,23 @@ class EpisodePublicationTest {
     private static final EpisodeInput INPUT =
             new EpisodeInput("Title", null, null, "guid-1", null, null, null, null, null);
     private static final EpisodeMetadata METADATA = INPUT.toMetadata(NOW);
+    private static final MultipartFile IMAGE_PART =
+            new MockMultipartFile("image", "c.jpg", "image/jpeg", new byte[] {2});
+    private static final ProcessedImage PROCESSED = new ProcessedImage(new byte[] {2}, ImageFormat.JPEG, 10, 10);
+    private static final EpisodeImage STORED = new EpisodeImage("image/jpeg", 10, 10, 1, "a".repeat(64));
     private static final MultipartFile AUDIO = new MockMultipartFile("audio", "a.mp3", "audio/mpeg", new byte[] {1});
 
     private final EpisodeService episodeService = mock(EpisodeService.class);
     private final AudioUploads audioUploads = mock(AudioUploads.class);
     private final AudioFile audioFile = mock(AudioFile.class);
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
-    private final EpisodePublication publication =
-            new EpisodePublication(episodeService, audioUploads, events, Clock.fixed(NOW, ZoneOffset.UTC));
+    private final EpisodeImages episodeImages = mock(EpisodeImages.class);
+    private final EpisodePublication publication;
+
+    EpisodePublicationTest() {
+        publication = new EpisodePublication(
+                episodeService, audioUploads, episodeImages, events, Clock.fixed(NOW, ZoneOffset.UTC));
+    }
 
     @BeforeEach
     void uploadSucceeds() {
@@ -61,11 +74,11 @@ class EpisodePublicationTest {
     void uploadsTheAudioThenSavesTheEpisodeWithTheSameId() {
         whenSaved(KEY).thenAnswer(invocation -> episodeWithId(invocation.getArgument(1)));
 
-        Episode published = publication.publish(SLUG, INPUT, AUDIO, KEY);
+        Episode published = publication.publish(SLUG, INPUT, AUDIO, null, KEY);
 
         ArgumentCaptor<UUID> uploadedId = ArgumentCaptor.forClass(UUID.class);
         verify(audioUploads).upload(eq(SLUG), uploadedId.capture(), eq(AUDIO));
-        verify(episodeService).publish(SLUG, uploadedId.getValue(), METADATA, audioFile, NOW, KEY);
+        verify(episodeService).publish(SLUG, uploadedId.getValue(), METADATA, audioFile, null, NOW, KEY);
         assertThat(published.getId()).isEqualTo(uploadedId.getValue());
         verify(audioUploads, never()).discard(anyString(), any(UUID.class), anyString());
         // The feed is written by the service once the episode is committed, not here.
@@ -77,7 +90,7 @@ class EpisodePublicationTest {
         Episode publishedMeanwhile = episodeWithId(UUID.randomUUID());
         whenSaved(KEY).thenReturn(publishedMeanwhile);
 
-        assertThat(publication.publish(SLUG, INPUT, AUDIO, KEY)).isSameAs(publishedMeanwhile);
+        assertThat(publication.publish(SLUG, INPUT, AUDIO, null, KEY)).isSameAs(publishedMeanwhile);
         verifyAudioDiscarded();
         verify(events).publishEvent(new PodcastFeedChanged(SLUG));
     }
@@ -87,9 +100,9 @@ class EpisodePublicationTest {
         Episode previous = mock(Episode.class);
         when(episodeService.prepare(SLUG, METADATA, KEY)).thenReturn(Optional.of(previous));
 
-        assertThat(publication.publish(SLUG, INPUT, AUDIO, KEY)).isSameAs(previous);
+        assertThat(publication.publish(SLUG, INPUT, AUDIO, null, KEY)).isSameAs(previous);
         verifyNoInteractions(audioUploads);
-        verify(episodeService, never()).publish(any(), any(), any(), any(), any(), any());
+        verify(episodeService, never()).publish(any(), any(), any(), any(), any(), any(), any());
         // The request it repeats may have failed only on the feed (503): the retry writes it again.
         verify(events).publishEvent(new PodcastFeedChanged(SLUG));
     }
@@ -100,7 +113,8 @@ class EpisodePublicationTest {
         FeedPublicationException feedNotWritten = mock(FeedPublicationException.class);
         doThrow(feedNotWritten).when(events).publishEvent(new PodcastFeedChanged(SLUG));
 
-        assertThatThrownBy(() -> publication.publish(SLUG, INPUT, AUDIO, KEY)).isSameAs(feedNotWritten);
+        assertThatThrownBy(() -> publication.publish(SLUG, INPUT, AUDIO, null, KEY))
+                .isSameAs(feedNotWritten);
     }
 
     @Test
@@ -108,8 +122,9 @@ class EpisodePublicationTest {
         ObjectStorageException storageDown = new ObjectStorageException("down", new RuntimeException());
         when(audioUploads.upload(eq(SLUG), any(UUID.class), eq(AUDIO))).thenThrow(storageDown);
 
-        assertThatThrownBy(() -> publication.publish(SLUG, INPUT, AUDIO, KEY)).isSameAs(storageDown);
-        verify(episodeService, never()).publish(any(), any(), any(), any(), any(), any());
+        assertThatThrownBy(() -> publication.publish(SLUG, INPUT, AUDIO, null, KEY))
+                .isSameAs(storageDown);
+        verify(episodeService, never()).publish(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -117,7 +132,8 @@ class EpisodePublicationTest {
         IllegalStateException failure = new IllegalStateException("database down");
         whenSaved(KEY).thenThrow(failure);
 
-        assertThatThrownBy(() -> publication.publish(SLUG, INPUT, AUDIO, KEY)).isSameAs(failure);
+        assertThatThrownBy(() -> publication.publish(SLUG, INPUT, AUDIO, null, KEY))
+                .isSameAs(failure);
         verifyAudioDiscarded();
     }
 
@@ -126,7 +142,8 @@ class EpisodePublicationTest {
         FeedPublicationException feedNotWritten = mock(FeedPublicationException.class);
         whenSaved(KEY).thenThrow(feedNotWritten);
 
-        assertThatThrownBy(() -> publication.publish(SLUG, INPUT, AUDIO, KEY)).isSameAs(feedNotWritten);
+        assertThatThrownBy(() -> publication.publish(SLUG, INPUT, AUDIO, null, KEY))
+                .isSameAs(feedNotWritten);
         verify(audioUploads, never()).discard(anyString(), any(UUID.class), anyString());
     }
 
@@ -136,9 +153,33 @@ class EpisodePublicationTest {
         whenSaved(KEY).thenThrow(violationOf(EpisodePublication.IDEMPOTENCY_KEY_CONSTRAINT));
         when(episodeService.findByIdempotencyKey(SLUG, KEY)).thenReturn(Optional.of(winner));
 
-        assertThat(publication.publish(SLUG, INPUT, AUDIO, KEY)).isSameAs(winner);
+        assertThat(publication.publish(SLUG, INPUT, AUDIO, null, KEY)).isSameAs(winner);
         verifyAudioDiscarded();
         verify(events).publishEvent(new PodcastFeedChanged(SLUG));
+    }
+
+    @Test
+    void replaysTheEpisodeOfAConcurrentRequestAndDiscardsItsOwnAudioAndImage() {
+        imageIsValid();
+        Episode winner = mock(Episode.class);
+        when(episodeService.publish(
+                        eq(SLUG), any(UUID.class), eq(METADATA), eq(audioFile), eq(STORED), eq(NOW), eq(KEY)))
+                .thenThrow(violationOf(EpisodePublication.IDEMPOTENCY_KEY_CONSTRAINT));
+        when(episodeService.findByIdempotencyKey(SLUG, KEY)).thenReturn(Optional.of(winner));
+
+        assertThat(publication.publish(SLUG, INPUT, AUDIO, IMAGE_PART, KEY)).isSameAs(winner);
+        verifyAudioDiscarded();
+        verifyImageDiscarded();
+    }
+
+    @Test
+    void treatsAnEmptyImagePartAsNoImage() {
+        MultipartFile empty = new MockMultipartFile("image", "none.png", "image/png", new byte[0]);
+        whenSaved(KEY).thenAnswer(invocation -> episodeWithId(invocation.getArgument(1)));
+
+        publication.publish(SLUG, INPUT, AUDIO, empty, KEY);
+
+        verifyNoInteractions(episodeImages);
     }
 
     @Test
@@ -146,7 +187,8 @@ class EpisodePublicationTest {
         DataIntegrityViolationException duplicateGuid = violationOf("episode_guid_unique");
         whenSaved(KEY).thenThrow(duplicateGuid);
 
-        assertThatThrownBy(() -> publication.publish(SLUG, INPUT, AUDIO, KEY)).isSameAs(duplicateGuid);
+        assertThatThrownBy(() -> publication.publish(SLUG, INPUT, AUDIO, null, KEY))
+                .isSameAs(duplicateGuid);
         verifyAudioDiscarded();
     }
 
@@ -155,13 +197,114 @@ class EpisodePublicationTest {
         DataIntegrityViolationException violation = violationOf(EpisodePublication.IDEMPOTENCY_KEY_CONSTRAINT);
         whenSaved(null).thenThrow(violation);
 
-        assertThatThrownBy(() -> publication.publish(SLUG, INPUT, AUDIO, null)).isSameAs(violation);
+        assertThatThrownBy(() -> publication.publish(SLUG, INPUT, AUDIO, null, null))
+                .isSameAs(violation);
         verifyAudioDiscarded();
+    }
+
+    @Test
+    void storesTheImageAndSavesTheEpisodeWithIt() {
+        imageIsValid();
+        when(episodeService.publish(
+                        eq(SLUG), any(UUID.class), eq(METADATA), eq(audioFile), eq(STORED), eq(NOW), eq(KEY)))
+                .thenAnswer(invocation -> episodeWithId(invocation.getArgument(1)));
+
+        Episode published = publication.publish(SLUG, INPUT, AUDIO, IMAGE_PART, KEY);
+
+        ArgumentCaptor<UUID> storedId = ArgumentCaptor.forClass(UUID.class);
+        verify(episodeImages).store(eq(SLUG), storedId.capture(), eq(PROCESSED));
+        assertThat(published.getId()).isEqualTo(storedId.getValue());
+        verify(episodeImages, never()).discard(anyString(), any(UUID.class), any());
+        verify(audioUploads, never()).discard(anyString(), any(UUID.class), anyString());
+    }
+
+    @Test
+    void uploadsNothingWhenTheImageIsInvalid() {
+        UnprocessableContentException invalid = new UnprocessableContentException("image", "is not an image");
+        when(episodeImages.fitPart(IMAGE_PART)).thenThrow(invalid);
+
+        assertThatThrownBy(() -> publication.publish(SLUG, INPUT, AUDIO, IMAGE_PART, KEY))
+                .isSameAs(invalid);
+        verifyNoInteractions(audioUploads);
+        verify(episodeService, never()).publish(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void discardsTheAudioWhenTheImageCannotBeStored() {
+        imageIsValid();
+        ObjectStorageException storageDown = new ObjectStorageException("down", new RuntimeException());
+        when(episodeImages.store(eq(SLUG), any(UUID.class), eq(PROCESSED))).thenThrow(storageDown);
+
+        assertThatThrownBy(() -> publication.publish(SLUG, INPUT, AUDIO, IMAGE_PART, KEY))
+                .isSameAs(storageDown);
+        verifyAudioDiscarded();
+        verify(episodeService, never()).publish(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void discardsTheImageWhenTheEpisodeCannotBeSaved() {
+        imageIsValid();
+        IllegalStateException failure = new IllegalStateException("database down");
+        when(episodeService.publish(
+                        eq(SLUG), any(UUID.class), eq(METADATA), eq(audioFile), eq(STORED), eq(NOW), eq(KEY)))
+                .thenThrow(failure);
+
+        assertThatThrownBy(() -> publication.publish(SLUG, INPUT, AUDIO, IMAGE_PART, KEY))
+                .isSameAs(failure);
+        verifyAudioDiscarded();
+        verifyImageDiscarded();
+    }
+
+    @Test
+    void keepsTheImageWhenOnlyTheFeedCannotBeWrittenAfterTheEpisodeIsSaved() {
+        imageIsValid();
+        FeedPublicationException feedNotWritten = mock(FeedPublicationException.class);
+        when(episodeService.publish(
+                        eq(SLUG), any(UUID.class), eq(METADATA), eq(audioFile), eq(STORED), eq(NOW), eq(KEY)))
+                .thenThrow(feedNotWritten);
+
+        assertThatThrownBy(() -> publication.publish(SLUG, INPUT, AUDIO, IMAGE_PART, KEY))
+                .isSameAs(feedNotWritten);
+        verify(episodeImages, never()).discard(anyString(), any(UUID.class), any());
+    }
+
+    @Test
+    void discardsItsImageWhenAnEpisodePublishedMeanwhileWithTheSameKeyIsReplayed() {
+        imageIsValid();
+        Episode publishedMeanwhile = episodeWithId(UUID.randomUUID());
+        when(episodeService.publish(
+                        eq(SLUG), any(UUID.class), eq(METADATA), eq(audioFile), eq(STORED), eq(NOW), eq(KEY)))
+                .thenReturn(publishedMeanwhile);
+
+        assertThat(publication.publish(SLUG, INPUT, AUDIO, IMAGE_PART, KEY)).isSameAs(publishedMeanwhile);
+        verifyAudioDiscarded();
+        verifyImageDiscarded();
+    }
+
+    @Test
+    void doesNotReadTheImageOfAReplayedPublication() {
+        when(episodeService.prepare(SLUG, METADATA, KEY)).thenReturn(Optional.of(mock(Episode.class)));
+
+        publication.publish(SLUG, INPUT, AUDIO, IMAGE_PART, KEY);
+
+        verifyNoInteractions(episodeImages, audioUploads);
+    }
+
+    private void imageIsValid() {
+        when(episodeImages.fitPart(IMAGE_PART)).thenReturn(PROCESSED);
+        when(episodeImages.store(eq(SLUG), any(UUID.class), eq(PROCESSED))).thenReturn(STORED);
+    }
+
+    /** The object removed is the one stored, identified by the id given to the new episode. */
+    private void verifyImageDiscarded() {
+        ArgumentCaptor<UUID> storedId = ArgumentCaptor.forClass(UUID.class);
+        verify(episodeImages).store(eq(SLUG), storedId.capture(), eq(PROCESSED));
+        verify(episodeImages).discard(SLUG, storedId.getValue(), ImageFormat.JPEG);
     }
 
     private OngoingStubbing<Episode> whenSaved(@Nullable String idempotencyKey) {
         return when(episodeService.publish(
-                eq(SLUG), any(UUID.class), eq(METADATA), eq(audioFile), eq(NOW), eq(idempotencyKey)));
+                eq(SLUG), any(UUID.class), eq(METADATA), eq(audioFile), isNull(), eq(NOW), eq(idempotencyKey)));
     }
 
     private static Episode episodeWithId(UUID id) {

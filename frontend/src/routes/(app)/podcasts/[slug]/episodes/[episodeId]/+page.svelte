@@ -4,6 +4,7 @@
 	import { api } from '#lib/app.ts';
 	import { changeThenRefresh } from '#lib/api/change-then-refresh.ts';
 	import ConfirmButton from '#lib/components/ConfirmButton.svelte';
+	import CoverImageForm from '#lib/components/CoverImageForm.svelte';
 	import EpisodeEditForm from '#lib/components/EpisodeEditForm.svelte';
 	import {
 		episodeFormValues,
@@ -30,6 +31,15 @@
 			() => api.updateEpisode(data.episode, toEpisodeMetadata(values)),
 			refreshEpisode
 		);
+	}
+
+	// The image changes the episode version (ETag): reload it before any further update.
+	function uploadImage(file: File): Promise<void> {
+		return changeThenRefresh(() => api.uploadEpisodeImage(episode, file), refreshEpisode);
+	}
+
+	function deleteImage(): Promise<void> {
+		return changeThenRefresh(() => api.deleteEpisodeImage(episode), refreshEpisode);
 	}
 
 	async function deleteEpisode(): Promise<void> {
@@ -64,6 +74,30 @@
 	{/key}
 </section>
 
+<section class="card" aria-labelledby="episode-image-title">
+	<h2 id="episode-image-title">Image de l’épisode</h2>
+	<CoverImageForm
+		image={episode.image}
+		subjectTitle={episode.title}
+		inputId="episode-image"
+		onUpload={uploadImage}
+		onDelete={deleteImage}
+		onReload={refreshEpisode}
+		onPublishFeed={() => api.publishFeed(podcast)}
+	>
+		{#snippet intro()}
+			Facultative : les applications d’écoute l’affichent pour cet épisode à la place de l’image du
+			podcast.
+		{/snippet}
+		{#snippet absent()}
+			Aucune image pour cet épisode : les applications affichent l’image du podcast.
+		{/snippet}
+		{#snippet deletionNotice()}
+			Les applications d’écoute afficheront de nouveau l’image du podcast pour cet épisode.
+		{/snippet}
+	</CoverImageForm>
+</section>
+
 <section class="card" aria-labelledby="episode-danger-title">
 	<h2 id="episode-danger-title">Suppression</h2>
 	<ConfirmButton
@@ -71,6 +105,6 @@
 		title="Supprimer « {episode.title} » ?"
 		onConfirm={deleteEpisode}
 	>
-		<p>L’épisode et son fichier audio seront définitivement supprimés.</p>
+		<p>L’épisode, son fichier audio et son image seront définitivement supprimés.</p>
 	</ConfirmButton>
 </section>

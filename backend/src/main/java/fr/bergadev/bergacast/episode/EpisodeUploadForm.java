@@ -5,7 +5,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 /** OpenAPI description of the multipart body of an episode upload (the parts are read by the controller). */
 @Schema(
         name = "EpisodeUpload",
-        description = "Multipart body of an episode publication: a JSON `metadata` part and a binary `audio` part.",
+        description = "Multipart body of an episode publication: a JSON `metadata` part, a binary `audio` part "
+                + "and an optional binary `image` part.",
         requiredProperties = {"metadata", "audio"})
 record EpisodeUploadForm(
         @Schema(
@@ -22,4 +23,13 @@ record EpisodeUploadForm(
                         + "of the public audio URL: mp3 (audio/mpeg), m4a (audio/mp4, audio/x-m4a), aac, ogg, "
                         + "opus, wav, flac or webm; for other audio types, the extension of the uploaded file "
                         + "name, else bin. At most BERGACAST_MAX_UPLOAD_SIZE (500MB by default).")
-        String audio) {}
+        String audio,
+
+        @Schema(
+                type = "string",
+                format = "binary",
+                nullable = true,
+                description = "Optional cover image of the episode. Its part must declare image/jpeg or "
+                        + "image/png. Downscaled to at most 3000 pixels on its largest side; at most "
+                        + "BERGACAST_MAX_IMAGE_UPLOAD_SIZE (20MB by default).")
+        String image) {}

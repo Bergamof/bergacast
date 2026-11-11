@@ -4,6 +4,13 @@
 	import type { FeedPublication } from '../api/resources';
 	import { formatFileSize } from '../format/file-size';
 	import {
+		IMAGE_FILE_ACCEPT,
+		imageRecommendationWarnings,
+		readImageDimensions,
+		validateImageFile
+	} from '../forms/cover-image';
+	import { clearFileInput } from '../forms/file-input';
+	import {
 		emptyEpisodeFormValues,
 		validateAudioFile,
 		validateEpisodeForm,
@@ -24,6 +31,7 @@
 		onSubmit: (
 			values: EpisodeFormValues,
 			audio: File,
+			image: File | null,
 			idempotencyKey: string,
 			transfer: UploadTransfer
 		) => Promise<void>;
@@ -36,6 +44,8 @@
 	let values = $state(emptyEpisodeFormValues());
 	let files = $state<FileList | undefined>();
 	let fileInput: HTMLInputElement | undefined = $state();
+	let imageFiles = $state<FileList | undefined>();
+	let imageInput: HTMLInputElement | undefined = $state();
 	let successMessage = $state('');
 	// Kept across retries of the same upload so that a request that actually succeeded despite a
 	// network error does not create a duplicate episode; renewed once the upload is confirmed.
@@ -49,6 +59,25 @@
 	let cancelButton: HTMLButtonElement | undefined = $state();
 
 	const chosenFile = $derived(files?.[0]);
+	let imageWarnings = $state<string[]>([]);
+
+	// Advice on the chosen image, from the dimensions the browser reads; the server accepts it anyway.
+	$effect(() => {
+		const file = imageFiles?.[0];
+		if (!file) {
+			imageWarnings = [];
+			return;
+		}
+		let current = true;
+		void readImageDimensions(file).then((dimensions) => {
+			if (current) {
+				imageWarnings = dimensions ? imageRecommendationWarnings(dimensions) : [];
+			}
+		});
+		return () => {
+			current = false;
+		};
+	});
 
 	// Leaving would silently drop an upload that may last minutes: ask first.
 	beforeNavigate((navigation) => {
@@ -78,7 +107,16 @@
 	function validate() {
 		const errors = validateEpisodeForm(values, { publicationDateRequired: false });
 		const audioError = validateAudioFile(files?.[0]);
-		return audioError === null ? errors : { ...errors, audio: audioError };
+		if (audioError !== null) {
+			errors.audio = audioError;
+		}
+		// The image is optional: only a chosen file is checked.
+		const imageFile = imageFiles?.[0];
+		const imageError = imageFile ? validateImageFile(imageFile) : null;
+		if (imageError !== null) {
+			errors.image = imageError;
+		}
+		return errors;
 	}
 
 	async function handleSubmit(
@@ -88,12 +126,13 @@
 		successMessage = '';
 		const title = values.title;
 		const audio = files?.[0];
+		const image = imageFiles?.[0] ?? null;
 		const uploaded = await form.submit(
 			validate,
 			async () => {
 				if (audio) {
 					try {
-						await onSubmit($state.snapshot(values), audio, idempotencyKey, upload.start());
+						await onSubmit($state.snapshot(values), audio, image, idempotencyKey, upload.start());
 					} finally {
 						upload.finish();
 					}
@@ -105,10 +144,10 @@
 			idempotencyKey = newIdempotencyKey();
 			successMessage = `Épisode « ${title} » publié.`;
 			values = emptyEpisodeFormValues();
-			if (fileInput) {
-				fileInput.value = '';
-			}
+			clearFileInput(fileInput);
 			files = undefined;
+			clearFileInput(imageInput);
+			imageFiles = undefined;
 		}
 	}
 </script>
@@ -123,6 +162,32 @@
 	{#if chosenFile}
 		<p class="muted chosen-file">{chosenFile.name} · {formatFileSize(chosenFile.size)}</p>
 	{/if}
+	<FormField
+		id="episode-image"
+		label="Image de l’épisode"
+		hint="Facultative, JPEG ou PNG : sinon, les applications affichent l’image du podcast."
+		error={form.fieldErrors.image}
+	>
+		{#snippet control(attributes)}
+			<input
+				{...attributes}
+				type="file"
+				accept={IMAGE_FILE_ACCEPT}
+				bind:files={imageFiles}
+				bind:this={imageInput}
+			/>
+		{/snippet}
+	</FormField>
+	<!-- Announced when a chosen image brings them; always rendered, as a live region must be. -->
+	<div role="status">
+		{#if imageWarnings.length > 0}
+			<div class="notice warning">
+				{#each imageWarnings as warning (warning)}
+					<p>{warning}</p>
+				{/each}
+			</div>
+		{/if}
+	</div>
 	<EpisodeFields
 		bind:values
 		errors={form.fieldErrors}
@@ -131,7 +196,7 @@
 	/>
 	<ProblemAlert
 		problem={form.problem}
-		inlineFields={[...Object.keys(values), 'durationSeconds', 'audio']}
+		inlineFields={[...Object.keys(values), 'durationSeconds', 'audio', 'image']}
 	/>
 	<RecoveryActions problem={form.problem} {onPublishFeed} />
 	{#if upload.active}

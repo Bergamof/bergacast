@@ -1,15 +1,16 @@
-import { describe, expect, it } from 'vitest';
-import type { PodcastImage } from '../api/resources';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { CoverImage } from '../api/resources';
 import {
 	IMAGE_FILE_ACCEPT,
 	MAX_IMAGE_FILE_SIZE_BYTES,
 	formatImageDimensions,
 	imagePreviewUrl,
 	imageRecommendationWarnings,
+	readImageDimensions,
 	validateImageFile
-} from './podcast-image';
+} from './cover-image';
 
-function image(width: number, height: number): PodcastImage {
+function image(width: number, height: number): CoverImage {
 	return {
 		mimeType: 'image/jpeg',
 		width,
@@ -97,5 +98,29 @@ describe('formatImageDimensions', () => {
 describe('imagePreviewUrl', () => {
 	it('adds the content hash to bust the browser cache', () => {
 		expect(imagePreviewUrl(image(1, 1))).toBe('https://api.example/demo/image.jpg?v=abc');
+	});
+});
+
+describe('readImageDimensions', () => {
+	afterEach(() => vi.unstubAllGlobals());
+
+	it('reads the dimensions the browser decodes and releases the bitmap', async () => {
+		const close = vi.fn();
+		vi.stubGlobal(
+			'createImageBitmap',
+			vi.fn().mockResolvedValue({ width: 1200, height: 800, close })
+		);
+
+		await expect(readImageDimensions(new Blob(['x']))).resolves.toEqual({
+			width: 1200,
+			height: 800
+		});
+		expect(close).toHaveBeenCalledOnce();
+	});
+
+	it('answers null when the browser cannot decode the file', async () => {
+		vi.stubGlobal('createImageBitmap', vi.fn().mockRejectedValue(new Error('not an image')));
+
+		await expect(readImageDimensions(new Blob(['x']))).resolves.toBeNull();
 	});
 });

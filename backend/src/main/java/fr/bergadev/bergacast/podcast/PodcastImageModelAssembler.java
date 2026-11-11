@@ -36,6 +36,6 @@ class PodcastImageModelAssembler {
     }
 
     private URI contentUrl(String slug, PodcastImageMetadata image) {
-        return publicUrls.podcastImage(slug, image.format().fileExtension());
+        return publicUrls.podcastImage(slug, image.format());
     }
 }

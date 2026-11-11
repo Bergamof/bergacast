@@ -4,6 +4,7 @@ import fr.bergadev.bergacast.audio.AudioFile;
 import fr.bergadev.bergacast.podcast.Podcast;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -15,6 +16,7 @@ import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
@@ -70,6 +72,9 @@ public class Episode {
     @Column(name = "explicit")
     private @Nullable Boolean explicit;
 
+    @Embedded
+    private @Nullable EpisodeImage image;
+
     @Column(name = "idempotency_key", updatable = false)
     private @Nullable String idempotencyKey;
 
@@ -86,9 +91,11 @@ public class Episode {
             Podcast podcast,
             AudioFile audioFile,
             EpisodeMetadata metadata,
+            @Nullable EpisodeImage image,
             Instant addedAt,
             @Nullable String idempotencyKey) {
         this.id = id;
+        this.image = image;
         this.podcast = podcast;
         this.audioFile = audioFile;
         this.addedAt = addedAt;
@@ -135,6 +142,15 @@ public class Episode {
 
     public AudioFile getAudioFile() {
         return audioFile;
+    }
+
+    public Optional<EpisodeImage> getImage() {
+        return Optional.ofNullable(image);
+    }
+
+    /** Sets or replaces the cover image; changing it changes the episode, hence its version. */
+    void setImage(@Nullable EpisodeImage image) {
+        this.image = image;
     }
 
     public Instant getAddedAt() {

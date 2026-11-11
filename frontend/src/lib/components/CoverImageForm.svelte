@@ -1,7 +1,9 @@
 <script lang="ts">
-	import type { PodcastImage } from '../api/resources';
+	import type { Snippet } from 'svelte';
+	import type { CoverImage, FeedPublication } from '../api/resources';
 	import { formatFileSize } from '../format/file-size';
 	import type { FieldErrors } from '../forms/field-errors';
+	import { clearFileInput } from '../forms/file-input';
 	import { FormState } from '../forms/form-state.svelte';
 	import {
 		IMAGE_FILE_ACCEPT,
@@ -10,22 +12,48 @@
 		imagePreviewUrl,
 		imageRecommendationWarnings,
 		validateImageFile
-	} from '../forms/podcast-image';
+	} from '../forms/cover-image';
 	import ConfirmButton from './ConfirmButton.svelte';
 	import FormField from './FormField.svelte';
 	import PendingButton from './PendingButton.svelte';
 	import ProblemAlert from './ProblemAlert.svelte';
+	import RecoveryActions from './RecoveryActions.svelte';
 	import RequiredFieldsLegend from './RequiredFieldsLegend.svelte';
 	import StatusMessage from './StatusMessage.svelte';
 
 	interface Props {
-		image: PodcastImage | null;
-		podcastTitle: string;
+		/** Cover image of a podcast or of an episode: the two share their rules and representation. */
+		image: CoverImage | null;
+		/** Title of the podcast or episode, used in the alternative text and the confirmation. */
+		subjectTitle: string;
+		/** Identifies the file input, unique on the page. */
+		inputId: string;
+		/** Explains what the image is for and the accepted files. */
+		intro: Snippet;
+		/** Said when there is no image yet. */
+		absent: Snippet;
+		/** Consequence of the deletion, shown in the confirmation. */
+		deletionNotice: Snippet;
 		onUpload: (file: File) => Promise<void>;
 		onDelete: () => Promise<void>;
+		/** Loads the latest version of the resource, offered after a 412 (replaced meanwhile). */
+		onReload: () => Promise<void>;
+		/** Rewrites the feed on the object storage, offered after a 503. */
+		onPublishFeed: () => Promise<FeedPublication>;
 	}
 
-	let { image, podcastTitle, onUpload, onDelete }: Props = $props();
+	let {
+		image,
+		subjectTitle,
+		inputId,
+		intro,
+		absent,
+		deletionNotice,
+		onUpload,
+		onDelete,
+		onReload,
+		onPublishFeed
+	}: Props = $props();
 
 	let files = $state<FileList | undefined>();
 	let fileInput: HTMLInputElement | undefined = $state();
@@ -57,9 +85,7 @@
 		);
 		if (uploaded) {
 			statusMessage = replacing ? 'Image remplacée.' : 'Image enregistrée.';
-			if (fileInput) {
-				fileInput.value = '';
-			}
+			clearFileInput(fileInput);
 			files = undefined;
 		}
 	}
@@ -73,16 +99,16 @@
 </script>
 
 <p class="muted">
-	Une image envoyée ici remplace, dans le flux RSS, l’URL d’image externe des réglages. JPEG ou PNG,
-	{formatFileSize(MAX_IMAGE_FILE_SIZE_BYTES)} au maximum ; au-delà de 3000 px, le serveur la réduit. Apple
-	Podcasts recommande une image carrée de 1400 à 3000 px de côté.
+	{@render intro()}
+	JPEG ou PNG, {formatFileSize(MAX_IMAGE_FILE_SIZE_BYTES)} au maximum ; au-delà de 3000 px, le serveur
+	la réduit. Apple Podcasts recommande une image carrée de 1400 à 3000 px de côté.
 </p>
 
 {#if image}
 	<div class="current">
 		<img
 			src={imagePreviewUrl(image)}
-			alt="Couverture actuelle de « {podcastTitle} »"
+			alt="Couverture actuelle de « {subjectTitle} »"
 			width={image.width}
 			height={image.height}
 		/>
@@ -96,7 +122,7 @@
 		</dl>
 	</div>
 {:else}
-	<p>Aucune image envoyée : le flux utilise l’URL d’image externe, si elle est renseignée.</p>
+	<p>{@render absent()}</p>
 {/if}
 
 <!-- Announced when an upload brings them; always rendered, as a live region must be. -->
@@ -113,7 +139,7 @@
 <form novalidate onsubmit={handleSubmit}>
 	<RequiredFieldsLegend />
 	<FormField
-		id="podcast-image"
+		id={inputId}
 		label={image ? 'Nouvelle image' : 'Image'}
 		required
 		error={form.fieldErrors.image}
@@ -129,6 +155,7 @@
 		{/snippet}
 	</FormField>
 	<ProblemAlert problem={form.problem} inlineFields={['image']} />
+	<RecoveryActions problem={form.problem} {onReload} {onPublishFeed} />
 	<div class="actions">
 		<PendingButton type="submit" pending={form.pending} pendingLabel="Envoi en cours…">
 			{image ? 'Remplacer l’image' : 'Envoyer l’image'}
@@ -136,11 +163,11 @@
 		{#if image}
 			<ConfirmButton
 				label="Supprimer l’image"
-				title="Supprimer l’image de « {podcastTitle} » ?"
+				title="Supprimer l’image de « {subjectTitle} » ?"
 				onConfirm={deleteImage}
 				afterConfirm={() => fileInput?.focus()}
 			>
-				<p>Le flux RSS utilisera de nouveau l’URL d’image externe, si elle est renseignée.</p>
+				<p>{@render deletionNotice()}</p>
 			</ConfirmButton>
 		{/if}
 		<StatusMessage message={statusMessage} />

@@ -32,6 +32,7 @@
 	function uploadEpisode(
 		values: EpisodeFormValues,
 		audio: File,
+		image: File | null,
 		idempotencyKey: string,
 		transfer: UploadTransfer
 	): Promise<void> {
@@ -39,7 +40,12 @@
 			() =>
 				api.uploadEpisode(
 					podcast,
-					{ metadata: toUploadMetadata(values), audio, idempotencyKey },
+					{
+						metadata: toUploadMetadata(values),
+						audio,
+						image,
+						idempotencyKey
+					},
 					transfer
 				),
 			refresh

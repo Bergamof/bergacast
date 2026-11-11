@@ -21,6 +21,7 @@ import org.jspecify.annotations.Nullable;
  * @param episodeType {@code itunes:episodeType}
  * @param explicit {@code itunes:explicit}, omitted when {@code null}
  * @param enclosure audio enclosure
+ * @param imageUrl {@code itunes:image} of the item, omitted when {@code null}
  */
 public record FeedItem(
         UUID id,
@@ -34,7 +35,8 @@ public record FeedItem(
         @Nullable Integer episodeNumber,
         EpisodeType episodeType,
         @Nullable Boolean explicit,
-        Enclosure enclosure) {
+        Enclosure enclosure,
+        @Nullable URI imageUrl) {
 
     /**
      * Audio file of an item.

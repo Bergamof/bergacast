@@ -15,8 +15,12 @@ describe('buildPublishCurlExample', () => {
 		expect(example).toContain("-F 'audio=@episode-42.mp3;type=audio/mpeg'");
 	});
 
+	it('shows how to send the optional episode image', () => {
+		expect(example).toContain("-F 'image=@episode-42.jpg;type=image/jpeg'");
+	});
+
 	it('continues lines with backslashes', () => {
-		expect(example.split(' \\\n')).toHaveLength(5);
+		expect(example.split(' \\\n')).toHaveLength(6);
 	});
 
 	it('escapes single quotes in the URL', () => {

@@ -4,8 +4,8 @@
 	import { api } from '#lib/app.ts';
 	import { changeThenRefresh } from '#lib/api/change-then-refresh.ts';
 	import ConfirmButton from '#lib/components/ConfirmButton.svelte';
+	import CoverImageForm from '#lib/components/CoverImageForm.svelte';
 	import PodcastForm from '#lib/components/PodcastForm.svelte';
-	import PodcastImageForm from '#lib/components/PodcastImageForm.svelte';
 	import PublishingInfo from '#lib/components/PublishingInfo.svelte';
 	import {
 		podcastFormValues,
@@ -73,12 +73,25 @@
 
 <section class="card" aria-labelledby="image-title">
 	<h2 id="image-title">Image de couverture</h2>
-	<PodcastImageForm
+	<CoverImageForm
 		image={podcast.image}
-		podcastTitle={podcast.title}
+		subjectTitle={podcast.title}
+		inputId="podcast-image"
 		onUpload={uploadImage}
 		onDelete={deleteImage}
-	/>
+		onReload={refreshPodcast}
+		onPublishFeed={() => api.publishFeed(podcast)}
+	>
+		{#snippet intro()}
+			Une image envoyée ici remplace, dans le flux RSS, l’URL d’image externe des réglages.
+		{/snippet}
+		{#snippet absent()}
+			Aucune image envoyée : le flux utilise l’URL d’image externe, si elle est renseignée.
+		{/snippet}
+		{#snippet deletionNotice()}
+			Le flux RSS utilisera de nouveau l’URL d’image externe, si elle est renseignée.
+		{/snippet}
+	</CoverImageForm>
 </section>
 
 <section class="card" aria-labelledby="danger-title">

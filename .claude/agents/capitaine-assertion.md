@@ -28,4 +28,5 @@ Liste de constats : sévérité (bloquant / majeur / mineur), localisation (`fic
 
 ## Pièges connus
 - `./gradlew test` exécute aussi `processTestAot` : chaque contexte de test démarre en AOT (Docker requis).
+- Un bean créé au démarrage du serveur web ne doit pas injecter `BergacastProperties` : elle serait liée avant l’endpoint S3Mock de `TestcontainersConfiguration`, et les tests `RANDOM_PORT` (`HttpServerIntegrationTest`, `UploadSizeLimitIntegrationTest`) écriraient sur le vrai stockage (403/503). Si ces tests échouent en 403/503 sur S3, chercher une dépendance précoce à `BergacastProperties`.
 - Checkstyle `MagicNumber` est désactivé dans les tests, le reste s'applique ; javac en `-Werror`.

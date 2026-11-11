@@ -15,11 +15,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import fr.bergadev.bergacast.image.TestImages;
 import fr.bergadev.bergacast.support.ApiTestClient;
 import fr.bergadev.bergacast.support.IntegrationTest;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -33,12 +36,16 @@ import org.springframework.test.web.servlet.ResultActions;
 class ObjectStorageUnavailableIntegrationTest {
 
     private static final String MERGE_PATCH = "application/merge-patch+json";
+    private static final int SHA256_LENGTH = 64;
 
     @Autowired
     private MockMvc mockMvc;
 
     @Autowired
     private ApiTestClient api;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private String admin;
     private String slug;
@@ -122,6 +129,71 @@ class ObjectStorageUnavailableIntegrationTest {
                 .andExpect(header().string(HttpHeaders.ETAG, etag));
     }
 
+    @Test
+    void setsNoEpisodeImageThatCannotBeWritten() throws Exception {
+        createPodcast().andExpect(status().isServiceUnavailable());
+        UUID episodeId = insertEpisode(false);
+        String etag = episodeEntityTag(episodeId);
+
+        mockMvc.perform(put(episodeImagePath(episodeId))
+                        .header(HttpHeaders.AUTHORIZATION, admin)
+                        .contentType(MediaType.IMAGE_PNG)
+                        .content(TestImages.png(10, 10)))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value(containsString("nothing was changed")));
+
+        mockMvc.perform(get(episodeImagePath(episodeId)).header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get(episodePath(episodeId)).header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(header().string(HttpHeaders.ETAG, etag));
+    }
+
+    @Test
+    void publishesNoEpisodeWhoseImageIsSentWithAnAudioThatCannotBeWritten() throws Exception {
+        createPodcast().andExpect(status().isServiceUnavailable());
+
+        mockMvc.perform(ApiTestClient.uploadRequest(slug, "{\"title\":\"Lost\"}", new byte[] {1}, "audio/mpeg")
+                        .file(new MockMultipartFile(
+                                "image", "cover.png", MediaType.IMAGE_PNG_VALUE, TestImages.png(10, 10)))
+                        .header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.detail").value(containsString("nothing was changed")));
+
+        mockMvc.perform(get("/api/v1/{slug}/episodes", slug).header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(jsonPath("$.page.totalElements").value(0));
+    }
+
+    /** The image is removed from the episode; only the feed, written after the commit, cannot be updated. */
+    @Test
+    void deletesAnEpisodeImageWhoseFeedCannotBeWritten() throws Exception {
+        createPodcast().andExpect(status().isServiceUnavailable());
+        UUID episodeId = insertEpisode(true);
+
+        mockMvc.perform(delete(episodeImagePath(episodeId)).header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value(containsString("feed-publications")));
+
+        mockMvc.perform(get(episodePath(episodeId)).header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.image").isEmpty());
+    }
+
+    /** Removing the objects of a deleted episode is best effort: orphans are logged, the deletion stands. */
+    @Test
+    void deletesAnEpisodeWithAnImageWhoseObjectsCannotBeRemoved() throws Exception {
+        createPodcast().andExpect(status().isServiceUnavailable());
+        UUID episodeId = insertEpisode(true);
+
+        mockMvc.perform(delete(episodePath(episodeId)).header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.detail").value(containsString("feed-publications")));
+
+        mockMvc.perform(get(episodePath(episodeId)).header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isNotFound());
+    }
+
     /** Removing the objects of a deleted podcast is best effort: orphans are logged, the deletion stands. */
     @Test
     void deletesAPodcastWhoseObjectsCannotBeRemoved() throws Exception {
@@ -132,6 +204,51 @@ class ObjectStorageUnavailableIntegrationTest {
 
         mockMvc.perform(get("/api/v1/podcasts/{slug}", slug).header(HttpHeaders.AUTHORIZATION, admin))
                 .andExpect(status().isNotFound());
+    }
+
+    /** An episode cannot be published while the storage is down: it is inserted as if published before. */
+    private UUID insertEpisode(boolean withImage) {
+        UUID audioFileId = UUID.randomUUID();
+        UUID episodeId = UUID.randomUUID();
+        UUID podcastId = jdbcTemplate.queryForObject("select id from podcast where slug = ?", UUID.class, slug);
+        jdbcTemplate.update(
+                "insert into audio_file (id, mime_type, size_bytes, sha256, file_extension) values (?, ?, ?, ?, ?)",
+                audioFileId,
+                "audio/mpeg",
+                1L,
+                "a".repeat(SHA256_LENGTH),
+                "mp3");
+        jdbcTemplate.update(
+                "insert into episode (id, podcast_id, audio_file_id, guid, title, publication_date, added_at,"
+                        + " episode_type, version, image_mime_type, image_width, image_height, image_size_bytes,"
+                        + " image_sha256) values (?, ?, ?, ?, ?, now(), now(), 'FULL', 0, ?, ?, ?, ?, ?)",
+                episodeId,
+                podcastId,
+                audioFileId,
+                "guid-" + episodeId,
+                "Inserted",
+                withImage ? "image/png" : null,
+                withImage ? 10 : null,
+                withImage ? 10 : null,
+                withImage ? 1L : null,
+                withImage ? "b".repeat(SHA256_LENGTH) : null);
+        return episodeId;
+    }
+
+    private String episodePath(UUID episodeId) {
+        return "/api/v1/" + slug + "/episodes/" + episodeId;
+    }
+
+    private String episodeImagePath(UUID episodeId) {
+        return episodePath(episodeId) + "/image";
+    }
+
+    private String episodeEntityTag(UUID episodeId) throws Exception {
+        return mockMvc.perform(get(episodePath(episodeId)).header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getHeader(HttpHeaders.ETAG);
     }
 
     private ResultActions createPodcast() throws Exception {

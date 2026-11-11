@@ -114,7 +114,12 @@ class OpenApiDocumentationIntegrationTest {
 
         assertThat(created)
                 .containsOnlyKeys(
-                        "createPodcast", "publishEpisode", "putPodcastImage", "createApiToken", "createAdminUser");
+                        "createPodcast",
+                        "publishEpisode",
+                        "putPodcastImage",
+                        "putEpisodeImage",
+                        "createApiToken",
+                        "createAdminUser");
         assertThat(created.values())
                 .allSatisfy(headers -> assertThat(headers.has("Location")).isTrue());
     }
@@ -131,6 +136,9 @@ class OpenApiDocumentationIntegrationTest {
         assertThat(responseHeaders("putPodcastImage", "201")).contains("ETag");
         assertThat(responseHeaders("putPodcastImage", "200")).contains("ETag");
         assertThat(responseHeaders("getPodcastImage", "200")).contains("ETag");
+        assertThat(responseHeaders("putEpisodeImage", "201")).contains("ETag");
+        assertThat(responseHeaders("putEpisodeImage", "200")).contains("ETag");
+        assertThat(responseHeaders("getEpisodeImage", "200")).contains("ETag");
         assertThat(responseHeaders("createApiToken", "201")).doesNotContain("ETag");
     }
 
@@ -140,6 +148,8 @@ class OpenApiDocumentationIntegrationTest {
         assertThat(parameterNames("updateEpisode")).contains("If-Match");
         assertThat(parameterNames("putPodcastImage")).contains("If-Match");
         assertThat(parameterNames("getPodcastImage")).contains("If-None-Match");
+        assertThat(parameterNames("putEpisodeImage")).contains("If-Match");
+        assertThat(parameterNames("getEpisodeImage")).contains("If-None-Match");
         assertThat(parameterNames("createPodcast")).doesNotContain("If-None-Match", "If-Match");
     }
 
@@ -171,6 +181,8 @@ class OpenApiDocumentationIntegrationTest {
                         "updatePodcast",
                         "putPodcastImage",
                         "deletePodcastImage",
+                        "putEpisodeImage",
+                        "deleteEpisodeImage",
                         "publishEpisode",
                         "updateEpisode",
                         "deleteEpisode"))

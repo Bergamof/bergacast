@@ -40,7 +40,6 @@ import org.springframework.web.util.DisconnectedClientHelper;
 public class ProblemDetailsExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ProblemDetailsExceptionHandler.class);
-    private static final String BODY_FIELD = "$";
     private static final String BEARER_CHALLENGE = "Bearer";
     /** Clients closing the connection (e.g. a player seeking) are routine: logged briefly, without stack trace. */
     private static final DisconnectedClientHelper DISCONNECTED_CLIENTS =
@@ -52,7 +51,7 @@ public class ProblemDetailsExceptionHandler extends ResponseEntityExceptionHandl
         Stream<InvalidField> fieldErrors = exception.getBindingResult().getFieldErrors().stream()
                 .map(error -> new InvalidField(error.getField(), messageOf(error)));
         Stream<InvalidField> globalErrors = exception.getBindingResult().getGlobalErrors().stream()
-                .map(error -> new InvalidField(BODY_FIELD, messageOf(error)));
+                .map(error -> new InvalidField(UnprocessableContentException.BODY_FIELD, messageOf(error)));
         return unprocessable(Stream.concat(fieldErrors, globalErrors).toList(), request);
     }
 
@@ -166,7 +165,7 @@ public class ProblemDetailsExceptionHandler extends ResponseEntityExceptionHandl
         if (error instanceof FieldError fieldError) {
             return fieldError.getField();
         }
-        return parameterName == null ? BODY_FIELD : parameterName;
+        return parameterName == null ? UnprocessableContentException.BODY_FIELD : parameterName;
     }
 
     private static String messageOf(MessageSourceResolvable error) {

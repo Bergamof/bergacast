@@ -105,7 +105,8 @@ class FeedEpisodeSelectorTest {
                 null,
                 EpisodeType.FULL,
                 null,
-                enclosure());
+                enclosure(),
+                null);
         FeedItem sameDatesSecondId = new FeedItem(
                 new UUID(0, 2),
                 "Y",
@@ -118,7 +119,8 @@ class FeedEpisodeSelectorTest {
                 null,
                 EpisodeType.FULL,
                 null,
-                enclosure());
+                enclosure(),
+                null);
         FeedSettings ascending = new FeedSettings(
                 null, EpisodeOrdering.PUBLICATION_DATE, EpisodeOrdering.PUBLICATION_DATE, SortDirection.ASC, false);
 
@@ -149,7 +151,8 @@ class FeedEpisodeSelectorTest {
                 null,
                 EpisodeType.FULL,
                 null,
-                enclosure());
+                enclosure(),
+                null);
     }
 
     private static FeedItem.Enclosure enclosure() {
