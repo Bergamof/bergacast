@@ -27,7 +27,10 @@ public record BergacastProperties(
         Storage storage,
         Jwt jwt,
         @DefaultValue Cors cors,
-        @DefaultValue("20MB") DataSize maxImageUploadSize) {
+        @DefaultValue(DEFAULT_MAX_IMAGE_UPLOAD_SIZE) DataSize maxImageUploadSize) {
+
+    /** Default of {@code BERGACAST_MAX_IMAGE_UPLOAD_SIZE}, also read on its own by {@link MultipartConfiguration}. */
+    public static final String DEFAULT_MAX_IMAGE_UPLOAD_SIZE = "20MB";
 
     /** Uploaded images are held in a byte array, hence an upper bound below 2 GiB. */
     public static final DataSize MAX_IMAGE_UPLOAD_SIZE_LIMIT = DataSize.ofGigabytes(1);

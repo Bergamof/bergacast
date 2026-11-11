@@ -1,6 +1,7 @@
 package fr.bergadev.bergacast.config;
 
 import jakarta.servlet.MultipartConfigElement;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.servlet.autoconfigure.MultipartProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,10 +18,17 @@ class MultipartConfiguration {
     static final DataSize REQUEST_OVERHEAD = DataSize.ofMegabytes(1);
     private static final long UNLIMITED = -1;
 
+    /**
+     * Only the image size is read here, not the whole {@link BergacastProperties}: this bean is created while the web
+     * server starts, and binding every {@code bergacast.*} property that early would fix the ones a test registers
+     * later (the object storage endpoint), sending its requests to the real storage.
+     */
     @Bean
     MultipartConfigElement multipartConfigElement(
-            MultipartProperties properties, BergacastProperties bergacastProperties) {
-        return withRequestOverhead(properties.createMultipartConfig(), bergacastProperties.maxImageUploadSize());
+            MultipartProperties properties,
+            @Value("${bergacast.max-image-upload-size:" + BergacastProperties.DEFAULT_MAX_IMAGE_UPLOAD_SIZE + "}")
+                    DataSize maxImageSize) {
+        return withRequestOverhead(properties.createMultipartConfig(), maxImageSize);
     }
 
     static MultipartConfigElement withRequestOverhead(MultipartConfigElement fileLimits, DataSize maxImageSize) {
