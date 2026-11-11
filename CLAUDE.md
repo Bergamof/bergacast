@@ -135,6 +135,7 @@ Docker (racine) : `cp .env.example .env` (renseigner `BERGACAST_JWT_SECRET`, mot
 - `@vitest/coverage-v8` a `vitest` en peer exact : toujours les monter ensemble (groupe Dependabot `vitest`).
 - `engine-strict=true` : Node ≠ 24 ou npm ≠ 12.2.1 → `npm ci` échoue ; installer `npm install -g npm@12.2.1`.
 - Spotless formate aussi les `*.gradle.kts` (ktlint) : lancer `spotlessApply` après toute modif du build.
+- `github/codeql-action/init` et `analyze` doivent avoir la même version (sinon « configuration error » de CodeQL) : groupe Dependabot `codeql-action` dans `.github/dependabot.yml`, à monter ensemble à la main si deux PR séparées subsistent.
 - Ports : 8080 (backend), 5173 (Vite), 5432 (base de dev) ; conflit fréquent avec un autre PostgreSQL/une autre app → libérer le port ou changer `BERGACAST_PORT`/`SPRING_DATASOURCE_URL`.
 - `docker compose` exige un `.env` (`POSTGRES_PASSWORD`, `BERGACAST_JWT_SECRET` en `:?`) même pour démarrer seulement `db`. Volume PostgreSQL 18 monté sur `/var/lib/postgresql` (et non `/var/lib/postgresql/data`).
 ## État du projet
