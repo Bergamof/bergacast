@@ -12,7 +12,7 @@ function shellQuote(value: string): string {
 	return `'${value.replaceAll("'", `'\\''`)}'`;
 }
 
-/** Example command showing automated tools how to publish an episode (multipart upload). */
+/** Example command showing automated tools how to publish an episode (multipart upload, image optional). */
 export function buildPublishCurlExample(publishUrl: string): string {
 	const metadataPart = `metadata=${JSON.stringify(EXAMPLE_METADATA)};type=application/json`;
 	return [
@@ -20,6 +20,7 @@ export function buildPublishCurlExample(publishUrl: string): string {
 		`  -H ${shellQuote(`Authorization: Bearer ${TOKEN_PLACEHOLDER}`)}`,
 		`  -H ${shellQuote('Idempotency-Key: episode-42')}`,
 		`  -F ${shellQuote(metadataPart)}`,
-		`  -F ${shellQuote('audio=@episode-42.mp3;type=audio/mpeg')}`
+		`  -F ${shellQuote('audio=@episode-42.mp3;type=audio/mpeg')}`,
+		`  -F ${shellQuote('image=@episode-42.jpg;type=image/jpeg')}`
 	].join(' \\\n');
 }

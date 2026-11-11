@@ -62,7 +62,14 @@ public record EpisodeResponse(
         @Nullable
         Boolean explicit,
 
-        @Schema(description = "Audio file of the episode.") Audio audio) {
+        @Schema(description = "Audio file of the episode.") Audio audio,
+
+        @Schema(
+                description = "Cover image of the episode (`itunes:image` of its feed item); absent when the "
+                        + "episode has none, in which case podcast apps show the image of the podcast.",
+                nullable = true)
+        @Nullable
+        EpisodeImageResponse image) {
 
     /** Audio file of an episode. */
     @Schema(description = "Audio file of an episode.")

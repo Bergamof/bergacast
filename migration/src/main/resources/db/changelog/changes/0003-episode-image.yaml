@@ -1,0 +1,21 @@
+# Optional cover image of an episode: its metadata lives on the episode row (all columns null when there is no image),
+# the content is an object of the storage. Additive, hence compatible with the previous backend version.
+databaseChangeLog:
+  - changeSet:
+      id: add-episode-image
+      author: bergacast
+      changes:
+        - sql:
+            sql: |
+              ALTER TABLE episode
+                  ADD COLUMN image_mime_type  varchar(127),
+                  ADD COLUMN image_width      integer CHECK (image_width >= 1),
+                  ADD COLUMN image_height     integer CHECK (image_height >= 1),
+                  ADD COLUMN image_size_bytes bigint CHECK (image_size_bytes >= 0),
+                  ADD COLUMN image_sha256     varchar(64),
+                  ADD CONSTRAINT episode_image_all_or_nothing CHECK (
+                      (image_mime_type IS NULL) = (image_width IS NULL)
+                      AND (image_mime_type IS NULL) = (image_height IS NULL)
+                      AND (image_mime_type IS NULL) = (image_size_bytes IS NULL)
+                      AND (image_mime_type IS NULL) = (image_sha256 IS NULL));
+            splitStatements: false

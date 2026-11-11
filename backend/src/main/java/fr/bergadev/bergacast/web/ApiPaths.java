@@ -13,6 +13,7 @@ public final class ApiPaths {
     public static final String PODCAST_FEED_PUBLICATIONS = PODCAST + "/feed-publications";
     public static final String EPISODES = BASE + "/{slug}/episodes";
     public static final String EPISODE = EPISODES + "/{episodeId}";
+    public static final String EPISODE_IMAGE = EPISODE + "/image";
     public static final String ADMIN_USERS = BASE + "/admin-users";
 
     /**
@@ -23,6 +24,7 @@ public final class ApiPaths {
             BASE + "/{slug:(?!(?:podcasts|admin-users|access-tokens)$)[a-z0-9-]+}/episodes";
 
     public static final String EPISODE_MAPPING = EPISODES_MAPPING + "/{episodeId}";
+    public static final String EPISODE_IMAGE_MAPPING = EPISODE_MAPPING + "/image";
     public static final String ADMIN_USER = ADMIN_USERS + "/{adminUserId}";
 
     private ApiPaths() {}

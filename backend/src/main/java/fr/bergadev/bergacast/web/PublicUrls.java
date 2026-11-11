@@ -37,6 +37,10 @@ public class PublicUrls {
         return media(MediaKeys.episodeAudio(podcastSlug, episodeId, fileExtension));
     }
 
+    public URI episodeImage(String podcastSlug, UUID episodeId, String fileExtension) {
+        return media(MediaKeys.episodeImage(podcastSlug, episodeId, fileExtension));
+    }
+
     public URI podcastImage(String podcastSlug, String fileExtension) {
         return media(MediaKeys.podcastImage(podcastSlug, fileExtension));
     }

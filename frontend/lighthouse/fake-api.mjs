@@ -1,5 +1,5 @@
 // Fake Bergacast API (HAL, Problem Details) giving the SPA realistic data to render during the Lighthouse audit:
-// a paginated list of podcasts, a podcast with a non-square image (warning), a scheduled episode, tokens, admins.
+// a paginated list of podcasts, a podcast with a non-square image (warning), a scheduled episode, an episode with an image, tokens, admins.
 // Read-only: the two writes it handles answer with the errors the pages must display well (401 on login, 422 on
 // creation); any other write is refused with a 405, so a journey that forgot to intercept its write fails loudly.
 
@@ -7,6 +7,7 @@ const NOW = new Date().toISOString();
 const PODCAST_COUNT = 25;
 const EPISODE_COUNT = 3;
 const SCHEDULED_EPISODE = 1;
+const WITH_IMAGE_EPISODE = 2;
 const DEFAULT_PAGE_SIZE = 20;
 export const MAIN_PODCAST = 'mon-podcast';
 
@@ -84,7 +85,22 @@ function episode(origin, slug, number) {
 			sha256: 'b'.repeat(64),
 			url: `${origin}/media/${slug}/episodes/ep-${number}/audio.mp3`
 		},
-		_links: { self: { href: `${origin}/api/v1/${slug}/episodes/ep-${number}` } }
+		// Only the second episode has an image of its own, to render both states of the image form.
+		image:
+			number === WITH_IMAGE_EPISODE
+				? {
+						mimeType: 'image/png',
+						width: 1000,
+						height: 1000,
+						sizeBytes: 234567,
+						sha256: 'c'.repeat(64),
+						url: `${origin}/media/${slug}/episodes/ep-${number}/image.png`
+					}
+				: null,
+		_links: {
+			self: { href: `${origin}/api/v1/${slug}/episodes/ep-${number}` },
+			image: { href: `${origin}/api/v1/${slug}/episodes/ep-${number}/image` }
+		}
 	};
 }
 

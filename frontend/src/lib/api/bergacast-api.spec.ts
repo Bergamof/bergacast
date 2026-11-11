@@ -269,6 +269,81 @@ describe('BergacastApi', () => {
 		expect(metadata.type).toBe('application/json');
 		expect(JSON.parse(await metadata.text())).toEqual({ title: 'Épisode' });
 		expect((body.get('audio') as File).name).toBe('episode.mp3');
+		expect(body.has('image')).toBe(false);
+	});
+
+	it('sends the optional image of an episode as a part of the upload', async () => {
+		const { api, requests } = createApi(jsonResponse(201, { id: 'e2' }));
+		const image = new File(['jpg'], 'cover.jpg', { type: 'image/jpeg' });
+
+		await api.uploadEpisode(podcast, {
+			metadata: { title: 'Épisode' },
+			audio: new File(['ID3'], 'episode.mp3', { type: 'audio/mpeg' }),
+			image,
+			idempotencyKey: 'key-1'
+		});
+
+		const sent = (requests[0].body as FormData).get('image') as File;
+		expect(sent.name).toBe('cover.jpg');
+		expect(sent.type).toBe('image/jpeg');
+	});
+
+	describe('episode image', () => {
+		const episodeWith = (image: { sha256: string } | null) =>
+			({
+				id: 'e1',
+				image,
+				_links: {
+					self: { href: '/api/v1/demo/episodes/e1' },
+					image: { href: '/api/v1/demo/episodes/e1/image' }
+				}
+			}) as unknown as Episode;
+
+		it('uploads the raw file through the image link, without If-Match when there is none', async () => {
+			const stored = { mimeType: 'image/png', width: 1400, height: 1400, sha256: 'new' };
+			const { api, requests } = createApi(jsonResponse(201, stored, { ETag: '"new"' }));
+			const file = new File(['png'], 'cover.png', { type: 'image/png' });
+
+			const uploaded = await api.uploadEpisodeImage(episodeWith(null), file);
+
+			expect(requests[0]).toMatchObject({ url: '/api/v1/demo/episodes/e1/image', method: 'PUT' });
+			expect(requests[0].body).toBe(file);
+			expect(requests[0].headers.get('Content-Type')).toBe('image/png');
+			expect(requests[0].headers.has('If-Match')).toBe(false);
+			expect(uploaded).toEqual({ resource: stored, etag: '"new"' });
+		});
+
+		it('replaces the image only if it is still the one displayed', async () => {
+			const { api, requests } = createApi(jsonResponse(200, {}));
+
+			await api.uploadEpisodeImage(
+				episodeWith({ sha256: 'old' }),
+				new File(['jpg'], 'c.jpg', { type: 'image/jpeg' })
+			);
+
+			expect(requests[0].headers.get('If-Match')).toBe('"old"');
+		});
+
+		it('reports a rejected image as problem details', async () => {
+			const { api } = createApi(
+				jsonResponse(422, { title: 'Image invalide' }, {}, 'application/problem+json')
+			);
+
+			await expect(
+				api.uploadEpisodeImage(episodeWith(null), new File(['x'], 'c.png', { type: 'image/png' }))
+			).rejects.toMatchObject({ status: 422, problem: { title: 'Image invalide' } });
+		});
+
+		it('deletes the image through the image link', async () => {
+			const { api, requests } = createApi(emptyResponse(204));
+
+			await api.deleteEpisodeImage(episodeWith({ sha256: 'old' }));
+
+			expect(requests[0]).toMatchObject({
+				url: '/api/v1/demo/episodes/e1/image',
+				method: 'DELETE'
+			});
+		});
 	});
 
 	it('follows the progress of an episode upload', async () => {

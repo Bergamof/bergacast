@@ -7,6 +7,7 @@ import type {
 	ApiToken,
 	CreatedApiToken,
 	Episode,
+	EpisodeImageResource,
 	EpisodeMetadata,
 	FeedPublication,
 	Podcast,
@@ -30,6 +31,8 @@ export interface PageRequest {
 export interface EpisodeUpload {
 	metadata: UploadMetadata;
 	audio: File;
+	/** Optional cover image of the episode, sent in the same request. */
+	image?: File;
 	/** Lets a retried upload return the already created episode instead of a duplicate. */
 	idempotencyKey: string;
 }
@@ -175,6 +178,9 @@ export class BergacastApi {
 			new Blob([JSON.stringify(upload.metadata)], { type: 'application/json' })
 		);
 		formData.append('audio', upload.audio, upload.audio.name);
+		if (upload.image) {
+			formData.append('image', upload.image, upload.image.name);
+		}
 		const response = await this.#client.postMultipart<Episode>(
 			requireLinkHref(podcast, 'episodes'),
 			formData,
@@ -191,6 +197,25 @@ export class BergacastApi {
 		const href = requireLinkHref(current.resource, 'self');
 		const response = await this.#client.patch<Episode>(href, metadata, current.etag);
 		return { resource: response.body, etag: response.etag };
+	}
+
+	/**
+	 * Creates or replaces the optional cover image of an episode with the raw file. When an image
+	 * is already stored, its SHA-256 (the image ETag) is sent in `If-Match` so that a concurrent
+	 * replacement is not silently overwritten.
+	 */
+	async uploadEpisodeImage(episode: Episode, file: File): Promise<Versioned<EpisodeImageResource>> {
+		const ifMatch = episode.image ? `"${episode.image.sha256}"` : null;
+		const response = await this.#client.putBlob<EpisodeImageResource>(
+			requireLinkHref(episode, 'image'),
+			file,
+			ifMatch
+		);
+		return { resource: response.body, etag: response.etag };
+	}
+
+	async deleteEpisodeImage(episode: Episode): Promise<void> {
+		await this.#client.delete(requireLinkHref(episode, 'image'));
 	}
 
 	async deleteEpisode(episode: Episode): Promise<void> {

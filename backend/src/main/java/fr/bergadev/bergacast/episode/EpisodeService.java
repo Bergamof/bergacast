@@ -32,6 +32,7 @@ public class EpisodeService {
     private final EpisodeRepository episodeRepository;
     private final PodcastService podcastService;
     private final AudioUploads audioUploads;
+    private final EpisodeImages episodeImages;
     private final JsonMergePatch jsonMergePatch;
     private final ApplicationEventPublisher events;
     private final Clock clock;
@@ -40,12 +41,14 @@ public class EpisodeService {
             EpisodeRepository episodeRepository,
             PodcastService podcastService,
             AudioUploads audioUploads,
+            EpisodeImages episodeImages,
             JsonMergePatch jsonMergePatch,
             ApplicationEventPublisher events,
             Clock clock) {
         this.episodeRepository = episodeRepository;
         this.podcastService = podcastService;
         this.audioUploads = audioUploads;
+        this.episodeImages = episodeImages;
         this.jsonMergePatch = jsonMergePatch;
         this.events = events;
         this.clock = clock;
@@ -69,7 +72,7 @@ public class EpisodeService {
     }
 
     /**
-     * Publishes an episode whose audio file is already in the object storage, or returns the episode published
+     * Publishes an episode whose audio file (and optional image) is already in the object storage, or returns the episode published
      * meanwhile with the same idempotency key. The checks of {@link #prepare} are made again, since the data may have
      * changed while the audio file was uploaded; the feed is written again once the episode is committed.
      *
@@ -80,6 +83,7 @@ public class EpisodeService {
             UUID episodeId,
             EpisodeMetadata metadata,
             AudioFile audioFile,
+            @Nullable EpisodeImage image,
             Instant addedAt,
             @Nullable String idempotencyKey) {
         Podcast podcast = podcastService.getBySlug(slug);
@@ -89,7 +93,7 @@ public class EpisodeService {
         }
         requireUniqueGuid(podcast, metadata.guid());
         Episode episode = episodeRepository.saveAndFlush(
-                new Episode(episodeId, podcast, audioFile, metadata, addedAt, idempotencyKey));
+                new Episode(episodeId, podcast, audioFile, metadata, image, addedAt, idempotencyKey));
         events.publishEvent(new PodcastFeedChanged(slug));
         return episode;
     }
@@ -152,14 +156,16 @@ public class EpisodeService {
 
     /**
      * Deletes an episode (its audio file row is deleted by a database trigger); once committed, the feed is written
-     * again and the audio object is removed from the storage.
+     * again and the audio and image objects are removed from the storage.
      */
     public void delete(String slug, UUID episodeId) {
         Episode episode = get(slug, episodeId);
         String audioExtension = episode.getAudioFile().getFileExtension();
+        Optional<EpisodeImage> image = episode.getImage();
         episodeRepository.delete(episode);
-        // Registered first: the audio object goes even if writing the feed then fails.
+        // Registered first: the objects go even if writing the feed then fails.
         AfterCommit.run(() -> audioUploads.discard(slug, episodeId, audioExtension));
+        image.ifPresent(stored -> AfterCommit.run(() -> episodeImages.discard(slug, episodeId, stored.format())));
         events.publishEvent(new PodcastFeedChanged(slug));
     }
 

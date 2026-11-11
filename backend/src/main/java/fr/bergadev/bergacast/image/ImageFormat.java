@@ -3,6 +3,9 @@ package fr.bergadev.bergacast.image;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
+import org.springframework.http.InvalidMediaTypeException;
+import org.springframework.http.MediaType;
 
 /** Image formats accepted for cover art, the ones Apple Podcasts supports. */
 public enum ImageFormat {
@@ -39,6 +42,22 @@ public enum ImageFormat {
         return Arrays.stream(values())
                 .filter(format -> format.mimeType.equals(normalized))
                 .findFirst();
+    }
+
+    /**
+     * Returns the format of a {@code Content-Type} header value (parameters such as {@code charset} ignored), if it
+     * is a supported one.
+     */
+    public static Optional<ImageFormat> fromContentType(@Nullable String contentType) {
+        if (contentType == null) {
+            return Optional.empty();
+        }
+        try {
+            MediaType mediaType = MediaType.parseMediaType(contentType);
+            return fromMimeType(mediaType.getType() + "/" + mediaType.getSubtype());
+        } catch (InvalidMediaTypeException invalid) {
+            return Optional.empty();
+        }
     }
 
     static Optional<ImageFormat> fromImageIoName(String formatName) {

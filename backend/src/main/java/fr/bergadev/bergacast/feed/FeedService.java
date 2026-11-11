@@ -116,6 +116,10 @@ public class FeedService {
                 new FeedItem.Enclosure(
                         publicUrls.audio(slug, episode.getId(), audio.getFileExtension()),
                         audio.getSizeBytes(),
-                        audio.getMimeType()));
+                        audio.getMimeType()),
+                episode.getImage()
+                        .map(image -> publicUrls.episodeImage(
+                                slug, episode.getId(), image.format().fileExtension()))
+                        .orElse(null));
     }
 }

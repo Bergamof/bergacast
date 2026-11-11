@@ -65,21 +65,25 @@ class MigratorTest {
         migrate(url);
 
         assertThat(query(url, "SELECT id, exectype FROM databasechangelog ORDER BY orderexecuted"))
-                .containsExactly(List.of("baseline-schema", "EXECUTED"), List.of("drop-flyway-history", "MARK_RAN"));
+                .containsExactly(
+                        List.of("baseline-schema", "EXECUTED"),
+                        List.of("drop-flyway-history", "MARK_RAN"),
+                        List.of("add-episode-image", "EXECUTED"));
         assertThat(tables(url))
                 .contains("podcast", "episode", "audio_file", "podcast_image", "api_token", "admin_user");
     }
 
     @Test
-    void createsTheSameSchemaAsTheFlywayMigrations() throws Exception {
-        String migratedByLiquibase = PostgresDatabases.createDatabase();
-        String migratedByFlyway = PostgresDatabases.createDatabase();
+    void createsTheSameSchemaOnAnEmptyDatabaseAndOnOneFlywayMigrated() throws Exception {
+        String emptyDatabase = PostgresDatabases.createDatabase();
+        String flywayMigrated = PostgresDatabases.createDatabase();
 
-        migrate(migratedByLiquibase);
-        applyFlywayMigrations(migratedByFlyway);
+        migrate(emptyDatabase);
+        applyFlywayMigrations(flywayMigrated);
+        migrate(flywayMigrated);
 
-        List<List<String>> schema = schemaOf(migratedByLiquibase);
-        assertThat(schema).hasSizeGreaterThan(50).isEqualTo(schemaOf(migratedByFlyway));
+        List<List<String>> schema = schemaOf(emptyDatabase);
+        assertThat(schema).hasSizeGreaterThan(50).isEqualTo(schemaOf(flywayMigrated));
     }
 
     @Test
@@ -92,13 +96,54 @@ class MigratorTest {
                         + " sort_direction, created_at, updated_at, version) VALUES ('" + PODCAST_ID
                         + "', 'former', 'Former',"
                         + " 'Already there', 'fr', 'PUBLICATION_DATE', 'PUBLICATION_DATE', 'DESC', now(), now(), 0)");
-        List<List<String>> schemaBefore = schemaOf(url);
 
         migrate(url);
 
         assertThat(execType(url, "baseline-schema")).isEqualTo("MARK_RAN");
         assertThat(query(url, "SELECT slug FROM podcast")).containsExactly(List.of("former"));
-        assertThat(schemaOf(url)).isEqualTo(schemaBefore);
+    }
+
+    @Test
+    void addsTheOptionalImageOfEpisodesWithoutTouchingExistingEpisodes() throws Exception {
+        String url = PostgresDatabases.createDatabase();
+        applyFlywayMigrations(url);
+
+        migrate(url);
+
+        assertThat(execType(url, "add-episode-image")).isEqualTo("EXECUTED");
+        assertThat(query(
+                        url,
+                        "SELECT column_name FROM information_schema.columns WHERE table_name = 'episode'"
+                                + " AND column_name LIKE 'image_%' ORDER BY 1"))
+                .containsExactly(
+                        List.of("image_height"),
+                        List.of("image_mime_type"),
+                        List.of("image_sha256"),
+                        List.of("image_size_bytes"),
+                        List.of("image_width"));
+    }
+
+    @Test
+    void refusesAnEpisodeImageWithMissingMetadata() throws Exception {
+        String url = PostgresDatabases.createDatabase();
+        migrate(url);
+        execute(
+                url,
+                "INSERT INTO podcast (id, slug, title, description, language, evict_oldest_by, sort_by,"
+                        + " sort_direction, created_at, updated_at, version) VALUES ('" + PODCAST_ID
+                        + "', 'show', 'Show', 'Desc', 'fr', 'PUBLICATION_DATE', 'PUBLICATION_DATE', 'DESC',"
+                        + " now(), now(), 0)");
+
+        assertThatThrownBy(() -> execute(
+                        url,
+                        "INSERT INTO audio_file (id, mime_type, size_bytes, sha256, file_extension) VALUES"
+                                + " ('22222222-2222-2222-2222-222222222222', 'audio/mpeg', 1, 'abc', 'mp3');"
+                                + " INSERT INTO episode (id, podcast_id, audio_file_id, guid, title, publication_date,"
+                                + " added_at, episode_type, version, image_mime_type) VALUES"
+                                + " ('33333333-3333-3333-3333-333333333333', '" + PODCAST_ID
+                                + "', '22222222-2222-2222-2222-222222222222', 'g', 'T', now(), now(), 'FULL', 0,"
+                                + " 'image/png')"))
+                .hasMessageContaining("episode_image_all_or_nothing");
     }
 
     @Test

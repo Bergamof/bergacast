@@ -25,6 +25,11 @@ public final class MediaKeys {
         return podcastFolder(podcastSlug) + "episodes/" + episodeId + "/audio." + fileExtension;
     }
 
+    /** Cover image of an episode, e.g. {@code my-podcast/episodes/3f2c…/image.jpg}. */
+    public static String episodeImage(String podcastSlug, UUID episodeId, String fileExtension) {
+        return podcastFolder(podcastSlug) + "episodes/" + episodeId + "/image." + fileExtension;
+    }
+
     /** Prefix of every object of a podcast but its feed. */
     public static String podcastFolder(String podcastSlug) {
         return podcastSlug + "/";

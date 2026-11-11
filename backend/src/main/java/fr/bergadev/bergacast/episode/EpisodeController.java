@@ -54,17 +54,22 @@ class EpisodeController {
     private static final int MAX_IDEMPOTENCY_KEY_LENGTH = 255;
     private static final String METADATA_PART = "metadata";
     private static final String AUDIO_PART = "audio";
+    private static final String IMAGE_PART = "image";
     private static final String PUBLISH_DESCRIPTION = """
             Publishes a new episode of the podcast: the audio file and its metadata are stored, and the episode \
             appears in the public feed (`/{slug}.xml`) from its `publicationDate`.
 
             **Authentication**: an API token of this podcast (`Authorization: Bearer bgc_…`) or an administrator JWT.
 
-            **Body** (`multipart/form-data`), two parts:
+            **Body** (`multipart/form-data`), two parts, plus an optional one:
             - `metadata`: JSON object where only `title` is required. Defaults: `guid` is a random UUID, \
             `publicationDate` the upload time, `episodeType` FULL.
             - `audio`: the audio file, with a concrete `audio/*` content type (e.g. `audio/mpeg`), at most \
             BERGACAST_MAX_UPLOAD_SIZE (500MB by default).
+            - `image` (optional): the cover image of the episode, `image/jpeg` or `image/png`, at most \
+            BERGACAST_MAX_IMAGE_UPLOAD_SIZE (20MB by default) and downscaled to 3000 pixels, like the podcast \
+            image. The feed item carries it as `itunes:image`; without it, apps show the image of the podcast. It \
+            can also be set or replaced later by an administrator (`PUT …/episodes/{id}/image`).
 
             **Scheduling**: with a `publicationDate` in the future, the episode stays out of the feed until that \
             date, unless the podcast feed settings include future episodes.
@@ -80,7 +85,8 @@ class EpisodeController {
               -H 'Authorization: Bearer bgc_…' \\
               -H 'Idempotency-Key: my-podcast-042' \\
               -F 'metadata=<episode-42.json;type=application/json' \\
-              -F 'audio=@episode-42.mp3;type=audio/mpeg'
+              -F 'audio=@episode-42.mp3;type=audio/mpeg' \\
+              -F 'image=@episode-42.jpg;type=image/jpeg'
             ```
 
             **Metadata content type**: the `metadata` part should be sent as `application/json`. For tools that \
@@ -99,7 +105,8 @@ class EpisodeController {
                 "episodeType": "FULL",
                 "explicit": false
               },
-              "audio": "(binary content of episode-42.mp3, sent as audio/mpeg)"
+              "audio": "(binary content of episode-42.mp3, sent as audio/mpeg)",
+              "image": "(optional, binary content of episode-42.jpg, sent as image/jpeg)"
             }""";
     private static final String MINIMAL_EPISODE_EXAMPLE = """
             {
@@ -134,7 +141,7 @@ class EpisodeController {
             requestBody =
                     @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             required = true,
-                            description = "The episode metadata (JSON) and its audio file.",
+                            description = "The episode metadata (JSON), its audio file and, optionally, its image.",
                             content =
                                     @Content(
                                             mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
@@ -143,7 +150,8 @@ class EpisodeController {
                                                 @Encoding(
                                                         name = METADATA_PART,
                                                         contentType = MediaType.APPLICATION_JSON_VALUE),
-                                                @Encoding(name = AUDIO_PART, contentType = "audio/*")
+                                                @Encoding(name = AUDIO_PART, contentType = "audio/*"),
+                                                @Encoding(name = IMAGE_PART, contentType = "image/jpeg, image/png")
                                             },
                                             examples = {
                                                 @ExampleObject(
@@ -172,14 +180,18 @@ class EpisodeController {
     @ApiResponse(responseCode = "409", description = "Another episode of the podcast has this guid", content = @Content)
     @ApiResponse(
             responseCode = "413",
-            description = "The audio file exceeds the maximum upload size (BERGACAST_MAX_UPLOAD_SIZE)",
+            description = "The audio file exceeds the maximum upload size (BERGACAST_MAX_UPLOAD_SIZE), or the "
+                    + "image exceeds BERGACAST_MAX_IMAGE_UPLOAD_SIZE",
             content = @Content)
     @ApiResponse(
             responseCode = "415",
-            description = "The audio part has no concrete audio/* content type, or the metadata part has a content "
-                    + "type that cannot hold JSON",
+            description = "The audio part has no concrete audio/* content type, the image part is neither "
+                    + "image/jpeg nor image/png, or the metadata part has a content type that cannot hold JSON",
             content = @Content)
-    @ApiResponse(responseCode = "422", description = "Invalid metadata, listed in errors", content = @Content)
+    @ApiResponse(
+            responseCode = "422",
+            description = "Invalid metadata, listed in errors, or an image part that is not a valid image",
+            content = @Content)
     @EntityTagged
     @ApiResponse(
             responseCode = StorageResponses.UNAVAILABLE,
@@ -189,6 +201,7 @@ class EpisodeController {
             @PathVariable String slug,
             @Parameter(hidden = true) @RequestPart(METADATA_PART) Part metadata,
             @Parameter(hidden = true) @RequestPart(AUDIO_PART) MultipartFile audio,
+            @Parameter(hidden = true) @RequestPart(name = IMAGE_PART, required = false) @Nullable MultipartFile image,
             @Parameter(
                             description = "Unique key of this publication, e.g. a UUID or the episode's own "
                                     + "identifier, making retries safe: a key already used for this podcast returns "
@@ -198,7 +211,12 @@ class EpisodeController {
                     @Size(max = MAX_IDEMPOTENCY_KEY_LENGTH)
                     @Nullable
                     String idempotencyKey) {
-        Episode episode = episodePublication.publish(slug, metadataReader.read(metadata), audio, idempotencyKey);
+        Episode episode = episodePublication.publish(
+                slug,
+                metadataReader.read(metadata),
+                audio,
+                image == null || image.isEmpty() ? null : image,
+                idempotencyKey);
         return ResponseEntity.created(ApiLinks.uri(ApiPaths.EPISODE, slug, episode.getId()))
                 .eTag(EpisodeService.entityTag(episode))
                 .body(assembler.toModel(episode));

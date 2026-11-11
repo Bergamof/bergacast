@@ -25,6 +25,12 @@ class MediaKeysTest {
                 .isEqualTo("my-podcast/episodes/3f2c8a1e-5b7d-4c9e-8f10-0123456789ab/audio.mp3");
     }
 
+    @Test
+    void storesTheImageOfAnEpisodeBesideItsAudio() {
+        assertThat(MediaKeys.episodeImage("my-podcast", EPISODE_ID, "jpg"))
+                .isEqualTo("my-podcast/episodes/3f2c8a1e-5b7d-4c9e-8f10-0123456789ab/image.jpg");
+    }
+
     /** The folder prefix ends with a slash: it never matches the objects of a podcast whose slug extends this one. */
     @Test
     void groupsEveryObjectOfAPodcastButItsFeedUnderItsFolder() {
@@ -33,6 +39,7 @@ class MediaKeysTest {
         assertThat(folder).isEqualTo("my-podcast/");
         assertThat(MediaKeys.podcastImage("my-podcast", "jpg")).startsWith(folder);
         assertThat(MediaKeys.episodeAudio("my-podcast", EPISODE_ID, "m4a")).startsWith(folder);
+        assertThat(MediaKeys.episodeImage("my-podcast", EPISODE_ID, "png")).startsWith(folder);
         assertThat(MediaKeys.feed("my-podcast")).doesNotStartWith(folder);
         assertThat(MediaKeys.podcastImage("my-podcast-2", "jpg")).doesNotStartWith(folder);
     }

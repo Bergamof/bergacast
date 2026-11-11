@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import type { PodcastImage } from '../api/resources';
 	import { formatFileSize } from '../format/file-size';
 	import type { FieldErrors } from '../forms/field-errors';
@@ -19,13 +20,24 @@
 	import StatusMessage from './StatusMessage.svelte';
 
 	interface Props {
+		/** Cover image of a podcast or of an episode: the two share their rules and representation. */
 		image: PodcastImage | null;
-		podcastTitle: string;
+		/** Title of the podcast or episode, used in the alternative text and the confirmation. */
+		subjectTitle: string;
+		/** Identifies the file input, unique on the page. */
+		inputId: string;
+		/** Explains what the image is for and the accepted files. */
+		intro: Snippet;
+		/** Said when there is no image yet. */
+		absent: Snippet;
+		/** Consequence of the deletion, shown in the confirmation. */
+		deletionNotice: Snippet;
 		onUpload: (file: File) => Promise<void>;
 		onDelete: () => Promise<void>;
 	}
 
-	let { image, podcastTitle, onUpload, onDelete }: Props = $props();
+	let { image, subjectTitle, inputId, intro, absent, deletionNotice, onUpload, onDelete }: Props =
+		$props();
 
 	let files = $state<FileList | undefined>();
 	let fileInput: HTMLInputElement | undefined = $state();
@@ -73,16 +85,16 @@
 </script>
 
 <p class="muted">
-	Une image envoyée ici remplace, dans le flux RSS, l’URL d’image externe des réglages. JPEG ou PNG,
-	{formatFileSize(MAX_IMAGE_FILE_SIZE_BYTES)} au maximum ; au-delà de 3000 px, le serveur la réduit. Apple
-	Podcasts recommande une image carrée de 1400 à 3000 px de côté.
+	{@render intro()}
+	JPEG ou PNG, {formatFileSize(MAX_IMAGE_FILE_SIZE_BYTES)} au maximum ; au-delà de 3000 px, le serveur
+	la réduit. Apple Podcasts recommande une image carrée de 1400 à 3000 px de côté.
 </p>
 
 {#if image}
 	<div class="current">
 		<img
 			src={imagePreviewUrl(image)}
-			alt="Couverture actuelle de « {podcastTitle} »"
+			alt="Couverture actuelle de « {subjectTitle} »"
 			width={image.width}
 			height={image.height}
 		/>
@@ -96,7 +108,7 @@
 		</dl>
 	</div>
 {:else}
-	<p>Aucune image envoyée : le flux utilise l’URL d’image externe, si elle est renseignée.</p>
+	<p>{@render absent()}</p>
 {/if}
 
 <!-- Announced when an upload brings them; always rendered, as a live region must be. -->
@@ -113,7 +125,7 @@
 <form novalidate onsubmit={handleSubmit}>
 	<RequiredFieldsLegend />
 	<FormField
-		id="podcast-image"
+		id={inputId}
 		label={image ? 'Nouvelle image' : 'Image'}
 		required
 		error={form.fieldErrors.image}
@@ -136,11 +148,11 @@
 		{#if image}
 			<ConfirmButton
 				label="Supprimer l’image"
-				title="Supprimer l’image de « {podcastTitle} » ?"
+				title="Supprimer l’image de « {subjectTitle} » ?"
 				onConfirm={deleteImage}
 				afterConfirm={() => fileInput?.focus()}
 			>
-				<p>Le flux RSS utilisera de nouveau l’URL d’image externe, si elle est renseignée.</p>
+				<p>{@render deletionNotice()}</p>
 			</ConfirmButton>
 		{/if}
 		<StatusMessage message={statusMessage} />

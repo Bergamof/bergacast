@@ -167,16 +167,8 @@ class PodcastImageController {
 
     /** The mapping only accepts the supported types; parameters such as {@code charset} are ignored. */
     private static ImageFormat declaredFormat(HttpServletRequest request) {
-        String contentType = request.getContentType();
-        if (contentType == null) {
-            throw unsupported();
-        }
-        MediaType mediaType = MediaType.parseMediaType(contentType);
-        return ImageFormat.fromMimeType(mediaType.getType() + "/" + mediaType.getSubtype())
-                .orElseThrow(PodcastImageController::unsupported);
-    }
-
-    private static UnsupportedMediaTypeException unsupported() {
-        return new UnsupportedMediaTypeException("The image must be sent as image/jpeg or image/png");
+        return ImageFormat.fromContentType(request.getContentType())
+                .orElseThrow(
+                        () -> new UnsupportedMediaTypeException("The image must be sent as image/jpeg or image/png"));
     }
 }

@@ -114,6 +114,10 @@ public class RssFeedWriter {
         itunesElement(xml, "episode", toText(item.episodeNumber()));
         itunesElement(xml, "episodeType", item.episodeType().itunesValue());
         itunesElement(xml, "explicit", toText(item.explicit()));
+        if (item.imageUrl() != null) {
+            xml.writeEmptyElement(ITUNES, "image", ITUNES_NAMESPACE);
+            attribute(xml, "href", item.imageUrl().toString());
+        }
         xml.writeEndElement();
     }
 

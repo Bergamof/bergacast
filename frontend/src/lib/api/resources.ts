@@ -51,6 +51,12 @@ export interface PodcastImage {
 /** Representation of the image sub-resource (`…/podcasts/{slug}/image`). */
 export interface PodcastImageResource extends PodcastImage, HalResource {}
 
+/** Cover image of an episode, shown by podcast apps instead of the podcast's one. */
+export type EpisodeImage = PodcastImage;
+
+/** Representation of the image sub-resource (`…/{slug}/episodes/{id}/image`). */
+export interface EpisodeImageResource extends EpisodeImage, HalResource {}
+
 export interface Podcast extends PodcastInput, HalResource {
 	id: string;
 	/** `null` when no image has been uploaded. */
@@ -110,6 +116,8 @@ export interface Episode extends HalResource {
 	episodeType: EpisodeType;
 	explicit: boolean | null;
 	audio: EpisodeAudio;
+	/** `null` when the episode has no image of its own (the podcast's one is then used). */
+	image: EpisodeImage | null;
 }
 
 export interface ApiToken extends HalResource {

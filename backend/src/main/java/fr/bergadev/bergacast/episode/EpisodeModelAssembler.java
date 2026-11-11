@@ -18,6 +18,7 @@ class EpisodeModelAssembler implements RepresentationModelAssembler<Episode, Ent
 
     static final LinkRelation PODCAST = LinkRelation.of("podcast");
     static final LinkRelation AUDIO = LinkRelation.of("audio");
+    static final LinkRelation IMAGE = LinkRelation.of("image");
 
     private final PublicUrls publicUrls;
 
@@ -31,6 +32,12 @@ class EpisodeModelAssembler implements RepresentationModelAssembler<Episode, Ent
         AudioFile audioFile = episode.getAudioFile();
         URI audioUrl = publicUrls.audio(slug, episode.getId(), audioFile.getFileExtension());
         EpisodeMetadata metadata = episode.metadata();
+        EpisodeImageResponse image = episode.getImage()
+                .map(stored -> EpisodeImageResponse.of(
+                        stored,
+                        publicUrls.episodeImage(
+                                slug, episode.getId(), stored.format().fileExtension())))
+                .orElse(null);
         EpisodeResponse response = new EpisodeResponse(
                 episode.getId(),
                 metadata.guid(),
@@ -44,11 +51,14 @@ class EpisodeModelAssembler implements RepresentationModelAssembler<Episode, Ent
                 metadata.episodeType(),
                 metadata.explicit(),
                 new EpisodeResponse.Audio(
-                        audioFile.getMimeType(), audioFile.getSizeBytes(), audioFile.getSha256(), audioUrl));
+                        audioFile.getMimeType(), audioFile.getSizeBytes(), audioFile.getSha256(), audioUrl),
+                image);
         return EntityModel.of(
                 response,
                 ApiLinks.link(IanaLinkRelations.SELF, ApiPaths.EPISODE, slug, episode.getId()),
                 ApiLinks.link(PODCAST, ApiPaths.PODCAST, slug),
-                Link.of(audioUrl.toString(), AUDIO));
+                Link.of(audioUrl.toString(), AUDIO),
+                // Always present: the image resource, where the first image is uploaded too.
+                ApiLinks.link(IMAGE, ApiPaths.EPISODE_IMAGE, slug, episode.getId()));
     }
 }
