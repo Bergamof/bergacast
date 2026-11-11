@@ -54,6 +54,17 @@ updates:
       # Remove once they accept it.
       - dependency-name: typescript
         update-types: ["version-update:semver-major"]
+  # Compose images: digests and minor/patch tags only; a new PostgreSQL major is a migration, not a bump.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+      include: scope
+    ignore:
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: docker
     directories:
       - /backend
@@ -64,3 +75,11 @@ updates:
     commit-message:
       prefix: build
       include: scope
+    # Runtimes follow the LTS lines pinned in .sdkmanrc/.nvmrc: a new major is bumped by hand, in all files at once.
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
+      - dependency-name: eclipse-temurin
+        update-types: ["version-update:semver-major"]
+      - dependency-name: ghcr.io/graalvm/native-image-community
+        update-types: ["version-update:semver-major"]
