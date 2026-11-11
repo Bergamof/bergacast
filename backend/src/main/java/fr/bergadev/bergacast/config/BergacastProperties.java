@@ -17,7 +17,6 @@ import org.springframework.util.unit.DataSize;
  *     build the public links to feeds, audio files and images
  * @param storage object storage where feeds, audio files and images are written
  * @param jwt settings of the admin access tokens
- * @param admin optional initial administrator created when no administrator exists
  * @param cors cross-origin access to the API, needed by the admin SPA served from another origin
  * @param maxImageUploadSize largest podcast cover image accepted for upload, before any downscaling
  */
@@ -27,7 +26,6 @@ public record BergacastProperties(
         URI mediaBaseUrl,
         Storage storage,
         Jwt jwt,
-        @DefaultValue InitialAdmin admin,
         @DefaultValue Cors cors,
         @DefaultValue("20MB") DataSize maxImageUploadSize) {
 
@@ -125,22 +123,6 @@ public record BergacastProperties(
         public String toString() {
             return "Storage[endpoint=" + endpoint + ", region=" + region + ", bucket=" + bucket + ", accessKey="
                     + accessKey + ", secretKey=<redacted>]";
-        }
-    }
-
-    /**
-     * @param username username of the administrator to create at startup, may be blank
-     * @param password password of the administrator to create at startup, may be blank
-     */
-    public record InitialAdmin(String username, String password) {
-
-        public boolean isConfigured() {
-            return username != null && !username.isBlank() && password != null && !password.isBlank();
-        }
-
-        @Override
-        public String toString() {
-            return "InitialAdmin[username=" + username + ", password=<redacted>]";
         }
     }
 

@@ -13,7 +13,7 @@ set -euo pipefail
 # shellcheck source=SCRIPTDIR/conventional-commits.bash
 source "$(dirname "${BASH_SOURCE[0]}")/conventional-commits.bash"
 
-readonly MODULES=(backend frontend)
+readonly MODULES=(backend frontend migration)
 readonly FIRST_VERSION=1.0.0
 readonly RELEASE_TAG_PATTERN='^v[0-9]+\.[0-9]+\.[0-9]+$'
 

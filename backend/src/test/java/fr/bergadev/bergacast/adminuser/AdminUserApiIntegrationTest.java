@@ -43,7 +43,7 @@ class AdminUserApiIntegrationTest {
     }
 
     @Test
-    void createsTheInitialAdministratorAtStartup() throws Exception {
+    void listsTheAdministratorCreatedByTheMigrationJob() throws Exception {
         mockMvc.perform(get("/api/v1/admin-users?size=100").header(HttpHeaders.AUTHORIZATION, admin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$._embedded.adminUsers[?(@.username == 'admin')]")

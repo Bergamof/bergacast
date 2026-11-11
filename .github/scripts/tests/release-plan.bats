@@ -35,8 +35,8 @@ expect_no_release() {
 
     plan HEAD
 
-    expect_release 1.0.0 "" '["backend","frontend"]'
-    [[ "$stderr" == *"Release 1.0.0 of backend frontend (previous tag: none)"* ]]
+    expect_release 1.0.0 "" '["backend","frontend","migration"]'
+    [[ "$stderr" == *"Release 1.0.0 of backend frontend migration (previous tag: none)"* ]]
 }
 
 @test "first release ignores non-release tags" {
@@ -50,7 +50,7 @@ expect_no_release() {
 
     plan HEAD
 
-    expect_release 1.0.0 "" '["backend","frontend"]'
+    expect_release 1.0.0 "" '["backend","frontend","migration"]'
 }
 
 # Changed modules
@@ -65,6 +65,16 @@ expect_no_release() {
     plan HEAD
 
     expect_release 1.0.1 v1.0.0 '["backend"]'
+}
+
+@test "only the migration module changed since the last release tag" {
+    commit backend/a.txt "feat: backend"
+    git tag v1.0.0
+    commit migration/a.txt "fix: migration bug"
+
+    plan HEAD
+
+    expect_release 1.0.1 v1.0.0 '["migration"]'
 }
 
 @test "only the frontend changed since the last release tag" {
@@ -351,7 +361,7 @@ BREAKING CHANGE: existing invalid slugs are rejected"
 
     plan main
 
-    expect_release 1.0.0 "" '["backend","frontend"]'
+    expect_release 1.0.0 "" '["backend","frontend","migration"]'
 }
 
 @test "usage error without argument" {

@@ -35,20 +35,34 @@ services:
     ports:
       - "127.0.0.1:${BERGACAST_MEDIA_PORT:-9090}:9090"
 
+  # Applies the schema changes then exits: in production the same image runs as a Scaleway Serverless Job.
+  migration:
+    build: ./migration
+    image: bergacast-migration:latest
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      BERGACAST_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-bergacast}
+      BERGACAST_DATASOURCE_USERNAME: ${POSTGRES_USER:-bergacast}
+      BERGACAST_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      # The administrator created when the database has none.
+      BERGACAST_ADMIN_USERNAME: ${BERGACAST_ADMIN_USERNAME:-}
+      BERGACAST_ADMIN_PASSWORD: ${BERGACAST_ADMIN_PASSWORD:-}
+
   backend:
     build: ./backend
     image: bergacast-backend:latest
     restart: unless-stopped
     depends_on:
-      db:
-        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
       storage:
         condition: service_started
     environment:
       BERGACAST_PUBLIC_BASE_URL: ${BERGACAST_PUBLIC_BASE_URL:-http://localhost:8080}
       BERGACAST_CORS_ALLOWED_ORIGINS: ${BERGACAST_ADMIN_URL:-http://localhost:8081}
-      BERGACAST_ADMIN_USERNAME: ${BERGACAST_ADMIN_USERNAME:-}
-      BERGACAST_ADMIN_PASSWORD: ${BERGACAST_ADMIN_PASSWORD:-}
       BERGACAST_JWT_SECRET: ${BERGACAST_JWT_SECRET:?BERGACAST_JWT_SECRET is required}
       BERGACAST_MAX_UPLOAD_SIZE: ${BERGACAST_MAX_UPLOAD_SIZE:-500MB}
       BERGACAST_MEDIA_BASE_URL: ${BERGACAST_MEDIA_BASE_URL:-http://localhost:9090/bergacast}

@@ -10,11 +10,18 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-/** Full application against a PostgreSQL container, driven through MockMvc. */
+/**
+ * Full application against a PostgreSQL container migrated like the production one, driven through MockMvc. Unlike
+ * the production startup, Hibernate reads the JDBC metadata and validates the entities against the schema.
+ */
 @Documented
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
-@SpringBootTest
+@SpringBootTest(
+        properties = {
+            "spring.jpa.hibernate.ddl-auto=validate",
+            "spring.jpa.properties.hibernate.boot.allow_jdbc_metadata_access=true"
+        })
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Import({TestcontainersConfiguration.class, ApiTestClient.class, StoredObjects.class})

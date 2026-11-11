@@ -28,8 +28,8 @@ class BergacastPropertiesTest {
 
     @Test
     void requiresAJwtSecret() {
-        assertThatThrownBy(() -> new BergacastProperties(
-                        PUBLIC_BASE_URL, MEDIA_BASE_URL, STORAGE, null, null, null, IMAGE_LIMIT))
+        assertThatThrownBy(() ->
+                        new BergacastProperties(PUBLIC_BASE_URL, MEDIA_BASE_URL, STORAGE, null, null, IMAGE_LIMIT))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("BERGACAST_JWT_SECRET");
     }
@@ -47,7 +47,6 @@ class BergacastPropertiesTest {
 
         assertThat(properties.publicBaseUrl()).hasToString("https://example.test");
         assertThat(properties.mediaBaseUrl()).hasToString("https://m.test");
-        assertThat(properties.admin().isConfigured()).isFalse();
         assertThat(properties.jwt().toString()).doesNotContain(SECRET);
     }
 
@@ -81,7 +80,6 @@ class BergacastPropertiesTest {
                         MEDIA_BASE_URL,
                         null,
                         JWT,
-                        new BergacastProperties.InitialAdmin(null, null),
                         new BergacastProperties.Cors(List.of()),
                         IMAGE_LIMIT))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -158,7 +156,6 @@ class BergacastPropertiesTest {
                         MEDIA_BASE_URL,
                         STORAGE,
                         JWT,
-                        new BergacastProperties.InitialAdmin(null, null),
                         new BergacastProperties.Cors(List.of()),
                         DataSize.parse(limit)))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -167,12 +164,6 @@ class BergacastPropertiesTest {
 
     private static BergacastProperties properties(URI publicBaseUrl, @Nullable URI mediaBaseUrl) {
         return new BergacastProperties(
-                publicBaseUrl,
-                mediaBaseUrl,
-                STORAGE,
-                JWT,
-                new BergacastProperties.InitialAdmin(null, null),
-                new BergacastProperties.Cors(List.of()),
-                IMAGE_LIMIT);
+                publicBaseUrl, mediaBaseUrl, STORAGE, JWT, new BergacastProperties.Cors(List.of()), IMAGE_LIMIT);
     }
 }

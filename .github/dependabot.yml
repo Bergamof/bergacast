@@ -19,6 +19,18 @@ updates:
     commit-message:
       prefix: build
       include: scope
+  - package-ecosystem: gradle
+    directory: /migration
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+      include: scope
+    ignore:
+      # Liquibase 5 and later are under the Functional Source License (not open source, not compatible with the AGPL
+      # of this project): stay on the Apache-2.0 4.x line.
+      - dependency-name: org.liquibase:liquibase-core
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /frontend
     schedule:
@@ -40,6 +52,7 @@ updates:
   - package-ecosystem: docker
     directories:
       - /backend
+      - /migration
       - /frontend
     schedule:
       interval: weekly

@@ -17,6 +17,12 @@ backend/bin/
 backend/out/
 backend/src/main/resources/static/admin/
 
+# Migration (Gradle)
+migration/.gradle/
+migration/build/
+migration/bin/
+migration/out/
+
 # Frontend (SvelteKit)
 frontend/node_modules/
 frontend/.svelte-kit/

@@ -1,0 +1,10 @@
+# Only what the image build needs.
+.gradle
+build
+bin
+out
+.idea
+*.iml
+.vscode
+Dockerfile
+.dockerignore

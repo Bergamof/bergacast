@@ -38,11 +38,6 @@ public class AdminUserService {
                 .orElseThrow(() -> new ResourceNotFoundException("No administrator " + id));
     }
 
-    @Transactional(readOnly = true)
-    public boolean anyExists() {
-        return adminUserRepository.count() > 0;
-    }
-
     /** @throws ConflictException when the username is already taken */
     public AdminUser create(String username, String password) {
         if (adminUserRepository.existsByUsername(username)) {

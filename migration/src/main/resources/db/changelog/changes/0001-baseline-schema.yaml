@@ -1,0 +1,17 @@
+# Schema as the former Flyway migrations V1 to V4 left it. A database they already migrated (production) holds the
+# podcast table: the changeset is then only recorded as run, so that nothing is created twice.
+databaseChangeLog:
+  - changeSet:
+      id: baseline-schema
+      author: bergacast
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: podcast
+      changes:
+        - sqlFile:
+            path: baseline-schema.sql
+            relativeToChangelogFile: true
+            # The trigger functions hold semicolons inside $$ quotes: the file is sent as a whole.
+            splitStatements: false

@@ -1,0 +1,12 @@
+# Flyway no longer manages the schema: its history table is useless once Liquibase has taken over.
+databaseChangeLog:
+  - changeSet:
+      id: drop-flyway-history
+      author: bergacast
+      preConditions:
+        - onFail: MARK_RAN
+        - tableExists:
+            tableName: flyway_schema_history
+      changes:
+        - dropTable:
+            tableName: flyway_schema_history

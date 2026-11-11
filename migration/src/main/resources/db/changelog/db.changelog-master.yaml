@@ -1,0 +1,10 @@
+# Every change of the schema of the database, in the order they are applied. A changeset already applied is never
+# edited: a new file is added here instead. Changes must stay compatible with the previous backend version (add, then
+# remove in a later release), because the migration job runs before the backend is redeployed.
+databaseChangeLog:
+  - include:
+      file: changes/0001-baseline-schema.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/0002-drop-flyway-history.yaml
+      relativeToChangelogFile: true
