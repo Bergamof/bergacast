@@ -5,7 +5,7 @@ name: bergacast
 
 services:
   db:
-    image: postgres:18
+    image: postgres:18@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-bergacast}
@@ -24,7 +24,7 @@ services:
   # S3-compatible object storage for local use (Adobe S3Mock: no authentication, objects publicly readable, kept in
   # the volume). In production, use a real object storage (Scaleway Object Storage) and set BERGACAST_STORAGE_*.
   storage:
-    image: adobe/s3mock:5.2.3
+    image: adobe/s3mock:5.2.3@sha256:ab01a6946750f451ca215a47e91030695b260e4003b8a5a6201d25029b8fca92
     restart: unless-stopped
     environment:
       COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: bergacast

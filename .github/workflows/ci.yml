@@ -906,13 +906,13 @@ jobs:
       MEDIA_URL: http://localhost:9090/bergacast
     services:
       s3:
-        image: adobe/s3mock:5.2.3
+        image: adobe/s3mock:5.2.3@sha256:ab01a6946750f451ca215a47e91030695b260e4003b8a5a6201d25029b8fca92
         env:
           COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: bergacast
         ports:
           - 9090:9090
       postgres:
-        image: postgres:18
+        image: postgres:18@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
         env:
           POSTGRES_DB: bergacast
           POSTGRES_USER: bergacast
@@ -1218,7 +1218,7 @@ jobs:
       IMAGE: bergacast-migration:ci
     services:
       postgres:
-        image: postgres:18
+        image: postgres:18@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
         env:
           POSTGRES_DB: bergacast
           POSTGRES_USER: bergacast

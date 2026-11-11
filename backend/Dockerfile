@@ -3,12 +3,12 @@
 # Bergacast backend image: Spring Boot compiled ahead of time into a GraalVM native executable, run on distroless.
 # Build context: backend/. Tests are not run here: they run in CI.
 
-ARG JAVA_MAJOR=25
+# Base images are pinned by digest (a tag can be rewritten); Dependabot updates tag and digest together.
 
 # ---------------------------------------------------------------------------
 # Native executable
 # ---------------------------------------------------------------------------
-FROM ghcr.io/graalvm/native-image-community:${JAVA_MAJOR} AS build
+FROM ghcr.io/graalvm/native-image-community:25@sha256:0d936f32bb8acb5bc60c41b33e05f064d7a6aaf36b726538296c54949bd4a3c0 AS build
 WORKDIR /workspace
 ENV GRADLE_OPTS="-Dorg.gradle.daemon=false"
 
@@ -36,7 +36,7 @@ RUN mkdir /dist \
 # ---------------------------------------------------------------------------
 # Runtime: glibc, CA certificates and tzdata only, no shell
 # ---------------------------------------------------------------------------
-FROM gcr.io/distroless/base-debian13:nonroot AS runtime
+FROM gcr.io/distroless/base-debian13:nonroot@sha256:7fe4df6a4413adf5889960d345a28b4574aea0872ea47684c7244c8d88027dca AS runtime
 
 # Native-image looks for the JDK libraries in the directory of the executable.
 COPY --from=build /dist/ /app/

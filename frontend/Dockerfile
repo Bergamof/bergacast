@@ -3,13 +3,12 @@
 # Bergacast admin SPA image: static SvelteKit build served by static-web-server (a few MB of memory).
 # Build context: frontend/. Tests are not run here: they run in CI.
 
-ARG NODE_MAJOR=24
-ARG STATIC_WEB_SERVER_VERSION=2.44.1
+# Base images are pinned by digest (a tag can be rewritten); Dependabot updates tag and digest together.
 
 # ---------------------------------------------------------------------------
 # Static build
 # ---------------------------------------------------------------------------
-FROM node:${NODE_MAJOR}-alpine AS build
+FROM node:24-alpine@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8 AS build
 ARG NPM_VERSION=12.2.1
 WORKDIR /workspace
 
@@ -29,7 +28,7 @@ RUN npm pkg set version="${VERSION}" && npm run build
 # ---------------------------------------------------------------------------
 # Runtime: static-web-server on Alpine (a shell is needed to write the runtime configuration)
 # ---------------------------------------------------------------------------
-FROM joseluisq/static-web-server:${STATIC_WEB_SERVER_VERSION}-alpine AS runtime
+FROM joseluisq/static-web-server:2.44.1-alpine@sha256:2fe3e5c0a20691f23fb270338578c8d31b5f7a19abb308c4c1ec901a7eefbe2e AS runtime
 ENV SPA_ROOT=/srv/admin
 USER root
 # The image is rebuilt upstream only at each static-web-server release: pick up the Alpine security fixes
