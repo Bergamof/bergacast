@@ -7,6 +7,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.endsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -289,6 +290,35 @@ class EpisodeImageApiIntegrationTest {
     }
 
     @Test
+    void keepsTheImageWhenTheMetadataOfTheEpisodeAreUpdated() throws Exception {
+        uploadImage(SMALL_PNG, MediaType.IMAGE_PNG_VALUE).andExpect(status().isCreated());
+
+        mockMvc.perform(patch(episodePath())
+                        .header(HttpHeaders.AUTHORIZATION, admin)
+                        .contentType("application/merge-patch+json")
+                        .content("{\"title\":\"Renamed\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Renamed"))
+                .andExpect(jsonPath("$.image.sha256").value(Sha256.hex(SMALL_PNG)));
+
+        assertThat(imageObject("png").orElseThrow().content()).isEqualTo(SMALL_PNG);
+        assertThat(feed()).contains("<itunes:image href=\"" + imageUrl("png") + "\"");
+    }
+
+    @Test
+    void rejectsAnUpdateOfTheEpisodeBasedOnAVersionOlderThanTheImage() throws Exception {
+        String etagBeforeTheImage = episodeEntityTag();
+        uploadImage(SMALL_PNG, MediaType.IMAGE_PNG_VALUE).andExpect(status().isCreated());
+
+        mockMvc.perform(patch(episodePath())
+                        .header(HttpHeaders.AUTHORIZATION, admin)
+                        .header(HttpHeaders.IF_MATCH, etagBeforeTheImage)
+                        .contentType("application/merge-patch+json")
+                        .content("{\"title\":\"Stale\"}"))
+                .andExpect(status().isPreconditionFailed());
+    }
+
+    @Test
     void listsEpisodesWithTheirImage() throws Exception {
         uploadImage(SMALL_PNG, MediaType.IMAGE_PNG_VALUE).andExpect(status().isCreated());
         String withoutImage = api.publishEpisode(slug, admin, "{\"title\":\"Plain\"}", AUDIO)
@@ -368,7 +398,7 @@ class EpisodeImageApiIntegrationTest {
     }
 
     @Test
-    void publishesAnEpisodeWithoutImageWhenThePartIsMissingOrEmpty() throws Exception {
+    void publishesAnEpisodeWithoutImageWhenThePartIsEmpty() throws Exception {
         MockMultipartFile empty = new MockMultipartFile("image", "none.png", MediaType.IMAGE_PNG_VALUE, new byte[0]);
 
         mockMvc.perform(uploadRequest(slug, "{\"title\":\"Empty\"}", AUDIO, "audio/mpeg")

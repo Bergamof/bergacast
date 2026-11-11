@@ -164,6 +164,30 @@ class EpisodePublicationTest {
     }
 
     @Test
+    void replaysTheEpisodeOfAConcurrentRequestAndDiscardsItsOwnAudioAndImage() {
+        imageIsValid();
+        Episode winner = mock(Episode.class);
+        when(episodeService.publish(
+                        eq(SLUG), any(UUID.class), eq(METADATA), eq(audioFile), eq(STORED), eq(NOW), eq(KEY)))
+                .thenThrow(violationOf(EpisodePublication.IDEMPOTENCY_KEY_CONSTRAINT));
+        when(episodeService.findByIdempotencyKey(SLUG, KEY)).thenReturn(Optional.of(winner));
+
+        assertThat(publication.publish(SLUG, INPUT, AUDIO, IMAGE_PART, KEY)).isSameAs(winner);
+        verifyAudioDiscarded();
+        verifyImageDiscarded();
+    }
+
+    @Test
+    void treatsAnEmptyImagePartAsNoImage() {
+        MultipartFile empty = new MockMultipartFile("image", "none.png", "image/png", new byte[0]);
+        whenSaved(KEY).thenAnswer(invocation -> episodeWithId(invocation.getArgument(1)));
+
+        publication.publish(SLUG, INPUT, AUDIO, empty, KEY);
+
+        verifyNoInteractions(episodeImages);
+    }
+
+    @Test
     void propagatesOtherConstraintViolations() {
         DataIntegrityViolationException duplicateGuid = violationOf("episode_guid_unique");
         whenSaved(KEY).thenThrow(duplicateGuid);

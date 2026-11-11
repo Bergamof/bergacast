@@ -79,6 +79,11 @@ public class ImageResizer {
         }
     }
 
+    /** The lock serializing decodings, exposed so that a test can hold it and observe that {@link #fit} waits. */
+    ReentrantLock decodingLock() {
+        return decoding;
+    }
+
     private ProcessedImage fitSerialized(byte[] content, ImageFormat declaredFormat) {
         try (ImageInputStream input = new MemoryCacheImageInputStream(new ByteArrayInputStream(content))) {
             Iterator<ImageReader> readers = ImageIO.getImageReaders(input);

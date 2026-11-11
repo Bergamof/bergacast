@@ -10,6 +10,11 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 
@@ -162,16 +167,19 @@ class ImageResizerTest {
     }
 
     @Test
-    void handlesSeveralImagesSubmittedAtTheSameTime() throws Exception {
+    void decodesOneImageAtATime() throws Exception {
         byte[] png = TestImages.png(400, 300);
-        try (var executor = java.util.concurrent.Executors.newFixedThreadPool(4)) {
-            var results = java.util.stream.IntStream.range(0, 8)
-                    .mapToObj(index -> executor.submit(() -> resizer.fit(png, ImageFormat.PNG)))
-                    .toList();
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            resizer.decodingLock().lock();
+            Future<ProcessedImage> waiting = executor.submit(() -> resizer.fit(png, ImageFormat.PNG));
 
-            for (var result : results) {
-                assertThat(result.get().width()).isEqualTo(400);
-            }
+            assertThatThrownBy(() -> waiting.get(300, TimeUnit.MILLISECONDS)).isInstanceOf(TimeoutException.class);
+            resizer.decodingLock().unlock();
+
+            assertThat(waiting.get(5, TimeUnit.SECONDS).width()).isEqualTo(400);
+        } finally {
+            executor.shutdownNow();
         }
     }
 }
