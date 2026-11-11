@@ -26,7 +26,7 @@ val postgresqlDriverVersion = "42.7.14"
 // The same password encoder as the backend (Spring Security delegating encoder), so that it can check what is stored.
 val springSecurityCryptoVersion = "7.1.2"
 val springCoreVersion = "7.0.10"
-val junitVersion = "6.0.3"
+val junitVersion = "6.1.3"
 val assertjVersion = "3.27.7"
 val testcontainersVersion = "2.0.5"
 val checkstyleVersion = "14.3.0"
