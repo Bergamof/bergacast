@@ -5,6 +5,7 @@ import fr.bergadev.bergacast.image.ImageResizer;
 import fr.bergadev.bergacast.image.InvalidImageException;
 import fr.bergadev.bergacast.image.ProcessedImage;
 import fr.bergadev.bergacast.storage.AfterCommit;
+import fr.bergadev.bergacast.storage.MediaCacheControl;
 import fr.bergadev.bergacast.storage.MediaKeys;
 import fr.bergadev.bergacast.storage.ObjectStorage;
 import fr.bergadev.bergacast.web.EntityTags;
@@ -12,12 +13,10 @@ import fr.bergadev.bergacast.web.ResourceNotFoundException;
 import fr.bergadev.bergacast.web.Sha256;
 import fr.bergadev.bergacast.web.UnprocessableContentException;
 import java.time.Clock;
-import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.http.CacheControl;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -29,12 +28,6 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Service
 public class PodcastImageService {
-
-    /** Field reported in validation errors: the image is the whole request body. */
-    static final String BODY_FIELD = "$";
-    /** Same freshness as the feed, which links the image: its URL stays the same when it is replaced. */
-    private static final CacheControl FIVE_MINUTES =
-            CacheControl.maxAge(Duration.ofMinutes(5)).cachePublic();
 
     private final PodcastService podcastService;
     private final PodcastImageRepository imageRepository;
@@ -140,7 +133,8 @@ public class PodcastImageService {
         Optional<PodcastImageMetadata> current = imageRepository.findMetadata(podcast.getId());
         // Checked again: the image may have changed while the new one was being processed.
         requireIfMatch(current, ifMatch);
-        storage.put(keyOf(slug, image.format()), image.content(), image.format().mimeType(), FIVE_MINUTES);
+        storage.put(
+                keyOf(slug, image.format()), image.content(), image.format().mimeType(), MediaCacheControl.COVER_IMAGE);
         if (current.isPresent()) {
             imageRepository.deleteByPodcastId(podcast.getId());
             ImageFormat previousFormat = current.get().format();
@@ -163,16 +157,14 @@ public class PodcastImageService {
     }
 
     private static void requireIfMatch(Optional<PodcastImageMetadata> current, @Nullable String ifMatch) {
-        current.ifPresentOrElse(
-                image -> EntityTags.requireIfMatch(ifMatch, image.entityTag()),
-                () -> EntityTags.requireIfMatchOnMissingResource(ifMatch));
+        EntityTags.requireIfMatch(ifMatch, current.map(PodcastImageMetadata::entityTag));
     }
 
     private ProcessedImage fit(byte[] content, ImageFormat declaredFormat) {
         try {
             return resizer.fit(content, declaredFormat);
         } catch (InvalidImageException invalid) {
-            throw new UnprocessableContentException(BODY_FIELD, invalid.getMessage());
+            throw new UnprocessableContentException(UnprocessableContentException.BODY_FIELD, invalid.getMessage());
         }
     }
 

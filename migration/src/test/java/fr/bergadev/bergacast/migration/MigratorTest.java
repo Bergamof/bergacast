@@ -10,6 +10,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -23,6 +24,8 @@ class MigratorTest {
             "V4__drop_media_content_from_database.sql");
 
     private static final String PODCAST_ID = "11111111-1111-1111-1111-111111111111";
+    private static final String EXISTING_EPISODE_ID = "33333333-3333-3333-3333-333333333333";
+    private static final String EXISTING_AUDIO_FILE_ID = "22222222-2222-2222-2222-222222222222";
 
     /** Tables of the migration tools themselves, which the schema comparison leaves out. */
     private static final String TOOL_TABLES = "('flyway_schema_history', 'databasechangelog', 'databasechangeloglock')";
@@ -107,8 +110,12 @@ class MigratorTest {
     void addsTheOptionalImageOfEpisodesWithoutTouchingExistingEpisodes() throws Exception {
         String url = PostgresDatabases.createDatabase();
         applyFlywayMigrations(url);
+        insertEpisode(url, EXISTING_EPISODE_ID, EXISTING_AUDIO_FILE_ID, "NULL, NULL, NULL, NULL, NULL");
 
         migrate(url);
+
+        assertThat(query(url, "SELECT title, image_mime_type, image_width, image_sha256 FROM episode"))
+                .containsExactly(Arrays.asList("Existing", null, null, null));
 
         assertThat(execType(url, "add-episode-image")).isEqualTo("EXECUTED");
         assertThat(query(
@@ -121,6 +128,23 @@ class MigratorTest {
                         List.of("image_sha256"),
                         List.of("image_size_bytes"),
                         List.of("image_width"));
+    }
+
+    @Test
+    void storesAnEpisodeImageAndRefusesAnImageWithoutPixels() throws Exception {
+        String url = PostgresDatabases.createDatabase();
+        migrate(url);
+        insertPodcast(url);
+
+        insertEpisode(url, EXISTING_EPISODE_ID, EXISTING_AUDIO_FILE_ID, "'image/png', 300, 200, 1234, 'abc'");
+        assertThat(query(url, "SELECT image_mime_type, image_width, image_height, image_size_bytes FROM episode"))
+                .containsExactly(List.of("image/png", "300", "200", "1234"));
+        assertThatThrownBy(() -> insertEpisode(
+                        url,
+                        "44444444-4444-4444-4444-444444444444",
+                        "55555555-5555-5555-5555-555555555555",
+                        "'image/png', 0, 200, 1234, 'abc'"))
+                .hasMessageContaining("image_width");
     }
 
     @Test
@@ -209,6 +233,41 @@ class MigratorTest {
         migrate(url);
 
         assertThat(tables(url)).contains("podcast");
+    }
+
+    private static void insertPodcast(String url) throws SQLException {
+        execute(
+                url,
+                "INSERT INTO podcast (id, slug, title, description, language, evict_oldest_by, sort_by,"
+                        + " sort_direction, created_at, updated_at, version) VALUES ('" + PODCAST_ID
+                        + "', 'show', 'Show', 'Desc', 'fr', 'PUBLICATION_DATE', 'PUBLICATION_DATE', 'DESC',"
+                        + " now(), now(), 0)");
+    }
+
+    /** Inserts an episode of the podcast {@code PODCAST_ID} (created if missing) and its audio file. */
+    private static void insertEpisode(String url, String episodeId, String audioFileId, String imageColumns)
+            throws SQLException {
+        if (query(url, "SELECT id FROM podcast").isEmpty()) {
+            insertPodcast(url);
+        }
+        execute(
+                url,
+                "INSERT INTO audio_file (id, mime_type, size_bytes, sha256, file_extension) VALUES ('" + audioFileId
+                        + "', 'audio/mpeg', 1, 'abc', 'mp3')");
+        boolean hasImageColumns = !query(
+                        url,
+                        "SELECT 1 FROM information_schema.columns WHERE table_name = 'episode'"
+                                + " AND column_name = 'image_mime_type'")
+                .isEmpty();
+        String imageNames =
+                hasImageColumns ? ", image_mime_type, image_width, image_height, image_size_bytes, image_sha256" : "";
+        String imageValues = hasImageColumns ? ", " + imageColumns : "";
+        execute(
+                url,
+                "INSERT INTO episode (id, podcast_id, audio_file_id, guid, title, publication_date, added_at,"
+                        + " episode_type, version" + imageNames + ") VALUES ('" + episodeId + "', '" + PODCAST_ID
+                        + "', '" + audioFileId + "', 'guid-" + episodeId + "', 'Existing', now(), now(), 'FULL', 0"
+                        + imageValues + ")");
     }
 
     private static void migrate(String url) throws SQLException {

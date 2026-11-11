@@ -3,8 +3,11 @@ package fr.bergadev.bergacast.episode;
 import static fr.bergadev.bergacast.support.ApiTestClient.bearer;
 import static fr.bergadev.bergacast.support.ApiTestClient.uploadRequest;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.endsWith;
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -35,6 +38,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
 import org.springframework.util.unit.DataSize;
 import tools.jackson.databind.JsonNode;
 
@@ -104,6 +108,22 @@ class EpisodeImageApiIntegrationTest {
 
         assertThat(imageObject("jpg").orElseThrow().content()).isEqualTo(SMALL_JPEG);
         assertThat(imageObject("png")).as("image of the former format").isEmpty();
+    }
+
+    @Test
+    void overwritesTheObjectWhenTheFormatStaysTheSame() throws Exception {
+        byte[] otherPng = TestImages.png(320, 320);
+        uploadImage(SMALL_PNG, MediaType.IMAGE_PNG_VALUE).andExpect(status().isCreated());
+        String before = episodeEntityTag();
+
+        uploadImage(otherPng, MediaType.IMAGE_PNG_VALUE)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.url").value(imageUrl("png")));
+
+        assertThat(imageObject("png").orElseThrow().content()).isEqualTo(otherPng);
+        assertThat(storedObjects.keys(episodeFolder())).containsExactly(audioKey(), imageKey("png"));
+        assertThat(episodeEntityTag()).isNotEqualTo(before);
+        assertThat(feed()).contains("<itunes:image href=\"" + imageUrl("png") + "\"");
     }
 
     @Test
@@ -330,7 +350,8 @@ class EpisodeImageApiIntegrationTest {
                 .andExpect(jsonPath("$._embedded.episodes[?(@.id == '" + episodeId + "')].image.width")
                         .value(300))
                 .andExpect(jsonPath("$._embedded.episodes[?(@.id == '" + withoutImage + "')].image")
-                        .value(org.hamcrest.Matchers.contains((Object) null)));
+                        .value(contains(nullValue())))
+                .andExpect(jsonPath("$._embedded.episodes[*]._links.image.href").value(hasSize(2)));
     }
 
     @Test
@@ -361,6 +382,21 @@ class EpisodeImageApiIntegrationTest {
                 .andExpect(status().isNoContent());
 
         assertThat(storedObjects.keys(episodeFolder())).isEmpty();
+    }
+
+    @Test
+    void deletesAnEpisodeWithoutImageAndKeepsTheObjectsOfTheOtherEpisodes() throws Exception {
+        uploadImage(SMALL_JPEG, MediaType.IMAGE_JPEG_VALUE).andExpect(status().isCreated());
+        String plain = api.publishEpisode(slug, admin, "{\"title\":\"Plain\"}", AUDIO)
+                .get("id")
+                .asString();
+
+        mockMvc.perform(delete("/api/v1/{slug}/episodes/{id}", slug, plain).header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isNoContent());
+
+        assertThat(storedObjects.keys(MediaKeys.podcastFolder(slug) + "episodes/" + plain + "/"))
+                .isEmpty();
+        assertThat(storedObjects.keys(episodeFolder())).containsExactly(audioKey(), imageKey("jpg"));
     }
 
     @Test
@@ -446,10 +482,13 @@ class EpisodeImageApiIntegrationTest {
 
         assertThat(api.json(retry).get("id")).isEqualTo(api.json(first).get("id"));
         assertThat(api.json(retry).get("image").get("mimeType").asString()).isEqualTo("image/png");
+        assertThat(feed())
+                .contains("<itunes:image href=\""
+                        + api.json(first).get("image").get("url").asString() + "\"");
         assertThat(storedObjects.keys(MediaKeys.podcastFolder(slug))).hasSize(objects);
     }
 
-    private org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder withImage(
+    private MockMultipartHttpServletRequestBuilder withImage(
             byte[] image, String imageContentType, String metadataJson) {
         return uploadRequest(slug, metadataJson, AUDIO, "audio/mpeg")
                 .file(new MockMultipartFile("image", "cover", imageContentType, image));
@@ -488,6 +527,10 @@ class EpisodeImageApiIntegrationTest {
 
     private String episodeFolder() {
         return MediaKeys.podcastFolder(slug) + "episodes/" + episodeId + "/";
+    }
+
+    private String imageKey(String fileExtension) {
+        return MediaKeys.episodeImage(slug, UUID.fromString(episodeId), fileExtension);
     }
 
     private String audioKey() {

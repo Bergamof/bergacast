@@ -25,7 +25,7 @@ class EpisodeImageModelAssembler {
     }
 
     EntityModel<EpisodeImageResponse> toModel(String slug, UUID episodeId, EpisodeImage image) {
-        URI contentUrl = publicUrls.episodeImage(slug, episodeId, image.format().fileExtension());
+        URI contentUrl = publicUrls.episodeImage(slug, episodeId, image.format());
         return EntityModel.of(
                 EpisodeImageResponse.of(image, contentUrl),
                 ApiLinks.link(IanaLinkRelations.SELF, ApiPaths.EPISODE_IMAGE, slug, episodeId),

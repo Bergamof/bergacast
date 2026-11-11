@@ -7,6 +7,9 @@ import org.springframework.http.HttpStatus;
 public final class UnprocessableContentException extends ApiException {
 
     public static final String ERRORS_PROPERTY = "errors";
+    /** Field reported when the whole request body is invalid (JSON path of the document root). */
+    public static final String BODY_FIELD = "$";
+
     public static final String VALIDATION_DETAIL = "The request content is invalid";
 
     public UnprocessableContentException(List<InvalidField> errors) {

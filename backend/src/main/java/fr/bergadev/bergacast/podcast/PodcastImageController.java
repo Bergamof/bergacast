@@ -4,10 +4,10 @@ import fr.bergadev.bergacast.config.BergacastProperties;
 import fr.bergadev.bergacast.image.ImageFormat;
 import fr.bergadev.bergacast.web.ApiLinks;
 import fr.bergadev.bergacast.web.ApiPaths;
+import fr.bergadev.bergacast.web.ImageUploads;
 import fr.bergadev.bergacast.web.LimitedRequestBody;
 import fr.bergadev.bergacast.web.SecuritySchemes;
 import fr.bergadev.bergacast.web.StorageResponses;
-import fr.bergadev.bergacast.web.UnsupportedMediaTypeException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.headers.Header;
@@ -117,7 +117,7 @@ class PodcastImageController {
                     String ifMatch,
             HttpServletRequest request)
             throws IOException {
-        ImageFormat format = declaredFormat(request);
+        ImageFormat format = ImageUploads.declaredFormat(request.getContentType(), "The image");
         // 404 and 412 are answered before reading a body of up to the upload limit.
         imageService.prepare(slug, ifMatch);
         byte[] content = LimitedRequestBody.read(request, maxUploadSize);
@@ -163,12 +163,5 @@ class PodcastImageController {
     ResponseEntity<Void> delete(@Parameter(description = SLUG_DESCRIPTION) @PathVariable String slug) {
         imageService.delete(slug);
         return ResponseEntity.noContent().build();
-    }
-
-    /** The mapping only accepts the supported types; parameters such as {@code charset} are ignored. */
-    private static ImageFormat declaredFormat(HttpServletRequest request) {
-        return ImageFormat.fromContentType(request.getContentType())
-                .orElseThrow(
-                        () -> new UnsupportedMediaTypeException("The image must be sent as image/jpeg or image/png"));
     }
 }

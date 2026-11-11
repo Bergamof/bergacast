@@ -7,7 +7,9 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
+import fr.bergadev.bergacast.config.BergacastProperties;
 import fr.bergadev.bergacast.image.ImageFormat;
 import fr.bergadev.bergacast.image.ImageResizer;
 import fr.bergadev.bergacast.image.ProcessedImage;
@@ -32,13 +34,13 @@ class EpisodeImagesTest {
     private static final DataSize LIMIT = DataSize.ofMegabytes(1);
 
     private final ObjectStorage storage = mock(ObjectStorage.class);
-    private final EpisodeImages images = new EpisodeImages(new ImageResizer(), storage);
+    private final EpisodeImages images = new EpisodeImages(new ImageResizer(), storage, properties());
 
     @Test
     void readsAnImagePart() {
         byte[] png = TestImages.png(300, 200);
 
-        ProcessedImage image = images.fit(part("image/png", png), "image", LIMIT);
+        ProcessedImage image = images.fitPart(part("image/png", png));
 
         assertThat(image.format()).isEqualTo(ImageFormat.PNG);
         assertThat(image.width()).isEqualTo(300);
@@ -47,10 +49,10 @@ class EpisodeImagesTest {
 
     @Test
     void rejectsAPartThatIsNotAJpegOrPng() {
-        assertThatThrownBy(() -> images.fit(part("image/gif", new byte[] {1}), "image", LIMIT))
+        assertThatThrownBy(() -> images.fitPart(part("image/gif", new byte[] {1})))
                 .isInstanceOf(UnsupportedMediaTypeException.class)
                 .hasMessageContaining("image part");
-        assertThatThrownBy(() -> images.fit(part(null, new byte[] {1}), "image", LIMIT))
+        assertThatThrownBy(() -> images.fitPart(part(null, new byte[] {1})))
                 .isInstanceOf(UnsupportedMediaTypeException.class);
     }
 
@@ -58,13 +60,13 @@ class EpisodeImagesTest {
     void rejectsAPartLargerThanTheLimitWithoutDecodingIt() {
         byte[] tooLarge = new byte[(int) LIMIT.toBytes() + 1];
 
-        assertThatThrownBy(() -> images.fit(part("image/png", tooLarge), "image", LIMIT))
+        assertThatThrownBy(() -> images.fitPart(part("image/png", tooLarge)))
                 .isInstanceOf(ContentTooLargeException.class);
     }
 
     @Test
     void reportsTheFieldOfAnInvalidImage() {
-        assertThatThrownBy(() -> images.fit(part("image/png", new byte[] {1, 2, 3}), "image", LIMIT))
+        assertThatThrownBy(() -> images.fitPart(part("image/png", new byte[] {1, 2, 3})))
                 .isInstanceOfSatisfying(
                         UnprocessableContentException.class,
                         invalid -> assertThat(invalid.getBody().getProperties())
@@ -102,9 +104,15 @@ class EpisodeImagesTest {
 
     @Test
     void writesNothingWhenOnlyChecking() {
-        images.fit(part("image/png", TestImages.png(20, 20)), "image", LIMIT);
+        images.fitPart(part("image/png", TestImages.png(20, 20)));
 
         verifyNoInteractions(storage);
+    }
+
+    private static BergacastProperties properties() {
+        BergacastProperties properties = mock(BergacastProperties.class);
+        when(properties.maxImageUploadSize()).thenReturn(LIMIT);
+        return properties;
     }
 
     private static MockMultipartFile part(String contentType, byte[] content) {

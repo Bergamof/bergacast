@@ -15,7 +15,6 @@ import static org.mockito.Mockito.when;
 
 import fr.bergadev.bergacast.audio.AudioFile;
 import fr.bergadev.bergacast.audio.AudioUploads;
-import fr.bergadev.bergacast.config.BergacastProperties;
 import fr.bergadev.bergacast.feed.FeedPublicationException;
 import fr.bergadev.bergacast.image.ImageFormat;
 import fr.bergadev.bergacast.image.ProcessedImage;
@@ -37,7 +36,6 @@ import org.mockito.stubbing.OngoingStubbing;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.util.unit.DataSize;
 import org.springframework.web.multipart.MultipartFile;
 
 class EpisodePublicationTest {
@@ -48,7 +46,6 @@ class EpisodePublicationTest {
     private static final EpisodeInput INPUT =
             new EpisodeInput("Title", null, null, "guid-1", null, null, null, null, null);
     private static final EpisodeMetadata METADATA = INPUT.toMetadata(NOW);
-    private static final DataSize IMAGE_LIMIT = DataSize.ofMegabytes(20);
     private static final MultipartFile IMAGE_PART =
             new MockMultipartFile("image", "c.jpg", "image/jpeg", new byte[] {2});
     private static final ProcessedImage PROCESSED = new ProcessedImage(new byte[] {2}, ImageFormat.JPEG, 10, 10);
@@ -60,13 +57,11 @@ class EpisodePublicationTest {
     private final AudioFile audioFile = mock(AudioFile.class);
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     private final EpisodeImages episodeImages = mock(EpisodeImages.class);
-    private final BergacastProperties properties = mock(BergacastProperties.class);
     private final EpisodePublication publication;
 
     EpisodePublicationTest() {
-        when(properties.maxImageUploadSize()).thenReturn(IMAGE_LIMIT);
         publication = new EpisodePublication(
-                episodeService, audioUploads, episodeImages, properties, events, Clock.fixed(NOW, ZoneOffset.UTC));
+                episodeService, audioUploads, episodeImages, events, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     @BeforeEach
@@ -226,7 +221,7 @@ class EpisodePublicationTest {
     @Test
     void uploadsNothingWhenTheImageIsInvalid() {
         UnprocessableContentException invalid = new UnprocessableContentException("image", "is not an image");
-        when(episodeImages.fit(IMAGE_PART, "image", IMAGE_LIMIT)).thenThrow(invalid);
+        when(episodeImages.fitPart(IMAGE_PART)).thenThrow(invalid);
 
         assertThatThrownBy(() -> publication.publish(SLUG, INPUT, AUDIO, IMAGE_PART, KEY))
                 .isSameAs(invalid);
@@ -296,7 +291,7 @@ class EpisodePublicationTest {
     }
 
     private void imageIsValid() {
-        when(episodeImages.fit(IMAGE_PART, "image", IMAGE_LIMIT)).thenReturn(PROCESSED);
+        when(episodeImages.fitPart(IMAGE_PART)).thenReturn(PROCESSED);
         when(episodeImages.store(eq(SLUG), any(UUID.class), eq(PROCESSED))).thenReturn(STORED);
     }
 

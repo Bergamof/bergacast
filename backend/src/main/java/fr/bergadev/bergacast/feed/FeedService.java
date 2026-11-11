@@ -81,7 +81,7 @@ public class FeedService {
         return podcastImageService
                 .find(podcast)
                 .map(image -> publicUrls
-                        .podcastImage(podcast.getSlug(), image.format().fileExtension())
+                        .podcastImage(podcast.getSlug(), image.format())
                         .toString())
                 .orElse(podcast.getDetails().imageUrl());
     }
@@ -118,8 +118,7 @@ public class FeedService {
                         audio.getSizeBytes(),
                         audio.getMimeType()),
                 episode.getImage()
-                        .map(image -> publicUrls.episodeImage(
-                                slug, episode.getId(), image.format().fileExtension()))
+                        .map(image -> publicUrls.episodeImage(slug, episode.getId(), image.format()))
                         .orElse(null));
     }
 }

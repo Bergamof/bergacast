@@ -1,6 +1,7 @@
 package fr.bergadev.bergacast.web;
 
 import fr.bergadev.bergacast.config.BergacastProperties;
+import fr.bergadev.bergacast.image.ImageFormat;
 import fr.bergadev.bergacast.storage.MediaKeys;
 import java.net.URI;
 import java.util.UUID;
@@ -37,12 +38,12 @@ public class PublicUrls {
         return media(MediaKeys.episodeAudio(podcastSlug, episodeId, fileExtension));
     }
 
-    public URI episodeImage(String podcastSlug, UUID episodeId, String fileExtension) {
-        return media(MediaKeys.episodeImage(podcastSlug, episodeId, fileExtension));
+    public URI episodeImage(String podcastSlug, UUID episodeId, ImageFormat format) {
+        return media(MediaKeys.episodeImage(podcastSlug, episodeId, format.fileExtension()));
     }
 
-    public URI podcastImage(String podcastSlug, String fileExtension) {
-        return media(MediaKeys.podcastImage(podcastSlug, fileExtension));
+    public URI podcastImage(String podcastSlug, ImageFormat format) {
+        return media(MediaKeys.podcastImage(podcastSlug, format.fileExtension()));
     }
 
     /** Public URL of the object stored with {@code key}. */

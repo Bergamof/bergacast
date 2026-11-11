@@ -34,9 +34,7 @@ class EpisodeModelAssembler implements RepresentationModelAssembler<Episode, Ent
         EpisodeMetadata metadata = episode.metadata();
         EpisodeImageResponse image = episode.getImage()
                 .map(stored -> EpisodeImageResponse.of(
-                        stored,
-                        publicUrls.episodeImage(
-                                slug, episode.getId(), stored.format().fileExtension())))
+                        stored, publicUrls.episodeImage(slug, episode.getId(), stored.format())))
                 .orElse(null);
         EpisodeResponse response = new EpisodeResponse(
                 episode.getId(),

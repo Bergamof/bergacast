@@ -2,7 +2,6 @@ package fr.bergadev.bergacast.episode;
 
 import fr.bergadev.bergacast.audio.AudioFile;
 import fr.bergadev.bergacast.audio.AudioUploads;
-import fr.bergadev.bergacast.config.BergacastProperties;
 import fr.bergadev.bergacast.feed.FeedPublicationException;
 import fr.bergadev.bergacast.image.ProcessedImage;
 import fr.bergadev.bergacast.podcast.PodcastFeedChanged;
@@ -14,7 +13,6 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import org.springframework.util.unit.DataSize;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -35,7 +33,6 @@ class EpisodePublication {
     private final EpisodeService episodeService;
     private final AudioUploads audioUploads;
     private final EpisodeImages episodeImages;
-    private final DataSize maxImageUploadSize;
     private final ApplicationEventPublisher events;
     private final Clock clock;
 
@@ -43,13 +40,11 @@ class EpisodePublication {
             EpisodeService episodeService,
             AudioUploads audioUploads,
             EpisodeImages episodeImages,
-            BergacastProperties properties,
             ApplicationEventPublisher events,
             Clock clock) {
         this.episodeService = episodeService;
         this.audioUploads = audioUploads;
         this.episodeImages = episodeImages;
-        this.maxImageUploadSize = properties.maxImageUploadSize();
         this.events = events;
         this.clock = clock;
     }
@@ -67,18 +62,10 @@ class EpisodePublication {
             return replay(slug, alreadyPublished.get());
         }
         // Checked before the audio is uploaded: a bad image must not cost an upload of up to 500 MB.
-        ProcessedImage image = hasContent(imagePart)
-                ? episodeImages.fit(imagePart, EpisodeImages.IMAGE_PART, maxImageUploadSize)
-                : null;
+        ProcessedImage image = hasContent(imagePart) ? episodeImages.fitPart(imagePart) : null;
         UUID episodeId = UUID.randomUUID();
         AudioFile audioFile = audioUploads.upload(slug, episodeId, audio);
-        EpisodeImage storedImage;
-        try {
-            storedImage = image == null ? null : episodeImages.store(slug, episodeId, image);
-        } catch (RuntimeException imageNotStored) {
-            audioUploads.discard(slug, episodeId, audioFile.getFileExtension());
-            throw imageNotStored;
-        }
+        EpisodeImage storedImage = storeImage(slug, episodeId, audioFile, image);
         Episode published;
         try {
             published = episodeService.publish(slug, episodeId, metadata, audioFile, storedImage, now, idempotencyKey);
@@ -100,6 +87,20 @@ class EpisodePublication {
             return replay(slug, published);
         }
         return published;
+    }
+
+    /** Writes the image, if any; when the storage fails, the audio file written just before is removed. */
+    private @Nullable EpisodeImage storeImage(
+            String slug, UUID episodeId, AudioFile audioFile, @Nullable ProcessedImage image) {
+        if (image == null) {
+            return null;
+        }
+        try {
+            return episodeImages.store(slug, episodeId, image);
+        } catch (RuntimeException imageNotStored) {
+            audioUploads.discard(slug, episodeId, audioFile.getFileExtension());
+            throw imageNotStored;
+        }
     }
 
     /** Tools such as n8n send an empty file part when there is no image: it means no image, not an invalid one. */

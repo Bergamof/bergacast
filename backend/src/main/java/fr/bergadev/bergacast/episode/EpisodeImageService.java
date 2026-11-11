@@ -75,7 +75,7 @@ class EpisodeImageService {
      */
     EpisodeImageChange put(
             String slug, UUID episodeId, byte[] content, ImageFormat declaredFormat, @Nullable String ifMatch) {
-        ProcessedImage image = images.fit(content, declaredFormat, EpisodeImages.BODY_FIELD);
+        ProcessedImage image = images.fit(content, declaredFormat, UnprocessableContentException.BODY_FIELD);
         return Objects.requireNonNull(transaction.execute(status -> store(slug, episodeId, image, ifMatch)));
     }
 
@@ -117,9 +117,7 @@ class EpisodeImageService {
     }
 
     private static void requireIfMatch(Optional<EpisodeImage> current, @Nullable String ifMatch) {
-        current.ifPresentOrElse(
-                image -> EntityTags.requireIfMatch(ifMatch, image.entityTag()),
-                () -> EntityTags.requireIfMatchOnMissingResource(ifMatch));
+        EntityTags.requireIfMatch(ifMatch, current.map(EpisodeImage::entityTag));
     }
 
     private static ResourceNotFoundException noImage(UUID episodeId) {

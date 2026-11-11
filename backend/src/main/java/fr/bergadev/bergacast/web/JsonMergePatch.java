@@ -27,7 +27,8 @@ public class JsonMergePatch {
      */
     public <T> T apply(T current, JsonNode patch, Class<T> type, Class<?>... validationGroups) {
         if (!patch.isObject()) {
-            throw new UnprocessableContentException("$", "A merge patch document must be a JSON object");
+            throw new UnprocessableContentException(
+                    UnprocessableContentException.BODY_FIELD, "A merge patch document must be a JSON object");
         }
         T patched = map(merge(jsonMapper.valueToTree(current), patch), type);
         requestValidator.validate(patched, validationGroups);
@@ -59,6 +60,6 @@ public class JsonMergePatch {
 
     private static String fieldOf(JacksonException exception) {
         String path = exception.getPathReference();
-        return path == null ? "$" : path;
+        return path == null ? UnprocessableContentException.BODY_FIELD : path;
     }
 }

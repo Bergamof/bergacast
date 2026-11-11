@@ -1,20 +1,20 @@
 package fr.bergadev.bergacast.episode;
 
+import fr.bergadev.bergacast.config.BergacastProperties;
 import fr.bergadev.bergacast.image.ImageFormat;
 import fr.bergadev.bergacast.image.ImageResizer;
 import fr.bergadev.bergacast.image.InvalidImageException;
 import fr.bergadev.bergacast.image.ProcessedImage;
+import fr.bergadev.bergacast.storage.MediaCacheControl;
 import fr.bergadev.bergacast.storage.MediaKeys;
 import fr.bergadev.bergacast.storage.ObjectStorage;
 import fr.bergadev.bergacast.web.ContentTooLargeException;
+import fr.bergadev.bergacast.web.ImageUploads;
 import fr.bergadev.bergacast.web.Sha256;
 import fr.bergadev.bergacast.web.UnprocessableContentException;
-import fr.bergadev.bergacast.web.UnsupportedMediaTypeException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.time.Duration;
 import java.util.UUID;
-import org.springframework.http.CacheControl;
 import org.springframework.stereotype.Component;
 import org.springframework.util.unit.DataSize;
 import org.springframework.web.multipart.MultipartFile;
@@ -30,36 +30,32 @@ class EpisodeImages {
 
     /** Name of the optional multipart part of a publication holding the image. */
     static final String IMAGE_PART = "image";
-    /** Field reported in validation errors when the image is the whole request body. */
-    static final String BODY_FIELD = "$";
-    /** Same freshness as the feed, which links the image: its URL stays the same when it is replaced. */
-    private static final CacheControl FIVE_MINUTES =
-            CacheControl.maxAge(Duration.ofMinutes(5)).cachePublic();
 
     private final ImageResizer resizer;
     private final ObjectStorage storage;
+    private final DataSize maxImageSize;
 
-    EpisodeImages(ImageResizer resizer, ObjectStorage storage) {
+    EpisodeImages(ImageResizer resizer, ObjectStorage storage, BergacastProperties properties) {
         this.resizer = resizer;
         this.storage = storage;
+        this.maxImageSize = properties.maxImageUploadSize();
     }
 
     /**
      * Reads and checks the image part of a publication.
      *
      * @throws UnsupportedMediaTypeException when the part is neither {@code image/jpeg} nor {@code image/png}
-     * @throws ContentTooLargeException when the part is larger than {@code limit}
+     * @throws ContentTooLargeException when the part is larger than the image upload limit
      * @throws UnprocessableContentException when the content is not a valid image of the declared type
      */
-    ProcessedImage fit(MultipartFile part, String field, DataSize limit) {
-        ImageFormat format = ImageFormat.fromContentType(part.getContentType())
-                .orElseThrow(() -> new UnsupportedMediaTypeException(
-                        "The " + field + " part must have an image/jpeg or image/png content type"));
-        if (part.getSize() > limit.toBytes()) {
-            throw new ContentTooLargeException("The " + field + " part exceeds the maximum size of " + limit);
+    ProcessedImage fitPart(MultipartFile part) {
+        ImageFormat format = ImageUploads.declaredFormat(part.getContentType(), "The " + IMAGE_PART + " part");
+        if (part.getSize() > maxImageSize.toBytes()) {
+            throw new ContentTooLargeException(
+                    "The " + IMAGE_PART + " part exceeds the maximum size of " + maxImageSize);
         }
         try {
-            return fit(part.getBytes(), format, field);
+            return fit(part.getBytes(), format, IMAGE_PART);
         } catch (IOException unreadable) {
             throw new UncheckedIOException("Cannot read the uploaded image", unreadable);
         }
@@ -86,7 +82,7 @@ class EpisodeImages {
                 MediaKeys.episodeImage(podcastSlug, episodeId, format.fileExtension()),
                 image.content(),
                 format.mimeType(),
-                FIVE_MINUTES);
+                MediaCacheControl.COVER_IMAGE);
         return new EpisodeImage(
                 format.mimeType(), image.width(), image.height(), image.content().length, Sha256.hex(image.content()));
     }
