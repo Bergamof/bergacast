@@ -553,7 +553,7 @@ Sur le stockage objet, relatives à `BERGACAST_MEDIA_BASE_URL` (la clé de l’o
 | `/{slug}/image.{jpg\|png}` | Image de couverture envoyée (`Cache-Control: public, max-age=300`). |
 | `/{slug}/episodes/{episodeId}/audio.{ext}` | Fichier audio (cache immuable d’un an). |
 
-Sur le backend (`BERGACAST_PUBLIC_BASE_URL`) : `/robots.txt` (fichier statique, `Disallow: /`, toutes les réponses portent
+Sur le backend (`BERGACAST_PUBLIC_BASE_URL`) : `/robots.txt` (fichier statique, `Disallow: /` sauf Swagger UI et `/v3/api-docs`, lisibles par les agents, toutes les réponses portent
 `X-Robots-Tag: noindex, nofollow`, la SPA aussi) ; les anciennes URL des flux, images et audios sont redirigées
 (`301`) vers le même chemin sur le stockage, sans interroger la base.
 

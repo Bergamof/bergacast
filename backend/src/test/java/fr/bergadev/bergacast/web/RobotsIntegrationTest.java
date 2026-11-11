@@ -18,17 +18,26 @@ class RobotsIntegrationTest {
     private MockMvc mockMvc;
 
     @Test
-    void disallowsTheCrawlingOfTheWholeServer() throws Exception {
+    void disallowsTheCrawlingOfTheServerExceptTheApiDocumentation() throws Exception {
         mockMvc.perform(get("/robots.txt"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_PLAIN))
-                .andExpect(content().string("User-agent: *\nDisallow: /\n"))
+                .andExpect(content()
+                        .string(
+                                """
+                                User-agent: *
+                                Allow: /swagger-ui.html
+                                Allow: /swagger-ui/
+                                Allow: /v3/api-docs
+                                Disallow: /
+                                """))
                 .andExpect(header().string("Cache-Control", "max-age=86400, public"));
     }
 
     @Test
     void asksNotToIndexAnyResponse() throws Exception {
         mockMvc.perform(get("/robots.txt")).andExpect(header().string("X-Robots-Tag", "noindex, nofollow"));
+        mockMvc.perform(get("/v3/api-docs")).andExpect(header().string("X-Robots-Tag", "noindex, nofollow"));
         mockMvc.perform(get("/api/v1")).andExpect(header().string("X-Robots-Tag", "noindex, nofollow"));
         mockMvc.perform(get("/api/v1/podcasts"))
                 .andExpect(status().isUnauthorized())

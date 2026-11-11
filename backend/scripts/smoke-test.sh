@@ -191,6 +191,7 @@ request GET "$MEDIA_URL/$SLUG/image.jpg" 404 >/dev/null
 
 step "Robots kept away (robots.txt, X-Robots-Tag)"
 request GET /robots.txt 200 | grep -qx 'Disallow: /' || fail "robots.txt does not disallow crawling"
+request GET /robots.txt 200 | grep -qx 'Allow: /v3/api-docs' || fail "robots.txt does not allow the API documentation"
 [ "$(header X-Robots-Tag)" = "noindex, nofollow" ] || fail "X-Robots-Tag missing"
 
 step "OpenAPI document and Swagger UI"
