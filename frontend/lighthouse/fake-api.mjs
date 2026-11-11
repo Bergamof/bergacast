@@ -1,6 +1,7 @@
 // Fake Bergacast API (HAL, Problem Details) giving the SPA realistic data to render during the Lighthouse audit:
 // a paginated list of podcasts, a podcast with a non-square image (warning), a scheduled episode, tokens, admins.
-// Read-only: writes answer with the errors the pages must display well (401 on login, 422 on creation).
+// Read-only: the two writes it handles answer with the errors the pages must display well (401 on login, 422 on
+// creation); any other write is refused with a 405, so a journey that forgot to intercept its write fails loudly.
 
 const NOW = new Date().toISOString();
 const PODCAST_COUNT = 25;
@@ -102,6 +103,8 @@ function paged(items, url, relation) {
 	};
 }
 
+const READ_METHODS = new Set(['GET', 'HEAD']);
+
 const hal = (body, headers = {}) => ({ status: 200, body, headers });
 const problem = (status, title, extra = {}) => ({
 	status,
@@ -109,13 +112,32 @@ const problem = (status, title, extra = {}) => ({
 	headers: {}
 });
 
-/** Answers an API request: `{ status, body, headers }`, a 404 Problem Details for any unknown route. */
+/**
+ * Answers an API request: `{ status, body, headers }`, a 404 Problem Details for any unknown route
+ * and a 405 for any write other than the login and the podcast creation.
+ */
 export function answer(method, url) {
 	const origin = url.origin;
 	const api = `${origin}/api/v1`;
 	const path = url.pathname;
 	const podcasts = Array.from({ length: PODCAST_COUNT }, (_, index) => podcast(origin, index));
 	let match;
+
+	if (path === '/api/v1/access-tokens' && method === 'POST') {
+		return problem(401, 'Identifiants invalides', {
+			detail: 'Identifiant ou mot de passe incorrect.'
+		});
+	}
+	if (path === '/api/v1/podcasts' && method === 'POST') {
+		return problem(422, 'Données invalides', {
+			errors: [{ field: 'slug', message: 'Ce slug est déjà utilisé.' }]
+		});
+	}
+	if (!READ_METHODS.has(method)) {
+		return problem(405, 'Méthode non gérée par l’API simulée', {
+			detail: `${method} ${path} doit être intercepté par le parcours (page.route).`
+		});
+	}
 
 	if (path === '/api/v1') {
 		return hal({
@@ -126,16 +148,6 @@ export function answer(method, url) {
 				adminUsers: { href: `${api}/admin-users` },
 				accessTokens: { href: `${api}/access-tokens` }
 			}
-		});
-	}
-	if (path === '/api/v1/access-tokens') {
-		return problem(401, 'Identifiants invalides', {
-			detail: 'Identifiant ou mot de passe incorrect.'
-		});
-	}
-	if (path === '/api/v1/podcasts' && method === 'POST') {
-		return problem(422, 'Données invalides', {
-			errors: [{ field: 'slug', message: 'Ce slug est déjà utilisé.' }]
 		});
 	}
 	if (path === '/api/v1/podcasts') {
