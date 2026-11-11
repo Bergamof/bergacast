@@ -80,7 +80,7 @@ Dépendances externes : PostgreSQL (métadonnées) et un stockage objet compatib
 | npm | 12.2.1 | épinglé par `packageManager` dans `frontend/package.json` (voir ci-dessous) |
 | [Docker](https://www.docker.com/) avec Docker Compose v2 | récent | <https://docs.docker.com/get-started/get-docker/> — requis pour la base locale, les tests backend (Testcontainers) et l’image |
 
-Gradle n’a pas besoin d’être installé : le wrapper `backend/gradlew` (Gradle 9.8.2) est fourni.
+Gradle n’a pas besoin d’être installé : le wrapper `backend/gradlew` (Gradle 9.9.0) est fourni.
 
 ## Activation de l’auto-configuration de l’environnement
 
