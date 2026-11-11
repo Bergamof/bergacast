@@ -72,9 +72,9 @@ public class EpisodeService {
     }
 
     /**
-     * Publishes an episode whose audio file (and optional image) is already in the object storage, or returns the episode published
-     * meanwhile with the same idempotency key. The checks of {@link #prepare} are made again, since the data may have
-     * changed while the audio file was uploaded; the feed is written again once the episode is committed.
+     * Publishes an episode whose audio file (and optional image) is already in the object storage, or returns the
+     * episode published meanwhile with the same idempotency key. The checks of {@link #prepare} are made again, since
+     * the data may have changed while the audio file was uploaded; the feed is written again once the episode is committed.
      *
      * @throws ConflictException when another episode of the podcast already has the same guid
      */

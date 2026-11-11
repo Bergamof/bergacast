@@ -89,6 +89,7 @@ class EpisodeImageService {
             Episode episode = episodeService.get(slug, episodeId);
             EpisodeImage image = episode.getImage().orElseThrow(() -> noImage(episodeId));
             episode.setImage(null);
+            // Flushed now so that the version (entity tag of the episode) is bumped inside this transaction.
             episodeRepository.saveAndFlush(episode);
             AfterCommit.run(() -> images.discard(slug, episodeId, image.format()));
             events.publishEvent(new PodcastFeedChanged(slug));

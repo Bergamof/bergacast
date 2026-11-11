@@ -160,4 +160,18 @@ class ImageResizerTest {
         assertThat(processed.height()).isEqualTo(3000);
         assertThat(ImageIO.read(new ByteArrayInputStream(processed.content()))).isNotNull();
     }
+
+    @Test
+    void handlesSeveralImagesSubmittedAtTheSameTime() throws Exception {
+        byte[] png = TestImages.png(400, 300);
+        try (var executor = java.util.concurrent.Executors.newFixedThreadPool(4)) {
+            var results = java.util.stream.IntStream.range(0, 8)
+                    .mapToObj(index -> executor.submit(() -> resizer.fit(png, ImageFormat.PNG)))
+                    .toList();
+
+            for (var result : results) {
+                assertThat(result.get().width()).isEqualTo(400);
+            }
+        }
+    }
 }

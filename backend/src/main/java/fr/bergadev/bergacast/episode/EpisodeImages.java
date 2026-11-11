@@ -21,12 +21,15 @@ import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Checks, downscales and writes the cover images of episodes to the object storage. Called outside of any
- * transaction by the publication, and inside the one of the image service, which removes the object itself when its
- * change cannot be committed.
+ * transaction by the publication, which removes the object when the episode cannot be saved, and inside the one of
+ * the image service, where (as for podcast images) an object written for a change that then fails to commit stays
+ * behind as an unreferenced orphan.
  */
 @Component
 class EpisodeImages {
 
+    /** Name of the optional multipart part of a publication holding the image. */
+    static final String IMAGE_PART = "image";
     /** Field reported in validation errors when the image is the whole request body. */
     static final String BODY_FIELD = "$";
     /** Same freshness as the feed, which links the image: its URL stays the same when it is replaced. */

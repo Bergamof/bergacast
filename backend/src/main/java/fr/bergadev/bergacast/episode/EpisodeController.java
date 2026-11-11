@@ -54,7 +54,6 @@ class EpisodeController {
     private static final int MAX_IDEMPOTENCY_KEY_LENGTH = 255;
     private static final String METADATA_PART = "metadata";
     private static final String AUDIO_PART = "audio";
-    private static final String IMAGE_PART = "image";
     private static final String PUBLISH_DESCRIPTION = """
             Publishes a new episode of the podcast: the audio file and its metadata are stored, and the episode \
             appears in the public feed (`/{slug}.xml`) from its `publicationDate`.
@@ -66,7 +65,8 @@ class EpisodeController {
             `publicationDate` the upload time, `episodeType` FULL.
             - `audio`: the audio file, with a concrete `audio/*` content type (e.g. `audio/mpeg`), at most \
             BERGACAST_MAX_UPLOAD_SIZE (500MB by default).
-            - `image` (optional): the cover image of the episode, `image/jpeg` or `image/png`, at most \
+            - `image` (optional; an empty part counts as absent): the cover image of the episode, `image/jpeg` or \
+            `image/png`, at most \
             BERGACAST_MAX_IMAGE_UPLOAD_SIZE (20MB by default) and downscaled to 3000 pixels, like the podcast \
             image. The feed item carries it as `itunes:image`; without it, apps show the image of the podcast. It \
             can also be set or replaced later by an administrator (`PUT …/episodes/{id}/image`).
@@ -151,7 +151,9 @@ class EpisodeController {
                                                         name = METADATA_PART,
                                                         contentType = MediaType.APPLICATION_JSON_VALUE),
                                                 @Encoding(name = AUDIO_PART, contentType = "audio/*"),
-                                                @Encoding(name = IMAGE_PART, contentType = "image/jpeg, image/png")
+                                                @Encoding(
+                                                        name = EpisodeImages.IMAGE_PART,
+                                                        contentType = "image/jpeg, image/png")
                                             },
                                             examples = {
                                                 @ExampleObject(
@@ -201,7 +203,8 @@ class EpisodeController {
             @PathVariable String slug,
             @Parameter(hidden = true) @RequestPart(METADATA_PART) Part metadata,
             @Parameter(hidden = true) @RequestPart(AUDIO_PART) MultipartFile audio,
-            @Parameter(hidden = true) @RequestPart(name = IMAGE_PART, required = false) @Nullable MultipartFile image,
+            @Parameter(hidden = true) @RequestPart(name = EpisodeImages.IMAGE_PART, required = false) @Nullable
+                    MultipartFile image,
             @Parameter(
                             description = "Unique key of this publication, e.g. a UUID or the episode's own "
                                     + "identifier, making retries safe: a key already used for this podcast returns "

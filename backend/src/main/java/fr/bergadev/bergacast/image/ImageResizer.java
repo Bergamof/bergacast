@@ -9,6 +9,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Iterator;
+import java.util.concurrent.locks.ReentrantLock;
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
@@ -29,6 +30,8 @@ import org.springframework.stereotype.Component;
  * by successive halvings (bilinear, which amounts to box filtering) then a last bicubic step, and re-encoded in the
  * same format.
  *
+ * <p>Images are processed one at a time (see {@link #fit}).
+ *
  * <p>Memory and temporary files: everything happens in memory ({@code MemoryCache*} streams, no {@code ImageIO}
  * cache file).
  */
@@ -45,6 +48,7 @@ public class ImageResizer {
     private static final int FIRST_IMAGE = 0;
     private static final int HALVING_DIVISOR = 2;
 
+    private final ReentrantLock decoding = new ReentrantLock();
     private final int maxSide;
     private final long maxPixels;
 
@@ -65,6 +69,17 @@ public class ImageResizer {
      * @throws InvalidImageException when the content is not a valid image of the declared format, or is too large
      */
     public ProcessedImage fit(byte[] content, ImageFormat declaredFormat) {
+        // One decoding at a time: each may take about 200 MB of heap, and API tokens (automation secrets) can now
+        // send images too, so concurrent requests must not be able to exhaust the memory of the instance.
+        decoding.lock();
+        try {
+            return fitSerialized(content, declaredFormat);
+        } finally {
+            decoding.unlock();
+        }
+    }
+
+    private ProcessedImage fitSerialized(byte[] content, ImageFormat declaredFormat) {
         try (ImageInputStream input = new MemoryCacheImageInputStream(new ByteArrayInputStream(content))) {
             Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
             if (!readers.hasNext()) {

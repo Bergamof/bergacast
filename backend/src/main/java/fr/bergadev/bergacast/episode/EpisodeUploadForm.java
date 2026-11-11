@@ -5,8 +5,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 /** OpenAPI description of the multipart body of an episode upload (the parts are read by the controller). */
 @Schema(
         name = "EpisodeUpload",
-        description =
-                "Multipart body of an episode publication: a JSON `metadata` part and a binary `audio` part, and an optional binary `image` part.",
+        description = "Multipart body of an episode publication: a JSON `metadata` part, a binary `audio` part "
+                + "and an optional binary `image` part.",
         requiredProperties = {"metadata", "audio"})
 record EpisodeUploadForm(
         @Schema(

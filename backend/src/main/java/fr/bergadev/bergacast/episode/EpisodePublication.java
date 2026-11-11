@@ -31,7 +31,6 @@ import org.springframework.web.multipart.MultipartFile;
 class EpisodePublication {
 
     static final String IDEMPOTENCY_KEY_CONSTRAINT = "episode_idempotency_key_unique";
-    private static final String IMAGE_PART = "image";
 
     private final EpisodeService episodeService;
     private final AudioUploads audioUploads;
@@ -68,7 +67,9 @@ class EpisodePublication {
             return replay(slug, alreadyPublished.get());
         }
         // Checked before the audio is uploaded: a bad image must not cost an upload of up to 500 MB.
-        ProcessedImage image = imagePart == null ? null : episodeImages.fit(imagePart, IMAGE_PART, maxImageUploadSize);
+        ProcessedImage image = hasContent(imagePart)
+                ? episodeImages.fit(imagePart, EpisodeImages.IMAGE_PART, maxImageUploadSize)
+                : null;
         UUID episodeId = UUID.randomUUID();
         AudioFile audioFile = audioUploads.upload(slug, episodeId, audio);
         EpisodeImage storedImage;
@@ -99,6 +100,11 @@ class EpisodePublication {
             return replay(slug, published);
         }
         return published;
+    }
+
+    /** Tools such as n8n send an empty file part when there is no image: it means no image, not an invalid one. */
+    private static boolean hasContent(@Nullable MultipartFile part) {
+        return part != null && !part.isEmpty();
     }
 
     private void discard(String slug, UUID episodeId, AudioFile audioFile, @Nullable EpisodeImage storedImage) {
