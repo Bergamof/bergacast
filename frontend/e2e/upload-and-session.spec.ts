@@ -2,11 +2,13 @@ import { expect, test, type Page } from '@playwright/test';
 import { SESSION_LIFETIME_MILLISECONDS } from '../lighthouse/session.mjs';
 import {
 	EPISODES_API,
+	PODCAST_API,
 	PODCAST_PATH,
 	SIGNED_IN,
 	expectNoAxeViolations,
 	heldResponse,
-	installControllableUploads
+	installControllableUploads,
+	problem
 } from './support';
 
 const AUDIO = {
@@ -243,5 +245,56 @@ test.describe('session renewal', () => {
 		await dialog.getByRole('button', { name: 'Se déconnecter' }).click();
 
 		await expect(page).toHaveURL(/\/login$/);
+	});
+
+	test('keeps the dialog on a background 401, then loads the data again once renewed', async ({
+		page
+	}) => {
+		const rejected = heldResponse();
+		await page.route('**/feed-publications', async (route) => {
+			await rejected.released;
+			await problem(route, 401, 'Non authentifié');
+		});
+		await renewalSucceeds(page);
+		await page.goto(`${SIGNED_IN}${PODCAST_PATH}`);
+		await page.getByRole('button', { name: 'Réécrire le flux' }).click();
+		await page.clock.fastForward(AFTER_EXPIRY);
+		const dialog = page.getByRole('alertdialog', { name: 'Session expirée' });
+		await expect(dialog).toBeVisible();
+
+		let readsAfterRenewal = 0;
+		await page.route(PODCAST_API, (route) => {
+			readsAfterRenewal++;
+			return route.continue();
+		});
+		rejected.release();
+		await expect(page.getByText('Non authentifié')).toBeVisible();
+		await expect(dialog).toBeVisible();
+		expect(new URL(page.url()).pathname).toBe(PODCAST_PATH);
+		expect(readsAfterRenewal).toBe(0);
+
+		await dialog.getByLabel('Mot de passe de « admin »').fill('the-password');
+		await dialog.getByRole('button', { name: 'Rester connecté' }).click();
+
+		await expect(dialog).toBeHidden();
+		expect(new URL(page.url()).pathname).toBe(PODCAST_PATH);
+		await expect.poll(() => readsAfterRenewal).toBeGreaterThan(0);
+	});
+
+	test('logs out when the user declines the dialog after a background 401', async ({ page }) => {
+		const rejected = heldResponse();
+		await page.route('**/feed-publications', async (route) => {
+			await rejected.released;
+			await problem(route, 401, 'Non authentifié');
+		});
+		await page.goto(`${SIGNED_IN}${PODCAST_PATH}`);
+		await page.getByRole('button', { name: 'Réécrire le flux' }).click();
+		await page.clock.fastForward(AFTER_EXPIRY);
+		const dialog = page.getByRole('alertdialog', { name: 'Session expirée' });
+		rejected.release();
+
+		await dialog.getByRole('button', { name: 'Se déconnecter' }).click();
+
+		await expect(page).toHaveURL(/\/login/);
 	});
 });
