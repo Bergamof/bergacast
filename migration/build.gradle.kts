@@ -37,7 +37,7 @@ dependencies {
     implementation("org.liquibase:liquibase-core:$liquibaseVersion")
     constraints {
         // liquibase-core 4.33.0 pulls commons-lang3 3.17.0 (CVE-2025-48924, fixed in 3.18.0).
-        implementation("org.apache.commons:commons-lang3:3.18.0")
+        implementation("org.apache.commons:commons-lang3:3.21.0")
     }
     runtimeOnly("org.postgresql:postgresql:$postgresqlDriverVersion")
     implementation("org.springframework.security:spring-security-crypto:$springSecurityCryptoVersion")
