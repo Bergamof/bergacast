@@ -3,7 +3,7 @@ plugins {
     application
     jacoco
     checkstyle
-    id("com.diffplug.spotless") version "8.10.4"
+    id("com.diffplug.spotless") version "8.11.0"
 }
 
 group = "fr.bergadev"
