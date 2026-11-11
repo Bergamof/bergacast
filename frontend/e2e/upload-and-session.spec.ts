@@ -36,6 +36,16 @@ async function startPendingUpload(page: Page): Promise<void> {
 	await startUpload(page);
 }
 
+/**
+ * Answers the next dialog from the listener itself: click() does not return while a dialog is open.
+ * The promise settles once the answer is given, so a later listener never meets the same dialog.
+ */
+function answerNextDialog(page: Page, answer: 'accept' | 'dismiss'): Promise<void> {
+	return new Promise((resolve, reject) => {
+		page.once('dialog', (dialog) => dialog[answer]().then(resolve, reject));
+	});
+}
+
 const status = (page: Page, text: string) => page.getByRole('status').filter({ hasText: text });
 
 test.describe('audio upload', () => {
@@ -97,15 +107,20 @@ test.describe('audio upload', () => {
 
 	test('asks before leaving the page during an upload', async ({ page }) => {
 		await startPendingUpload(page);
+		// The warning only exists once the upload can be cancelled: leaving earlier is not asked about.
+		await expect(page.getByRole('button', { name: 'Annuler l’envoi' })).toBeVisible();
 		const navigation = page.getByRole('navigation', { name: 'Navigation principale' });
 
-		page.once('dialog', (dialog) => dialog.dismiss());
-		await navigation.getByRole('link', { name: 'Administrateurs' }).click();
+		const link = navigation.getByRole('link', { name: 'Administrateurs' });
+		const leaveRefused = answerNextDialog(page, 'dismiss');
+		await link.click();
+		await leaveRefused;
 		await expect(page.getByRole('button', { name: 'Annuler l’envoi' })).toBeVisible();
 		expect(new URL(page.url()).pathname).toBe(`${PODCAST_PATH}/episodes`);
 
-		page.once('dialog', (dialog) => dialog.accept());
-		await navigation.getByRole('link', { name: 'Administrateurs' }).click();
+		const leaveConfirmed = answerNextDialog(page, 'accept');
+		await link.click();
+		await leaveConfirmed;
 		await expect(page).toHaveURL(/\/admin-users$/);
 	});
 });
