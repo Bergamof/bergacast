@@ -7,6 +7,7 @@ import { BergacastApi, OPENAPI_DOCUMENTATION_PATH } from './api/bergacast-api';
 import { ApiError, SERVICE_UNAVAILABLE } from './api/problem';
 import { EXPIRED_PARAMETER, REDIRECT_PARAMETER } from './auth/login-redirect';
 import { SessionStore, type Session } from './auth/session-store';
+import { UnauthorizedGate } from './auth/unauthorized-gate';
 import { apiOriginOf } from './runtime-config';
 
 /** Application-wide singletons, wired to the browser (the SPA never renders on a server). */
@@ -37,13 +38,16 @@ export async function logIn(username: string, password: string): Promise<Session
 	return sessionStore.save(token.accessToken, username, token.expiresIn);
 }
 
+/** A 401 ends the session, except while the renewal dialog is open (see `UnauthorizedGate`). */
+export const unauthorizedGate = new UnauthorizedGate(() => void logOut({ expired: true }));
+
 const apiOrigin = apiOriginOf(globalThis.bergacastConfig);
 
 export const api = new BergacastApi(
 	new ApiClient({
 		fetch: (input, init) => fetch(input, init),
 		getAccessToken: () => sessionStore.read()?.accessToken ?? null,
-		onUnauthorized: () => void logOut({ expired: true }),
+		onUnauthorized: () => unauthorizedGate.handle(),
 		uploadTransport: createXhrUploadTransport(),
 		apiOrigin
 	})

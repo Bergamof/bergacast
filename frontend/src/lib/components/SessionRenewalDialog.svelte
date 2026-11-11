@@ -14,14 +14,19 @@
 		/** Renews the token with the password; the page and its unsaved work stay. */
 		onRenew: (password: string) => Promise<void>;
 		onLogOut: () => void;
+		/** The dialog opened: the page defers whatever would take the user away from it. */
+		onopen?: () => void;
+		/** The dialog closed, `renewed` once the session was renewed in place. */
+		onclose?: (renewed: boolean) => void;
 	}
 
-	let { session, onRenew, onLogOut }: Props = $props();
+	let { session, onRenew, onLogOut, onopen, onclose }: Props = $props();
 
 	const uid = $props.id();
 	let modal: ModalDialog | undefined = $state();
 	let expired = $state(false);
 	let password = $state('');
+	let renewedInPlace = false;
 	const form = new FormState();
 
 	// The JWT cannot be refreshed (stateless API): asking the password again before it expires
@@ -47,8 +52,16 @@
 	function open(): void {
 		if (!modal?.isOpen()) {
 			form.reset();
+			onopen?.();
 			modal?.open();
 		}
+	}
+
+	function closed(): void {
+		const renewed = renewedInPlace;
+		renewedInPlace = false;
+		password = '';
+		onclose?.(renewed);
 	}
 
 	async function renew(
@@ -61,6 +74,7 @@
 			event.currentTarget
 		);
 		if (renewed) {
+			renewedInPlace = true;
 			// Closing a modal dialog gives the focus back to where it was before it opened.
 			modal?.close();
 		}
@@ -74,7 +88,7 @@
 	title={expired ? 'Session expirée' : 'Session bientôt expirée'}
 	dismissible={!form.pending && !expired}
 	opaque={expired}
-	onclose={() => (password = '')}
+	onclose={closed}
 >
 	{#snippet description()}
 		<p>

@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
+	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { navigating, page } from '$app/state';
-	import { api, apiDocumentationHref, logIn, logOut } from '#lib/app.ts';
+	import { api, apiDocumentationHref, logIn, logOut, unauthorizedGate } from '#lib/app.ts';
 	import NewTabNotice from '#lib/components/NewTabNotice.svelte';
 	import SessionRenewalDialog from '#lib/components/SessionRenewalDialog.svelte';
 	import { spaVersion } from '#lib/version.ts';
@@ -36,6 +38,26 @@
 
 	// Follows the layout data (read from the store at each navigation) and a renewal made in place.
 	let session = $derived(data.session);
+
+	// A 401 received while the renewal dialog is open must not take the user away from it. If the
+	// session was renewed, the data those requests failed to load is loaded again; if not, the
+	// 401 ends the session as usual.
+	function sessionDialogClosed(renewed: boolean): void {
+		const unauthorized = unauthorizedGate.release();
+		if (unauthorized && renewed) {
+			void invalidateAll();
+		} else if (unauthorized) {
+			void logOut({ expired: true });
+		}
+	}
+
+	function leave(): void {
+		unauthorizedGate.release();
+		void logOut();
+	}
+
+	// Leaving the layout (logout) must not leave the deferral on for the next session.
+	onDestroy(() => unauthorizedGate.release());
 
 	async function renewSession(password: string): Promise<void> {
 		session = await logIn(session.username, password);
@@ -76,7 +98,13 @@
 	{@render children()}
 </main>
 
-<SessionRenewalDialog {session} onRenew={renewSession} onLogOut={() => logOut()} />
+<SessionRenewalDialog
+	{session}
+	onRenew={renewSession}
+	onLogOut={leave}
+	onopen={() => unauthorizedGate.hold()}
+	onclose={sessionDialogClosed}
+/>
 
 <footer class="muted">
 	Interface {spaVersion} · Serveur
