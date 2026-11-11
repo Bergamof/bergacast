@@ -99,13 +99,16 @@ test.describe('audio upload', () => {
 		await startPendingUpload(page);
 		const navigation = page.getByRole('navigation', { name: 'Navigation principale' });
 
-		page.once('dialog', (dialog) => dialog.dismiss());
-		await navigation.getByRole('link', { name: 'Administrateurs' }).click();
+		// click() can return before the dialog event arrives: wait for each dialog on its own, or a late
+		// first dialog would be answered by both handlers.
+		const link = navigation.getByRole('link', { name: 'Administrateurs' });
+		const [firstWarning] = await Promise.all([page.waitForEvent('dialog'), link.click()]);
+		await firstWarning.dismiss();
 		await expect(page.getByRole('button', { name: 'Annuler l’envoi' })).toBeVisible();
 		expect(new URL(page.url()).pathname).toBe(`${PODCAST_PATH}/episodes`);
 
-		page.once('dialog', (dialog) => dialog.accept());
-		await navigation.getByRole('link', { name: 'Administrateurs' }).click();
+		const [secondWarning] = await Promise.all([page.waitForEvent('dialog'), link.click()]);
+		await secondWarning.accept();
 		await expect(page).toHaveURL(/\/admin-users$/);
 	});
 });
