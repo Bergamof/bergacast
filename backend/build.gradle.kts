@@ -30,7 +30,7 @@ val awsSdkVersion = "2.57.11"
 
 // swagger-core (springdoc) imports jackson-bom 2.22.1, which wins over the Jackson 2 managed by Spring Boot and has
 // known vulnerabilities. Remove once springdoc ships a swagger-core built on Jackson >= 2.22.3.
-val jackson2Version = "2.22.4"
+val jackson2Version = "2.23.0"
 
 dependencies {
     implementation(platform(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES))
