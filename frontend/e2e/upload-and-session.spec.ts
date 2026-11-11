@@ -17,7 +17,9 @@ const AUDIO = {
 
 test.afterEach(async ({ page }) => {
 	// Held responses are never released by some journeys: drop their pending routes.
-	await page.unrouteAll({ behavior: 'ignoreErrors' });
+	if (!page.isClosed()) {
+		await page.unrouteAll({ behavior: 'ignoreErrors' });
+	}
 });
 
 async function startUpload(page: Page): Promise<void> {
@@ -40,9 +42,9 @@ async function startPendingUpload(page: Page): Promise<void> {
  * Answers the next dialog from the listener itself: click() does not return while a dialog is open.
  * The promise settles once the answer is given, so a later listener never meets the same dialog.
  */
-function answerNextDialog(page: Page, answer: 'accept' | 'dismiss'): Promise<void> {
+function answerNextDialog(page: Page, answer: 'accept' | 'dismiss'): Promise<string> {
 	return new Promise((resolve, reject) => {
-		page.once('dialog', (dialog) => dialog[answer]().then(resolve, reject));
+		page.once('dialog', (dialog) => dialog[answer]().then(() => resolve(dialog.type()), reject));
 	});
 }
 
@@ -122,6 +124,38 @@ test.describe('audio upload', () => {
 		await link.click();
 		await leaveConfirmed;
 		await expect(page).toHaveURL(/\/admin-users$/);
+	});
+
+	test('lets the browser warn before the tab is closed during an upload', async ({ page }) => {
+		await startPendingUpload(page);
+		await expect(page.getByRole('button', { name: 'Annuler l’envoi' })).toBeVisible();
+
+		const closeRefused = answerNextDialog(page, 'dismiss');
+		await page.close({ runBeforeUnload: true });
+		expect(await closeRefused).toBe('beforeunload');
+		expect(page.isClosed()).toBe(false);
+		await expect(page.getByRole('button', { name: 'Annuler l’envoi' })).toBeVisible();
+
+		const closeConfirmed = answerNextDialog(page, 'accept');
+		const closed = page.waitForEvent('close');
+		await page.close({ runBeforeUnload: true });
+		expect(await closeConfirmed).toBe('beforeunload');
+		await closed;
+	});
+
+	test('does not warn before the tab is closed without an upload in progress', async ({ page }) => {
+		await page.goto(`${SIGNED_IN}${PODCAST_PATH}/episodes`);
+		const warnings: string[] = [];
+		page.on('dialog', (dialog) => {
+			warnings.push(dialog.type());
+			void dialog.dismiss();
+		});
+
+		const closed = page.waitForEvent('close');
+		await page.close({ runBeforeUnload: true });
+		await closed;
+
+		expect(warnings).toEqual([]);
 	});
 });
 
