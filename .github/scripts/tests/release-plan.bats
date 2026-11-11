@@ -234,16 +234,27 @@ BREAKING CHANGE: existing invalid slugs are rejected"
     expect_release 1.2.4 v1.2.3 '["backend"]'
 }
 
-@test "bump only considers commits changing a changed module" {
+@test "bump considers every commit since the last release tag, whatever the files they change" {
     commit backend/a.txt "feat: backend"
     git tag v1.2.3
-    commit docs/guide.md "feat!: rewrite the documentation"
+    commit docs/guide.md "docs: guide"
     commit .github/workflows/ci.yml "feat: new CI job"
     commit backend/a.txt "fix: bug"
 
     plan HEAD
 
-    expect_release 1.2.4 v1.2.3 '["backend"]'
+    expect_release 1.3.0 v1.2.3 '["backend"]'
+}
+
+@test "a breaking change outside the modules makes a major release of the modules that changed" {
+    commit backend/a.txt "feat: backend"
+    git tag v1.2.3
+    commit docs/guide.md "feat!: rewrite the documentation"
+    commit frontend/a.txt "fix: bug"
+
+    plan HEAD
+
+    expect_release 2.0.0 v1.2.3 '["frontend"]'
 }
 
 @test "bump ignores commits already released" {

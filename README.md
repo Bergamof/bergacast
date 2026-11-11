@@ -383,33 +383,58 @@ docker compose down -v           # arrêt et suppression des données
 
 ### Versions et publication
 
-Chaque merge sur `main` dont la CI est verte et qui modifie `backend/`, `frontend/` ou `migration/` produit une version, sans
-intervention ([`.github/workflows/release.yml`](.github/workflows/release.yml)) :
+Une release se lance **à la main** depuis `main` (*Actions → Release → Run workflow*,
+[`.github/workflows/release.yml`](.github/workflows/release.yml)). Elle publie la version du commit de tête de `main`
+puis la déploie :
 
-1. **Plan** ([`.github/scripts/release-plan.sh`](.github/scripts/release-plan.sh)) : modules modifiés depuis le
-   dernier tag `vX.Y.Z` (aucun → rien n’est publié) et prochaine version, déduite des
-   [Conventional Commits](https://www.conventionalcommits.org/fr/) qui touchent ces modules : `type!:` ou pied
-   `BREAKING CHANGE:` → majeure, `feat` → mineure, tout autre type → patch. Première version : `1.0.0`.
-2. **Publication** de l’image de chaque module modifié, construite avec cette version (argument Docker `VERSION`),
-   dans le Container Registry Scaleway, namespace `bergacast` (région `fr-par`), pour `linux/amd64` (seule
-   architecture des Serverless Containers), avec les tags `X.Y.Z`, `X.Y`, `X`, `latest` et `sha-<sha court>` :
+1. **CI** ([`.github/scripts/wait-for-ci.sh`](.github/scripts/wait-for-ci.sh)) : la CI de ce commit doit être
+   entièrement verte. Une CI encore en cours est attendue (jusqu’à 90 min) ; une CI échouée, annulée ou absente arrête la
+   release.
+2. **Plan** ([`.github/scripts/release-plan.sh`](.github/scripts/release-plan.sh)) : modules modifiés depuis le
+   dernier tag `vX.Y.Z` (`migration/`, `backend/`, `frontend/` ; aucun → rien n’est publié) et prochaine version, déduite
+   des [Conventional Commits](https://www.conventionalcommits.org/fr/) de **tous** les commits depuis ce tag : `type!:`
+   ou pied `BREAKING CHANGE:` → majeure, `feat` → mineure, tout autre type → patch. Première version : `1.0.0`.
+3. **Publication** de l’image de chaque module modifié seulement, construite avec cette version (argument Docker
+   `VERSION`), dans le Container Registry Scaleway, namespace `bergacast` (région `fr-par`), pour `linux/amd64`, avec les
+   tags `X.Y.Z`, `X.Y`, `X`, `latest` et `sha-<sha court>` :
+   - `rg.fr-par.scw.cloud/bergacast/bergacast-migration`
    - `rg.fr-par.scw.cloud/bergacast/bergacast-backend`
    - `rg.fr-par.scw.cloud/bergacast/bergacast-frontend`
-   - `rg.fr-par.scw.cloud/bergacast/bergacast-migration`
-3. **Tag `vX.Y.Z`** sur le commit et **release GitHub** (images publiées, changements groupés par type) : les releases
-   GitHub tiennent lieu de journal des modifications.
+4. **Migration** ([`.github/scripts/run-migration-job.sh`](.github/scripts/run-migration-job.sh)), si l’image de
+   migration a été publiée : la définition du job pointe sur la nouvelle image, le job est lancé et la release attend la
+   fin du run, qui doit réussir.
+5. **Redéploiement** ([`.github/scripts/deploy-container.sh`](.github/scripts/deploy-container.sh)) des conteneurs
+   dont l’image a été publiée : le backend d’abord, puis le frontend, chacun une fois la migration (si elle a eu lieu)
+   et le déploiement précédent terminés avec succès. Un conteneur est considéré déployé quand il est `ready` sur la
+   nouvelle image.
+6. **Tag `vX.Y.Z`** sur le commit et **release GitHub** (images publiées, changements groupés par type), posés
+   en dernier : les releases GitHub tiennent lieu de journal des modifications. En cas d’échec d’une étape, relancer la
+   release rejoue la même version (publication et migration sont idempotentes) tant que le tag n’est pas posé.
 
 Une seule version pour le dépôt, appliquée aux seuls modules modifiés : un module inchangé garde sa version
-précédente. Les versions sont visibles dans le pied de page de la SPA (interface et serveur), à la racine de l’API
-(`GET /api/v1` → `version`) et dans `info.version` de l’OpenAPI. Dans le dépôt, `build.gradle.kts` et `package.json`
-restent en `0.0.0-dev` : la version n’existe que dans les tags Git et les images.
+précédente (et n’est pas redéployé). Les versions sont visibles dans le pied de page de la SPA (interface et serveur), à
+la racine de l’API (`GET /api/v1` → `version`) et dans `info.version` de l’OpenAPI. Dans le dépôt, `build.gradle.kts` et
+`package.json` restent en `0.0.0-dev` : la version n’existe que dans les tags Git et les images.
 
 Le titre de chaque PR doit donc suivre les Conventional Commits (job `pr-title`) : avec le merge squash (seul mode
 autorisé, titre du commit = titre de la PR), il devient le message du commit sur `main`. Dependabot préfixe ses PR
 par `build(deps)`, `build(deps-dev)` ou `ci(deps)`.
 
-Configuration GitHub requise : secret `SCW_SECRET_KEY` (clé d’API IAM ayant le droit d’écrire dans le registry). En
-cas d’échec, relancer le run : la version est recalculée à l’identique tant que le tag n’est pas posé.
+Configuration requise :
+
+- secret de dépôt `SCW_SECRET_KEY` : clé d’API IAM ayant le droit d’écrire dans le registry ;
+- environnement GitHub `production` (*Settings → Environments*), utilisé par la migration et les déploiements :
+  secret `SCW_DEPLOY_SECRET_KEY` (clé d’API IAM distincte, autorisée à gérer les Serverless Jobs et les Serverless
+  Containers), variables `SCW_JOB_DEFINITION_ID` (job de migration), `SCW_BACKEND_CONTAINER_ID`,
+  `SCW_FRONTEND_CONTAINER_ID` (UUID) et, hors `fr-par`, `SCW_REGION`. Limiter l’environnement à la branche `main`
+  (*Deployment branches*), faute de quoi un workflow modifié sur une autre branche pourrait lire ces secrets, et y
+  ajouter des *required reviewers* pour confirmer chaque déploiement. `SCW_SECRET_KEY` (registry) est un secret de
+  dépôt : protéger `main` par un ruleset (pull request obligatoire) limite qui peut modifier le workflow qui le lit.
+
+Limites connues : un conteneur est déployé par tag (`X.Y.Z`), pas par empreinte (`@sha256:…`) : un tag republié par un
+rejeu depuis un autre commit n’est pris en compte que par un `redeploy`, que le script déclenche quand le conteneur est
+déjà sur ce tag (déploiement par empreinte : à voir avec #37). Une migration réussie suivie d’un déploiement du backend
+en échec laisse le schéma en avance sur le code : d’où des migrations compatibles avec la version précédente.
 
 ### Migration de la base (Scaleway Serverless Job)
 
@@ -422,8 +447,8 @@ fois dans la console Scaleway (*Serverless → Jobs → Create job definition*) 
   variable **secrète**, `BERGACAST_DATASOURCE_PASSWORD` (Serverless SQL : utilisateur = ID du principal IAM, mot de passe
   = secret key d’une clé d’API de ce principal) ; `BERGACAST_ADMIN_USERNAME` et, en variable **secrète**,
   `BERGACAST_ADMIN_PASSWORD` (administrateur créé s’il n’en existe aucun) ;
-- aucune planification : le job se lance à la demande, avant chaque mise à jour du backend qui change le schéma
-  (`scw jobs definition start <id>`), et le backend ne se redéploie qu’une fois le run terminé avec succès.
+- aucune planification : la release lance le job (étape 4 ci-dessus) avant de redéployer le backend, et ne continue que si le
+  run réussit. Pour le lancer à la main : `scw jobs definition start <id>`.
 
 Deux rôles de base de données sont recommandés : celui du job possède le schéma (`CREATE`, `ALTER`, `DROP`, et
 l’écriture dans `databasechangelog*`) ; celui du backend n’a que `SELECT`, `INSERT`, `UPDATE`, `DELETE` sur les
@@ -442,8 +467,9 @@ que Flyway avait créé est reconnu et simplement noté comme appliqué (rien n�
 
 ### Déploiement (conteneurs serverless)
 
-Configurer chaque conteneur sur un tag `X.Y.Z` (déploiement explicite, retour arrière possible) ou sur `latest`
-(dernière version du module, prise en compte au prochain redéploiement).
+La release déplace chaque conteneur modifié sur le tag `X.Y.Z` de sa nouvelle image (déploiement explicite, retour
+arrière possible en relançant un conteneur sur un tag précédent depuis la console). Configurer chaque conteneur une
+première fois sur un tag `X.Y.Z` existant.
 
 
 - **backend** : port `8080` (la plateforme fournit `PORT`), variables de la section [Configuration](#configuration) ;

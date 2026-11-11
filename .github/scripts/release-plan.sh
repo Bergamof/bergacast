@@ -5,7 +5,7 @@
 # Prints GITHUB_OUTPUT lines:
 #   release=true|false   false when no module changed, or when a release tag already contains the commit
 #   version=X.Y.Z        next version: 1.0.0 without previous tag, else major (`type!:` or a `BREAKING CHANGE:`
-#                        footer), minor (`feat`) or patch (any other type) bump, from the commits changing a module
+#                        footer), minor (`feat`) or patch (any other type) bump, from every commit since that tag
 #   previous-tag=vX.Y.Z  last release tag contained in the commit (empty for the first release)
 #   modules=[…]          JSON array of the modules changed since that tag (every module for the first release)
 set -euo pipefail
@@ -45,8 +45,7 @@ done
 # 2 = major, 1 = minor, 0 = patch.
 bump_level() {
     local range="$1" level=0 hash
-    shift
-    for hash in $(git rev-list "$range" -- "$@"); do
+    for hash in $(git rev-list "$range"); do
         case $(commit_kind "$hash") in
             breaking)
                 echo 2
@@ -62,11 +61,7 @@ if [ -z "$previous_tag" ]; then
     version="$FIRST_VERSION"
 else
     IFS=. read -r major minor patch <<<"${previous_tag#v}"
-    module_paths=()
-    for module in "${changed_modules[@]}"; do
-        module_paths+=("$module/")
-    done
-    case $(bump_level "$previous_tag..$commit" "${module_paths[@]}") in
+    case $(bump_level "$previous_tag..$commit") in
         2) version="$((major + 1)).0.0" ;;
         1) version="$major.$((minor + 1)).0" ;;
         *) version="$major.$minor.$((patch + 1))" ;;
