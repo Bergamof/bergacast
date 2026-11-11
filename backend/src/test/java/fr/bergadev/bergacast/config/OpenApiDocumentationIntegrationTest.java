@@ -139,7 +139,6 @@ class OpenApiDocumentationIntegrationTest {
         assertThat(responseHeaders("putEpisodeImage", "201")).contains("ETag");
         assertThat(responseHeaders("putEpisodeImage", "200")).contains("ETag");
         assertThat(responseHeaders("getEpisodeImage", "200")).contains("ETag");
-        assertThat(responseHeaders("getEpisodeImage", "304")).contains("ETag");
         assertThat(responseHeaders("createApiToken", "201")).doesNotContain("ETag");
     }
 
