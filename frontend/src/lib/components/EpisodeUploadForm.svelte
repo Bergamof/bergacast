@@ -3,7 +3,13 @@
 	import type { UploadTransfer } from '../api/client';
 	import type { FeedPublication } from '../api/resources';
 	import { formatFileSize } from '../format/file-size';
-	import { IMAGE_FILE_ACCEPT, validateImageFile } from '../forms/podcast-image';
+	import {
+		IMAGE_FILE_ACCEPT,
+		imageRecommendationWarnings,
+		readImageDimensions,
+		validateImageFile
+	} from '../forms/cover-image';
+	import { clearFileInput } from '../forms/file-input';
 	import {
 		emptyEpisodeFormValues,
 		validateAudioFile,
@@ -53,6 +59,25 @@
 	let cancelButton: HTMLButtonElement | undefined = $state();
 
 	const chosenFile = $derived(files?.[0]);
+	let imageWarnings = $state<string[]>([]);
+
+	// Advice on the chosen image, from the dimensions the browser reads; the server accepts it anyway.
+	$effect(() => {
+		const file = imageFiles?.[0];
+		if (!file) {
+			imageWarnings = [];
+			return;
+		}
+		let current = true;
+		void readImageDimensions(file).then((dimensions) => {
+			if (current) {
+				imageWarnings = dimensions ? imageRecommendationWarnings(dimensions) : [];
+			}
+		});
+		return () => {
+			current = false;
+		};
+	});
 
 	// Leaving would silently drop an upload that may last minutes: ask first.
 	beforeNavigate((navigation) => {
@@ -82,14 +107,16 @@
 	function validate() {
 		const errors = validateEpisodeForm(values, { publicationDateRequired: false });
 		const audioError = validateAudioFile(files?.[0]);
-		const imageFile = imageFiles?.[0];
+		if (audioError !== null) {
+			errors.audio = audioError;
+		}
 		// The image is optional: only a chosen file is checked.
+		const imageFile = imageFiles?.[0];
 		const imageError = imageFile ? validateImageFile(imageFile) : null;
-		return {
-			...errors,
-			...(audioError !== null && { audio: audioError }),
-			...(imageError !== null && { image: imageError })
-		};
+		if (imageError !== null) {
+			errors.image = imageError;
+		}
+		return errors;
 	}
 
 	async function handleSubmit(
@@ -117,13 +144,9 @@
 			idempotencyKey = newIdempotencyKey();
 			successMessage = `Épisode « ${title} » publié.`;
 			values = emptyEpisodeFormValues();
-			if (fileInput) {
-				fileInput.value = '';
-			}
+			clearFileInput(fileInput);
 			files = undefined;
-			if (imageInput) {
-				imageInput.value = '';
-			}
+			clearFileInput(imageInput);
 			imageFiles = undefined;
 		}
 	}
@@ -155,6 +178,16 @@
 			/>
 		{/snippet}
 	</FormField>
+	<!-- Announced when a chosen image brings them; always rendered, as a live region must be. -->
+	<div role="status">
+		{#if imageWarnings.length > 0}
+			<div class="notice warning">
+				{#each imageWarnings as warning (warning)}
+					<p>{warning}</p>
+				{/each}
+			</div>
+		{/if}
+	</div>
 	<EpisodeFields
 		bind:values
 		errors={form.fieldErrors}

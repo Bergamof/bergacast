@@ -1,8 +1,9 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { PodcastImage } from '../api/resources';
+	import type { CoverImage, FeedPublication } from '../api/resources';
 	import { formatFileSize } from '../format/file-size';
 	import type { FieldErrors } from '../forms/field-errors';
+	import { clearFileInput } from '../forms/file-input';
 	import { FormState } from '../forms/form-state.svelte';
 	import {
 		IMAGE_FILE_ACCEPT,
@@ -11,17 +12,18 @@
 		imagePreviewUrl,
 		imageRecommendationWarnings,
 		validateImageFile
-	} from '../forms/podcast-image';
+	} from '../forms/cover-image';
 	import ConfirmButton from './ConfirmButton.svelte';
 	import FormField from './FormField.svelte';
 	import PendingButton from './PendingButton.svelte';
 	import ProblemAlert from './ProblemAlert.svelte';
+	import RecoveryActions from './RecoveryActions.svelte';
 	import RequiredFieldsLegend from './RequiredFieldsLegend.svelte';
 	import StatusMessage from './StatusMessage.svelte';
 
 	interface Props {
 		/** Cover image of a podcast or of an episode: the two share their rules and representation. */
-		image: PodcastImage | null;
+		image: CoverImage | null;
 		/** Title of the podcast or episode, used in the alternative text and the confirmation. */
 		subjectTitle: string;
 		/** Identifies the file input, unique on the page. */
@@ -34,10 +36,24 @@
 		deletionNotice: Snippet;
 		onUpload: (file: File) => Promise<void>;
 		onDelete: () => Promise<void>;
+		/** Loads the latest version of the resource, offered after a 412 (replaced meanwhile). */
+		onReload: () => Promise<void>;
+		/** Rewrites the feed on the object storage, offered after a 503. */
+		onPublishFeed: () => Promise<FeedPublication>;
 	}
 
-	let { image, subjectTitle, inputId, intro, absent, deletionNotice, onUpload, onDelete }: Props =
-		$props();
+	let {
+		image,
+		subjectTitle,
+		inputId,
+		intro,
+		absent,
+		deletionNotice,
+		onUpload,
+		onDelete,
+		onReload,
+		onPublishFeed
+	}: Props = $props();
 
 	let files = $state<FileList | undefined>();
 	let fileInput: HTMLInputElement | undefined = $state();
@@ -69,9 +85,7 @@
 		);
 		if (uploaded) {
 			statusMessage = replacing ? 'Image remplacée.' : 'Image enregistrée.';
-			if (fileInput) {
-				fileInput.value = '';
-			}
+			clearFileInput(fileInput);
 			files = undefined;
 		}
 	}
@@ -141,6 +155,7 @@
 		{/snippet}
 	</FormField>
 	<ProblemAlert problem={form.problem} inlineFields={['image']} />
+	<RecoveryActions problem={form.problem} {onReload} {onPublishFeed} />
 	<div class="actions">
 		<PendingButton type="submit" pending={form.pending} pendingLabel="Envoi en cours…">
 			{image ? 'Remplacer l’image' : 'Envoyer l’image'}

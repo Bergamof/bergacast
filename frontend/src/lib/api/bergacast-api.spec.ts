@@ -334,6 +334,19 @@ describe('BergacastApi', () => {
 			).rejects.toMatchObject({ status: 422, problem: { title: 'Image invalide' } });
 		});
 
+		it('propagates a 412 when the image was replaced meanwhile', async () => {
+			const { api } = createApi(
+				jsonResponse(412, { title: 'Precondition Failed' }, {}, 'application/problem+json')
+			);
+
+			await expect(
+				api.uploadEpisodeImage(
+					episodeWith({ sha256: 'old' }),
+					new File(['x'], 'c.png', { type: 'image/png' })
+				)
+			).rejects.toMatchObject({ status: 412 });
+		});
+
 		it('deletes the image through the image link', async () => {
 			const { api, requests } = createApi(emptyResponse(204));
 

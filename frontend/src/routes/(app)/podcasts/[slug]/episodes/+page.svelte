@@ -43,7 +43,7 @@
 					{
 						metadata: toUploadMetadata(values),
 						audio,
-						...(image && { image }),
+						image,
 						idempotencyKey
 					},
 					transfer

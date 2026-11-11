@@ -4,7 +4,7 @@
 	import Pagination from '#lib/components/Pagination.svelte';
 	import { formatEpisodeCount } from '#lib/format/count.ts';
 	import { formatDateTime } from '#lib/format/date-time.ts';
-	import { imagePreviewUrl } from '#lib/forms/podcast-image.ts';
+	import { imagePreviewUrl } from '#lib/forms/cover-image.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();

@@ -82,6 +82,8 @@
 		inputId="episode-image"
 		onUpload={uploadImage}
 		onDelete={deleteImage}
+		onReload={refreshEpisode}
+		onPublishFeed={() => api.publishFeed(podcast)}
 	>
 		{#snippet intro()}
 			Facultative : les applications d’écoute l’affichent pour cet épisode à la place de l’image du

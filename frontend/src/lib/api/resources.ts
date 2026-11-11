@@ -36,8 +36,8 @@ export interface PodcastInput {
 	feed: FeedSettings;
 }
 
-/** Cover image uploaded for a podcast (it takes priority over `imageUrl` in the feed). */
-export interface PodcastImage {
+/** Cover image of a podcast or of an episode, as the API represents both. */
+export interface CoverImage {
 	mimeType: string;
 	/** Dimensions in pixels, after the server downscaled the image if needed. */
 	width: number;
@@ -48,11 +48,14 @@ export interface PodcastImage {
 	url: string;
 }
 
+/** Cover image uploaded for a podcast (it takes priority over `imageUrl` in the feed). */
+export type PodcastImage = CoverImage;
+
 /** Representation of the image sub-resource (`…/podcasts/{slug}/image`). */
 export interface PodcastImageResource extends PodcastImage, HalResource {}
 
 /** Cover image of an episode, shown by podcast apps instead of the podcast's one. */
-export type EpisodeImage = PodcastImage;
+export type EpisodeImage = CoverImage;
 
 /** Representation of the image sub-resource (`…/{slug}/episodes/{id}/image`). */
 export interface EpisodeImageResource extends EpisodeImage, HalResource {}

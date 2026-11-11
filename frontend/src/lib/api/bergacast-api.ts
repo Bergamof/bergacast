@@ -32,7 +32,7 @@ export interface EpisodeUpload {
 	metadata: UploadMetadata;
 	audio: File;
 	/** Optional cover image of the episode, sent in the same request. */
-	image?: File;
+	image?: File | null;
 	/** Lets a retried upload return the already created episode instead of a duplicate. */
 	idempotencyKey: string;
 }

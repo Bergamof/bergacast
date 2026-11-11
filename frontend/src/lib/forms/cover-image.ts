@@ -1,8 +1,8 @@
 import { withQuery } from '../api/client';
-import type { PodcastImage } from '../api/resources';
+import type { CoverImage } from '../api/resources';
 import { formatFileSize } from '../format/file-size';
 
-/** Media types accepted by the server for a podcast cover image. */
+/** Media types accepted by the server for a podcast or episode cover image. */
 export const ACCEPTED_IMAGE_TYPES: readonly string[] = ['image/jpeg', 'image/png'];
 /** Value of the `accept` attribute of the file input. */
 export const IMAGE_FILE_ACCEPT = ACCEPTED_IMAGE_TYPES.join(',');
@@ -26,7 +26,7 @@ export function validateImageFile(file: File | null | undefined): string | null 
 }
 
 /** Non-blocking advice when the stored image does not follow the podcast directories' recommendations. */
-export function imageRecommendationWarnings(image: PodcastImage): string[] {
+export function imageRecommendationWarnings(image: Pick<CoverImage, 'width' | 'height'>): string[] {
 	const warnings: string[] = [];
 	if (image.width !== image.height) {
 		warnings.push(
@@ -41,7 +41,7 @@ export function imageRecommendationWarnings(image: PodcastImage): string[] {
 	return warnings;
 }
 
-export function formatImageDimensions({ width, height }: Pick<PodcastImage, 'width' | 'height'>) {
+export function formatImageDimensions({ width, height }: Pick<CoverImage, 'width' | 'height'>) {
 	return `${width} × ${height} px`;
 }
 
@@ -49,6 +49,23 @@ export function formatImageDimensions({ width, height }: Pick<PodcastImage, 'wid
  * The public image URL stays the same when the image is replaced and is cacheable: the content
  * hash is added so that the browser fetches the new image right away.
  */
-export function imagePreviewUrl(image: Pick<PodcastImage, 'url' | 'sha256'>): string {
+export function imagePreviewUrl(image: Pick<CoverImage, 'url' | 'sha256'>): string {
 	return withQuery(image.url, { v: image.sha256 });
+}
+
+/**
+ * Dimensions of a chosen image file, read by the browser, or `null` when it cannot decode it (the server
+ * then gives the verdict).
+ */
+export async function readImageDimensions(
+	file: Blob
+): Promise<Pick<CoverImage, 'width' | 'height'> | null> {
+	try {
+		const bitmap = await createImageBitmap(file);
+		const { width, height } = bitmap;
+		bitmap.close();
+		return { width, height };
+	} catch {
+		return null;
+	}
 }

@@ -213,9 +213,9 @@ test.describe('episode image', () => {
 	});
 
 	test('refuses a file that is not an image without calling the API', async ({ page }) => {
-		let called = false;
+		const requests: string[] = [];
 		await page.route(EPISODE_IMAGE_API, (route) => {
-			called = true;
+			requests.push(route.request().method());
 			return route.abort();
 		});
 		await page.goto(`${SIGNED_IN}${EPISODE_PATH}`);
@@ -229,7 +229,82 @@ test.describe('episode image', () => {
 		const field = section.getByLabel('Nouvelle image');
 		await expect(field).toBeFocused();
 		await expect(field).toHaveAccessibleDescription(/JPEG ou PNG/);
-		expect(called).toBe(false);
+		expect(requests).toHaveLength(0);
+	});
+
+	test('announces a replaced image and keeps the focus on the field', async ({ page }) => {
+		await page.route(EPISODE_IMAGE_API, (route) =>
+			route.request().method() === 'PUT'
+				? route.fulfill({
+						status: 200,
+						contentType: 'application/hal+json',
+						headers: { ETag: '"new"' },
+						body: JSON.stringify({
+							mimeType: 'image/png',
+							width: 1000,
+							height: 1000,
+							sizeBytes: 1,
+							sha256: 'd'.repeat(64),
+							url: 'https://media.example/image.png'
+						})
+					})
+				: route.continue()
+		);
+		await page.goto(`${SIGNED_IN}${EPISODE_PATH}`);
+		const section = page.getByRole('region', { name: 'Image de l’épisode' });
+		await section.getByLabel('Nouvelle image').setInputFiles({
+			name: 'cover.png',
+			mimeType: 'image/png',
+			buffer: Buffer.from('png')
+		});
+
+		await section.getByRole('button', { name: 'Remplacer l’image' }).click();
+
+		await expect(section.getByText('Image remplacée.')).toBeVisible();
+		await expect(section.getByRole('alert')).toHaveCount(0);
+		await expect(section.getByLabel('Nouvelle image')).toHaveValue('');
+	});
+
+	test('offers to reload when the image was replaced meanwhile (412)', async ({ page }) => {
+		await page.route(EPISODE_IMAGE_API, (route) =>
+			route.request().method() === 'PUT'
+				? problem(route, 412, 'Precondition Failed')
+				: route.continue()
+		);
+		await page.goto(`${SIGNED_IN}${EPISODE_PATH}`);
+		const section = page.getByRole('region', { name: 'Image de l’épisode' });
+		await section.getByLabel('Nouvelle image').setInputFiles({
+			name: 'cover.png',
+			mimeType: 'image/png',
+			buffer: Buffer.from('png')
+		});
+
+		await section.getByRole('button', { name: 'Remplacer l’image' }).click();
+
+		await expect(section.getByRole('alert')).toBeVisible();
+		await expect(
+			section.getByRole('button', { name: 'Recharger la dernière version' })
+		).toBeVisible();
+	});
+
+	test('deletes the image after a confirmation, then focuses the field and announces it', async ({
+		page
+	}) => {
+		await page.route(EPISODE_IMAGE_API, (route) =>
+			route.request().method() === 'DELETE' ? route.fulfill({ status: 204 }) : route.continue()
+		);
+		await page.goto(`${SIGNED_IN}${EPISODE_PATH}`);
+		const section = page.getByRole('region', { name: 'Image de l’épisode' });
+		await section.getByRole('button', { name: 'Supprimer l’image' }).click();
+
+		await page
+			.getByRole('alertdialog')
+			.getByRole('button', { name: 'Supprimer', exact: true })
+			.click();
+
+		await expect(page.getByRole('alertdialog')).toBeHidden();
+		await expect(section.getByLabel('Nouvelle image')).toBeFocused();
+		await expect(section.getByText('Image supprimée.')).toBeVisible();
 	});
 
 	test('shows the problem the API reports for an invalid image', async ({ page }) => {
@@ -268,4 +343,48 @@ test('episode upload offers an optional image', async ({ page }) => {
 	await expect(image).toBeVisible();
 	await expect(image).not.toHaveAttribute('required', '');
 	await expect(image).toHaveAccessibleDescription(/Facultative/);
+});
+
+test('episode upload sends the chosen image as a part of the request', async ({ page }) => {
+	let body = '';
+	await page.route(EPISODES_API, async (route) => {
+		if (route.request().method() === 'POST') {
+			body = route.request().postData() ?? '';
+			return problem(route, 422, 'Données invalides');
+		}
+		return route.continue();
+	});
+	await page.goto(`${SIGNED_IN}${PODCAST_PATH}/episodes`);
+	await page.getByText('Publier un épisode depuis l’interface').click();
+	await page.getByLabel('Fichier audio').setInputFiles({
+		name: 'episode.mp3',
+		mimeType: 'audio/mpeg',
+		buffer: Buffer.alloc(100)
+	});
+	await page.getByLabel('Image de l’épisode').setInputFiles({
+		name: 'cover.png',
+		mimeType: 'image/png',
+		buffer: Buffer.from('png')
+	});
+	await page.getByRole('textbox', { name: 'Titre', exact: true }).fill('Un titre');
+
+	await page.getByRole('button', { name: 'Publier l’épisode' }).click();
+
+	await expect.poll(() => body).toContain('name="image"; filename="cover.png"');
+});
+
+test('episode upload warns about a chosen image that is not square', async ({ page }) => {
+	await page.goto(`${SIGNED_IN}${PODCAST_PATH}/episodes`);
+	await page.getByText('Publier un épisode depuis l’interface').click();
+	// 2 × 1 px PNG: not square and far below the recommended size.
+	const wide = Buffer.from(
+		'iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAAD0lEQVR4nGP4z8DA8J8BAAf/Af8Bf4mnAAAAAElFTkSuQmCC',
+		'base64'
+	);
+
+	await page
+		.getByLabel('Image de l’épisode')
+		.setInputFiles({ name: 'wide.png', mimeType: 'image/png', buffer: wide });
+
+	await expect(page.getByText('L’image n’est pas carrée')).toBeVisible();
 });

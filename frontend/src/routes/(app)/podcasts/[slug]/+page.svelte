@@ -4,8 +4,8 @@
 	import { api } from '#lib/app.ts';
 	import { changeThenRefresh } from '#lib/api/change-then-refresh.ts';
 	import ConfirmButton from '#lib/components/ConfirmButton.svelte';
-	import PodcastForm from '#lib/components/PodcastForm.svelte';
 	import CoverImageForm from '#lib/components/CoverImageForm.svelte';
+	import PodcastForm from '#lib/components/PodcastForm.svelte';
 	import PublishingInfo from '#lib/components/PublishingInfo.svelte';
 	import {
 		podcastFormValues,
@@ -79,6 +79,8 @@
 		inputId="podcast-image"
 		onUpload={uploadImage}
 		onDelete={deleteImage}
+		onReload={refreshPodcast}
+		onPublishFeed={() => api.publishFeed(podcast)}
 	>
 		{#snippet intro()}
 			Une image envoyée ici remplace, dans le flux RSS, l’URL d’image externe des réglages.
