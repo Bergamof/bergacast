@@ -22,9 +22,7 @@ class RobotsIntegrationTest {
         mockMvc.perform(get("/robots.txt"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_PLAIN))
-                .andExpect(content()
-                        .string(
-                                """
+                .andExpect(content().string("""
                                 User-agent: *
                                 Allow: /swagger-ui.html
                                 Allow: /swagger-ui/
