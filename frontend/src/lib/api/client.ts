@@ -1,4 +1,4 @@
-import { ApiError, NETWORK_ERROR_STATUS, toProblemDetails } from './problem';
+import { ApiError, NETWORK_ERROR_STATUS, toProblemDetails, withRetryDelay } from './problem';
 import { isAbortError } from './abort';
 import type { UploadProgressListener, UploadTransport } from './upload-transport';
 
@@ -161,7 +161,13 @@ export class ApiClient {
 			if (response.status === 401 && !options.anonymous) {
 				this.#options.onUnauthorized();
 			}
-			throw new ApiError(response.status, toProblemDetails(response.status, responseBody));
+			const problem = toProblemDetails(response.status, responseBody);
+			throw new ApiError(
+				response.status,
+				response.status === 429
+					? withRetryDelay(problem, response.headers.get('Retry-After'))
+					: problem
+			);
 		}
 		return {
 			status: response.status,

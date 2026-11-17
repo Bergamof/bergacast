@@ -194,6 +194,7 @@
 				id="maxEpisodes"
 				label="Nombre maximal d’épisodes"
 				error={errors.maxEpisodes}
+				hint="Disponible lorsque « Seulement les plus récents » est choisi."
 				required={editable.values.limitEpisodes}
 			>
 				{#snippet control(attributes)}
