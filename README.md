@@ -2,8 +2,9 @@
 
 Bergacast est un service **auto-hébergé de publication de podcasts**. Des outils automatisés (scripts, chaînes de
 production audio, CI…) publient un épisode — fichier audio + métadonnées — sur une API authentifiée propre à chaque
-podcast ; Bergacast stocke l’audio **dans la base PostgreSQL** et sert, pour chaque podcast, un **flux RSS public**
-compatible Apple Podcasts ainsi que les URL publiques des fichiers audio. Une interface d’administration web permet de
+podcast ; Bergacast stocke les métadonnées dans PostgreSQL, l’audio, les images et le flux RSS dans un **stockage objet
+S3** (public en lecture) et publie, pour chaque podcast, un **flux RSS public** compatible Apple Podcasts ainsi que les
+URL publiques des fichiers audio. Une interface d’administration web permet de
 tout gérer.
 
 Dépôt : <https://github.com/Bergamof/bergacast> — licence [AGPL-3.0](LICENSE).
@@ -359,7 +360,7 @@ Trois images, une par module, construites chacune depuis son dossier (contexte `
 
 | Image | Étapes | Taille / mémoire |
 |-------|--------|------------------|
-| `bergacast-backend` | `ghcr.io/graalvm/native-image-community:25` (AOT Spring + `nativeCompile`) → `gcr.io/distroless/base-debian13:nonroot` (glibc seule, pas de shell, utilisateur `nonroot`) | ~ 190 Mo, ~ 110–120 Mo de RAM (tient dans 256 Mo, upload de 200 Mo compris), démarrage ~ 1 s |
+| `bergacast-backend` | `ghcr.io/graalvm/native-image-community:25` (AOT Spring + `nativeCompile`) → `gcr.io/distroless/base-debian13:nonroot` (glibc seule, pas de shell, utilisateur `nonroot`) | ~ 70 Mo, ~ 120 Mo de RAM au repos (smoke test CI), démarrage ~ 1 s ; les parts multipart sont écrites dans `/tmp`, que la documentation Scaleway donne **en RAM** sur Serverless Containers (à vérifier) : dimensionner la mémoire du conteneur en conséquence (voir la limite d’envoi `BERGACAST_MAX_UPLOAD_SIZE`) |
 | `bergacast-migration` | `eclipse-temurin:25-jdk` (Gradle `installDist`, JRE réduit par `jlink`) → `gcr.io/distroless/base-debian13:nonroot` (comme le backend, pas de shell) | s’arrête une fois la base à jour |
 | `bergacast-frontend` | `node:24-alpine` (build statique, précompressé brotli/gzip) → `joseluisq/static-web-server:2.44.3-alpine` (utilisateur `sws`) | ~ 18 Mo, ~ 10 Mo de RAM |
 
