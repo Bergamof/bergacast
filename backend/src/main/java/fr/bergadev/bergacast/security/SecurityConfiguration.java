@@ -61,6 +61,22 @@ class SecurityConfiguration {
     private static final String ADMIN_ROLE = "ROLE_" + AdminPrincipal.ROLE;
     private static final String SLUG_VARIABLE = "slug";
     private static final String HMAC_ALGORITHM = "HmacSHA256";
+    private static final String ERROR_PATH = "/error";
+
+    /** The only public pages besides the API root: former media URLs, robots.txt, probes and the API documentation. */
+    private static final String[] PUBLIC_READ_PATHS = {
+        "/*.xml",
+        "/*/image.*",
+        "/*/episodes/*/audio.*",
+        "/robots.txt",
+        "/actuator/health",
+        "/actuator/health/**",
+        "/swagger-ui.html",
+        "/swagger-ui/**",
+        "/v3/api-docs",
+        "/v3/api-docs/**"
+    };
+
     private static final Duration CORS_PREFLIGHT_CACHE = Duration.ofHours(1);
 
     @Bean
@@ -83,16 +99,28 @@ class SecurityConfiguration {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(requests -> requests.requestMatchers(HttpMethod.GET, ApiPaths.BASE)
                         .permitAll()
+                        .requestMatchers(HttpMethod.HEAD, ApiPaths.BASE)
+                        .permitAll()
                         .requestMatchers(HttpMethod.POST, ApiPaths.ACCESS_TOKENS)
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, ApiPaths.EPISODES, ApiPaths.EPISODE)
+                        .access(adminOrPodcastToken())
+                        .requestMatchers(HttpMethod.HEAD, ApiPaths.EPISODES, ApiPaths.EPISODE)
                         .access(adminOrPodcastToken())
                         .requestMatchers(HttpMethod.POST, ApiPaths.EPISODES)
                         .access(adminOrPodcastToken())
                         .requestMatchers(ApiPaths.BASE + "/**")
                         .hasAuthority(ADMIN_ROLE)
+                        .requestMatchers(HttpMethod.GET, PUBLIC_READ_PATHS)
+                        .permitAll()
+                        .requestMatchers(HttpMethod.HEAD, PUBLIC_READ_PATHS)
+                        .permitAll()
+                        // Also for the error dispatch of a rejected request, whatever its method.
+                        .requestMatchers(ERROR_PATH)
+                        .permitAll()
+                        // Closed by default: a controller added outside of /api is private until listed above.
                         .anyRequest()
-                        .permitAll())
+                        .denyAll())
                 .oauth2ResourceServer(resourceServer -> resourceServer
                         .bearerTokenResolver(apiBearerTokenResolver())
                         .authenticationManagerResolver(request -> bearerAuthenticationManager)

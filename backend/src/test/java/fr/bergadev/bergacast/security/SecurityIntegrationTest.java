@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -184,10 +185,12 @@ class SecurityIntegrationTest {
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
         mockMvc.perform(get("/no/such/page"))
-                .andExpect(status().isNotFound())
+                .andExpect(status().isUnauthorized())
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.title").value("Not Found"))
                 .andExpect(jsonPath("$.instance").value("/no/such/page"));
+        mockMvc.perform(get("/no/such/page").header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
         mockMvc.perform(put("/api/v1/podcasts").header(HttpHeaders.AUTHORIZATION, admin))
                 .andExpect(status().isMethodNotAllowed())
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
@@ -196,6 +199,22 @@ class SecurityIntegrationTest {
     @Test
     void exposesHealthOnly() throws Exception {
         mockMvc.perform(get("/actuator/health")).andExpect(status().isOk());
-        mockMvc.perform(get("/actuator/env")).andExpect(status().isNotFound());
+        mockMvc.perform(get("/actuator/env")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void keepsEveryRouteOutsideTheListedPublicOnesPrivate() throws Exception {
+        mockMvc.perform(get("/swagger-ui.html")).andExpect(status().is3xxRedirection());
+        mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk());
+        mockMvc.perform(get("/actuator/health/liveness")).andExpect(status().isOk());
+        mockMvc.perform(get("/actuator/loggers")).andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/unknown-podcast.xml")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/unknown/folder/image.gif")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void answersHeadLikeGetOnThePublicRoot() throws Exception {
+        mockMvc.perform(head("/api/v1")).andExpect(status().isOk());
+        mockMvc.perform(head("/unknown-podcast.xml")).andExpect(status().isMovedPermanently());
     }
 }

@@ -123,17 +123,19 @@ public class PodcastService {
         if (podcasts.isEmpty()) {
             return Map.of();
         }
-        List<UUID> ids = podcasts.stream().map(Podcast::getId).toList();
-        return imageRepository.findAllMetadata(ids).stream()
+        return imageRepository.findAllMetadata(idsOf(podcasts)).stream()
                 .collect(Collectors.toMap(PodcastImageMetadata::podcastId, Function.identity()));
+    }
+
+    private static List<UUID> idsOf(List<Podcast> podcasts) {
+        return podcasts.stream().map(Podcast::getId).toList();
     }
 
     private Map<UUID, Long> countEpisodes(List<Podcast> podcasts) {
         if (podcasts.isEmpty()) {
             return Map.of();
         }
-        List<UUID> ids = podcasts.stream().map(Podcast::getId).toList();
-        return podcastRepository.countEpisodes(ids).stream()
+        return podcastRepository.countEpisodes(idsOf(podcasts)).stream()
                 .collect(Collectors.toMap(EpisodeCount::podcastId, EpisodeCount::count));
     }
 }
