@@ -5,6 +5,7 @@ import fr.bergadev.bergacast.image.ImageResizer;
 import fr.bergadev.bergacast.image.InvalidImageException;
 import fr.bergadev.bergacast.image.ProcessedImage;
 import fr.bergadev.bergacast.storage.AfterCommit;
+import fr.bergadev.bergacast.storage.AfterCommitScope;
 import fr.bergadev.bergacast.storage.MediaCacheControl;
 import fr.bergadev.bergacast.storage.MediaKeys;
 import fr.bergadev.bergacast.storage.ObjectStorage;
@@ -27,6 +28,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * tag), and its feed, written again once the change is committed.
  */
 @Service
+@AfterCommitScope
 public class PodcastImageService {
 
     private final PodcastService podcastService;
