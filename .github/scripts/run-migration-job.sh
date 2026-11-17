@@ -8,6 +8,10 @@ set -euo pipefail
 # shellcheck source=SCRIPTDIR/scaleway.bash
 source "$(dirname "${BASH_SOURCE[0]}")/scaleway.bash"
 
+readonly RUN_LIST_PAGE_SIZE=100
+# Every end state of a run (a manually cancelled run is over too, it must not block the next release).
+readonly TERMINAL_STATES='["succeeded", "failed", "interrupted", "canceled"]'
+
 : "${JOB_POLL_SECONDS:=10}" "${JOB_TIMEOUT_SECONDS:=1800}"
 : "${SCW_SECRET_KEY:?SCW_SECRET_KEY is required}" "${SCW_JOB_DEFINITION_ID:?SCW_JOB_DEFINITION_ID is required}"
 
@@ -22,8 +26,8 @@ definition_path="$jobs_path/job-definitions/$SCW_JOB_DEFINITION_ID"
 
 echo "Migration job: image $image"
 # Two migrations must never run at once (a run of an earlier attempt may still be going on).
-unfinished=$(scw_api GET "$jobs_path/job-runs?job_definition_id=$SCW_JOB_DEFINITION_ID&page_size=100" \
-    | jq '[.job_runs[] | select(.state | IN("succeeded", "failed", "interrupted") | not)] | length')
+unfinished=$(scw_api GET "$jobs_path/job-runs?job_definition_id=$SCW_JOB_DEFINITION_ID&page_size=$RUN_LIST_PAGE_SIZE" \
+    | jq --argjson terminal "$TERMINAL_STATES" '[.job_runs[] | select(.state | IN($terminal[]) | not)] | length')
 [ "$unfinished" -eq 0 ] || { echo "$unfinished run(s) of the migration job are still in progress" >&2; exit 1; }
 scw_api PATCH "$definition_path" "$(jq -nc --arg image "$image" '{image_uri: $image}')" >/dev/null
 run_id=$(scw_api POST "$definition_path/start" '{}' \

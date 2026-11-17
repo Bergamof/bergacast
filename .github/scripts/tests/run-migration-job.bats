@@ -56,6 +56,14 @@ state() { printf '{"id":"%s","state":"%s","error_message":%s}' "$RUN_ID" "$1" "$
     [ "$(calls_of curl | wc -l)" -eq 1 ]
 }
 
+@test "ignores a run of an earlier attempt that was cancelled" {
+    stub_command curl '{"job_runs":[{"id":"x","state":"canceled"}]}' '{}' "$(started)" "$(state succeeded)"
+
+    migrate "$IMAGE"
+
+    [ "$status" -eq 0 ]
+}
+
 @test "never puts the key in the arguments of curl" {
     stub_command curl "$(none_running)" '{}' "$(started)" "$(state succeeded)"
 
