@@ -1,5 +1,6 @@
 package fr.bergadev.bergacast.adminuser;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -98,6 +99,48 @@ class AdminUserApiIntegrationTest {
                 .andExpect(status().isNoContent());
         mockMvc.perform(get("/api/v1/admin-users/{id}", id).header(HttpHeaders.AUTHORIZATION, admin()))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void protectsAnAdministratorAgainstConcurrentChangesWithAnEntityTag() throws Exception {
+        String username = "user-" + UUID.randomUUID();
+        MvcResult created = mockMvc.perform(post("/api/v1/admin-users")
+                        .header(HttpHeaders.AUTHORIZATION, admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(credentials(username, PASSWORD)))
+                .andExpect(status().isCreated())
+                .andExpect(header().exists(HttpHeaders.ETAG))
+                .andReturn();
+        String id = api.json(created).get("id").asString();
+        String entityTag = created.getResponse().getHeader(HttpHeaders.ETAG);
+
+        mockMvc.perform(get("/api/v1/admin-users/{id}", id)
+                        .header(HttpHeaders.AUTHORIZATION, admin())
+                        .header(HttpHeaders.IF_NONE_MATCH, entityTag))
+                .andExpect(status().isNotModified());
+        mockMvc.perform(patch("/api/v1/admin-users/{id}", id)
+                        .header(HttpHeaders.AUTHORIZATION, admin())
+                        .header(HttpHeaders.IF_MATCH, "\"stale\"")
+                        .contentType("application/merge-patch+json")
+                        .content("{\"password\":\"another-strong-password\"}"))
+                .andExpect(status().isPreconditionFailed());
+        MvcResult changed = mockMvc.perform(patch("/api/v1/admin-users/{id}", id)
+                        .header(HttpHeaders.AUTHORIZATION, admin())
+                        .header(HttpHeaders.IF_MATCH, entityTag)
+                        .contentType("application/merge-patch+json")
+                        .content("{\"password\":\"another-strong-password\"}"))
+                .andExpect(status().isOk())
+                .andExpect(header().exists(HttpHeaders.ETAG))
+                .andReturn();
+        assertThat(changed.getResponse().getHeader(HttpHeaders.ETAG)).isNotEqualTo(entityTag);
+        mockMvc.perform(delete("/api/v1/admin-users/{id}", id)
+                        .header(HttpHeaders.AUTHORIZATION, admin())
+                        .header(HttpHeaders.IF_MATCH, entityTag))
+                .andExpect(status().isPreconditionFailed());
+        mockMvc.perform(delete("/api/v1/admin-users/{id}", id)
+                        .header(HttpHeaders.AUTHORIZATION, admin())
+                        .header(HttpHeaders.IF_MATCH, changed.getResponse().getHeader(HttpHeaders.ETAG)))
+                .andExpect(status().isNoContent());
     }
 
     @Test

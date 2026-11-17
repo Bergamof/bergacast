@@ -4,9 +4,10 @@ import fr.bergadev.bergacast.podcast.Podcast;
 import fr.bergadev.bergacast.podcast.PodcastService;
 import fr.bergadev.bergacast.web.ResourceNotFoundException;
 import java.time.Clock;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,8 +27,8 @@ public class ApiTokenService {
     }
 
     @Transactional(readOnly = true)
-    public List<ApiToken> list(String slug) {
-        return apiTokenRepository.findByPodcastOrderByCreatedAtAsc(podcastService.getBySlug(slug));
+    public Page<ApiToken> list(String slug, Pageable pageable) {
+        return apiTokenRepository.findByPodcast(podcastService.getBySlug(slug), pageable);
     }
 
     public CreatedApiToken create(String slug, String name) {

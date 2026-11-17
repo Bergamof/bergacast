@@ -303,7 +303,13 @@ class EpisodeApiIntegrationTest {
 
         mockMvc.perform(delete("/api/v1/{slug}/episodes/{id}", slug, id).header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(delete("/api/v1/{slug}/episodes/{id}", slug, id).header(HttpHeaders.AUTHORIZATION, admin))
+        mockMvc.perform(delete("/api/v1/{slug}/episodes/{id}", slug, id)
+                        .header(HttpHeaders.AUTHORIZATION, admin)
+                        .header(HttpHeaders.IF_MATCH, "\"0\""))
+                .andExpect(status().isPreconditionFailed());
+        mockMvc.perform(delete("/api/v1/{slug}/episodes/{id}", slug, id)
+                        .header(HttpHeaders.AUTHORIZATION, admin)
+                        .header(HttpHeaders.IF_MATCH, "\"1\""))
                 .andExpect(status().isNoContent());
         assertThat(storedObjects.find(audioKey)).isEmpty();
         mockMvc.perform(get("/api/v1/{slug}/episodes/{id}", slug, id).header(HttpHeaders.AUTHORIZATION, admin))
