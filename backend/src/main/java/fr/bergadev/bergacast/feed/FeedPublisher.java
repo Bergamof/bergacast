@@ -2,19 +2,18 @@ package fr.bergadev.bergacast.feed;
 
 import fr.bergadev.bergacast.podcast.PodcastFeedChanged;
 import fr.bergadev.bergacast.storage.AfterCommit;
+import fr.bergadev.bergacast.storage.MediaCacheControl;
 import fr.bergadev.bergacast.storage.MediaKeys;
 import fr.bergadev.bergacast.storage.ObjectStorage;
 import fr.bergadev.bergacast.storage.ObjectStorageException;
 import fr.bergadev.bergacast.web.PublicUrls;
 import java.time.Clock;
-import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import org.springframework.context.event.EventListener;
-import org.springframework.http.CacheControl;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -31,9 +30,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class FeedPublisher {
 
     static final String RSS_XML_VALUE = "application/rss+xml;charset=UTF-8";
-    /** Podcast apps poll feeds: a short freshness keeps changes visible soon. */
-    static final CacheControl FIVE_MINUTES =
-            CacheControl.maxAge(Duration.ofMinutes(5)).cachePublic();
 
     private final FeedService feedService;
     private final ObjectStorage storage;
@@ -80,7 +76,7 @@ public class FeedPublisher {
         try {
             RenderedFeed feed =
                     Objects.requireNonNull(newReadOnlyTransaction.execute(status -> feedService.render(slug)));
-            storage.put(MediaKeys.feed(slug), feed.document(), RSS_XML_VALUE, FIVE_MINUTES);
+            storage.put(MediaKeys.feed(slug), feed.document(), RSS_XML_VALUE, MediaCacheControl.FEED);
             return new FeedPublication(publicUrls.feed(slug), clock.instant(), feed.episodeCount());
         } catch (ObjectStorageException exception) {
             throw new FeedPublicationException(slug, exception);

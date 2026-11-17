@@ -61,7 +61,6 @@ class SecurityConfiguration {
     private static final String ADMIN_ROLE = "ROLE_" + AdminPrincipal.ROLE;
     private static final String SLUG_VARIABLE = "slug";
     private static final String HMAC_ALGORITHM = "HmacSHA256";
-    private static final String API_PREFIX = "/api/";
     private static final Duration CORS_PREFLIGHT_CACHE = Duration.ofHours(1);
 
     @Bean
@@ -131,7 +130,7 @@ class SecurityConfiguration {
         configuration.setExposedHeaders(List.of(HttpHeaders.ETAG, HttpHeaders.LOCATION, HttpHeaders.RETRY_AFTER));
         configuration.setMaxAge(CORS_PREFLIGHT_CACHE);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration(API_PREFIX + "**", configuration);
+        source.registerCorsConfiguration(ApiPaths.PREFIX + "**", configuration);
         return source;
     }
 
@@ -144,7 +143,7 @@ class SecurityConfiguration {
         return request -> {
             String path =
                     request.getRequestURI().substring(request.getContextPath().length());
-            return path.startsWith(API_PREFIX) ? headerResolver.resolve(request) : null;
+            return path.startsWith(ApiPaths.PREFIX) ? headerResolver.resolve(request) : null;
         };
     }
 

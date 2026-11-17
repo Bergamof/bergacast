@@ -1,5 +1,6 @@
 package fr.bergadev.bergacast.web;
 
+import fr.bergadev.bergacast.storage.MediaCacheControl;
 import fr.bergadev.bergacast.storage.MediaKeys;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -8,9 +9,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.time.Duration;
 import java.util.UUID;
-import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,9 +30,6 @@ class MediaRedirectController {
     private static final String SLUG = "{slug:[a-z0-9-]+}";
     private static final String MOVED = "Moved permanently to the object storage";
     private static final String LOCATION_DESCRIPTION = "Same path on the object storage (BERGACAST_MEDIA_BASE_URL)";
-    /** Permanent: clients may remember it, a day bounds how long a misconfigured target would stick. */
-    private static final CacheControl ONE_DAY =
-            CacheControl.maxAge(Duration.ofDays(1)).cachePublic();
 
     private final PublicUrls publicUrls;
 
@@ -112,7 +108,7 @@ class MediaRedirectController {
     private ResponseEntity<Void> redirect(String key) {
         return ResponseEntity.status(HttpStatus.MOVED_PERMANENTLY)
                 .location(publicUrls.media(key))
-                .cacheControl(ONE_DAY)
+                .cacheControl(MediaCacheControl.REDIRECT)
                 .build();
     }
 }
