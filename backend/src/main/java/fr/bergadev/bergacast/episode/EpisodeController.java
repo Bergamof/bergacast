@@ -7,6 +7,7 @@ import fr.bergadev.bergacast.web.ApiPaths;
 import fr.bergadev.bergacast.web.EntityTagged;
 import fr.bergadev.bergacast.web.PagedModels;
 import fr.bergadev.bergacast.web.SecuritySchemes;
+import fr.bergadev.bergacast.web.SortableProperties;
 import fr.bergadev.bergacast.web.StorageResponses;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -19,6 +20,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.Part;
 import jakarta.validation.constraints.Size;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springdoc.core.annotations.ParameterObject;
@@ -51,6 +53,8 @@ import tools.jackson.databind.JsonNode;
 @Tag(name = "Episodes")
 class EpisodeController {
 
+    private static final Set<String> SORTABLE_PROPERTIES =
+            Set.of("publicationDate", "addedAt", "title", "season", "episodeNumber", "durationSeconds");
     private static final int MAX_IDEMPOTENCY_KEY_LENGTH = 255;
     private static final String METADATA_PART = "metadata";
     private static final String AUDIO_PART = "audio";
@@ -231,7 +235,7 @@ class EpisodeController {
             summary = "List the episodes of a podcast",
             description = "Lists all the episodes of the podcast, including those not in the feed yet (scheduled) or "
                     + "no longer in it (beyond maxEpisodes). Sorted by publicationDate, newest first, by default; "
-                    + "sortable by any episode property, e.g. publicationDate, addedAt, title, episodeNumber.",
+                    + "sortable by publicationDate, addedAt, title, season, episodeNumber or durationSeconds.",
             security = {
                 @SecurityRequirement(name = SecuritySchemes.PODCAST_TOKEN),
                 @SecurityRequirement(name = SecuritySchemes.ADMIN_JWT)
@@ -240,7 +244,11 @@ class EpisodeController {
             @PathVariable String slug,
             @ParameterObject @PageableDefault(sort = "publicationDate", direction = Sort.Direction.DESC)
                     Pageable pageable) {
-        return PagedModels.of(episodeService.list(slug, pageable), pagedAssembler, assembler, EpisodeResponse.class);
+        return PagedModels.of(
+                episodeService.list(slug, SortableProperties.restrict(pageable, SORTABLE_PROPERTIES)),
+                pagedAssembler,
+                assembler,
+                EpisodeResponse.class);
     }
 
     @GetMapping(ApiPaths.EPISODE_MAPPING)

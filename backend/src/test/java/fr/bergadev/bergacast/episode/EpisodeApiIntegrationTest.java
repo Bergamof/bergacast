@@ -250,6 +250,9 @@ class EpisodeApiIntegrationTest {
         mockMvc.perform(get("/api/v1/{slug}/episodes?sort=publicationDate,asc", slug)
                         .header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(jsonPath("$._embedded.episodes[0].title").value("Old"));
+        mockMvc.perform(get("/api/v1/{slug}/episodes?sort=idempotencyKey", slug)
+                        .header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
