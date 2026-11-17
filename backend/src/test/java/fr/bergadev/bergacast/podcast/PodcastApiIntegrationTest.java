@@ -1,6 +1,7 @@
 package fr.bergadev.bergacast.podcast;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -238,6 +239,53 @@ class PodcastApiIntegrationTest {
         mockMvc.perform(get("/api/v1/podcasts?sort=ownerEmail").header(HttpHeaders.AUTHORIZATION, admin))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
+    }
+
+    @Test
+    void linksToThePreviousAndNextPages() throws Exception {
+        api.createPodcast(ApiTestClient.uniqueSlug("paging-a"));
+        api.createPodcast(ApiTestClient.uniqueSlug("paging-b"));
+        api.createPodcast(ApiTestClient.uniqueSlug("paging-c"));
+
+        mockMvc.perform(get("/api/v1/podcasts?size=1&page=1").header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.number").value(1))
+                .andExpect(jsonPath("$._links.prev.href").value(containsString("page=0")))
+                .andExpect(jsonPath("$._links.next.href").value(containsString("page=2")))
+                .andExpect(jsonPath("$._links.first.href").value(containsString("page=0")))
+                .andExpect(jsonPath("$._links.last.href").isString());
+    }
+
+    @Test
+    void fallsBackToTheDefaultsForInvalidPagingParameters() throws Exception {
+        for (String query : new String[] {"size=0", "size=-5", "size=abc", "page=-1", "page=abc"}) {
+            mockMvc.perform(get("/api/v1/podcasts?" + query).header(HttpHeaders.AUTHORIZATION, admin))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.page.number").value(0))
+                    .andExpect(jsonPath("$.page.size").value(20));
+        }
+        mockMvc.perform(get("/api/v1/podcasts?size=100000").header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.size").value(100));
+    }
+
+    @Test
+    void answersAnEmptyPageBeyondTheLastOne() throws Exception {
+        mockMvc.perform(get("/api/v1/podcasts?page=99999").header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$._embedded.podcasts.length()").value(0))
+                .andExpect(jsonPath("$.page.number").value(99999));
+    }
+
+    @Test
+    void refusesAMediaTypeItCannotProduce() throws Exception {
+        String slug = ApiTestClient.uniqueSlug("negotiation");
+        api.createPodcast(slug);
+
+        mockMvc.perform(get("/api/v1/podcasts/{slug}", slug)
+                        .header(HttpHeaders.AUTHORIZATION, admin)
+                        .accept(MediaType.APPLICATION_XML))
+                .andExpect(status().isNotAcceptable());
     }
 
     @Test
