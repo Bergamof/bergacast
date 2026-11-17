@@ -5,9 +5,9 @@
 	"description": "Interface d’administration (SPA) de Bergacast",
 	"type": "module",
 	"engines": {
-		"node": ">=24 <25"
+		"node": ">=26 <27"
 	},
-	"packageManager": "npm@12.2.1",
+	"packageManager": "npm@12.2.2",
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
