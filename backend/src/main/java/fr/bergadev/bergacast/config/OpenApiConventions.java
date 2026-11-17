@@ -1,5 +1,6 @@
 package fr.bergadev.bergacast.config;
 
+import fr.bergadev.bergacast.web.ApiPaths;
 import fr.bergadev.bergacast.web.JsonRequestSizeFilter;
 import fr.bergadev.bergacast.web.SecuritySchemes;
 import io.swagger.v3.oas.models.Components;
@@ -265,7 +266,7 @@ final class OpenApiConventions implements OpenApiCustomizer {
                         new StringSchema()
                                 .format("uri-reference")
                                 .description("URI of the request that caused the problem.")
-                                .example("/api/v1/podcasts"))
+                                .example(ApiPaths.PODCASTS))
                 .addProperty(
                         "errors",
                         new ArraySchema()
