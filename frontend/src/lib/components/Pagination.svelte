@@ -11,9 +11,18 @@
 
 	const hasPrevious = $derived(page.number > 0);
 	const hasNext = $derived(page.number + 1 < page.totalPages);
+	const beyondLastPage = $derived(page.totalPages > 0 && page.number >= page.totalPages);
 </script>
 
-{#if page.totalPages > 1}
+{#if beyondLastPage}
+	<nav class="pagination" aria-label="Pagination">
+		<span>Cette page n’existe plus.</span>
+		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- href derives from the already resolved current URL -->
+		<a class="button secondary" href={pageHref(url, page.totalPages - 1)}
+			>Aller à la dernière page</a
+		>
+	</nav>
+{:else if page.totalPages > 1}
 	<nav class="pagination" aria-label="Pagination">
 		{#if hasPrevious}
 			<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- href derives from the already resolved current URL -->

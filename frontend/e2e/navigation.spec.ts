@@ -71,3 +71,15 @@ test('announces an expired session on the login page', async ({ page }) => {
 		'Votre session a expiré. Reconnectez-vous.'
 	);
 });
+
+test('tells a page past the end is gone and offers the last one instead of an empty list', async ({
+	page
+}) => {
+	await page.goto(`${SIGNED_IN}/podcasts?page=9`);
+
+	await expect(page.getByText('Cette page n’existe plus.')).toBeVisible();
+	await expect(page.getByText('Aucun podcast pour l’instant')).toHaveCount(0);
+	await page.getByRole('link', { name: 'Aller à la dernière page' }).click();
+
+	await expect(page.getByRole('table')).toBeVisible();
+});
