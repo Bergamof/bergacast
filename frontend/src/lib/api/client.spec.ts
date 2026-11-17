@@ -271,7 +271,7 @@ describe('ApiClient', () => {
 		const { client } = createClient(fetch);
 
 		await expect(client.get('/api/v1')).rejects.toMatchObject({
-			problem: { title: 'Erreur HTTP 500' }
+			problem: { title: 'Erreur du serveur' }
 		});
 	});
 

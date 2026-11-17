@@ -185,7 +185,7 @@ export function answer(method, url) {
 			lastUsedAt,
 			_links: { self: { href: `${origin}${path}/${id}` } }
 		}));
-		return hal({ _embedded: { apiTokens: tokens } });
+		return hal(paged(tokens, url, 'apiTokens'));
 	}
 	if ((match = path.match(/^\/api\/v1\/([^/]+)\/episodes$/))) {
 		const episodes = Array.from({ length: EPISODE_COUNT }, (_, index) =>
@@ -203,7 +203,7 @@ export function answer(method, url) {
 			createdAt: NOW,
 			_links: { self: { href: `${api}/admin-users/u${index}` } }
 		}));
-		return hal({ _embedded: { adminUsers: users } });
+		return hal(paged(users, url, 'adminUsers'));
 	}
 	return problem(404, 'Ressource introuvable');
 }

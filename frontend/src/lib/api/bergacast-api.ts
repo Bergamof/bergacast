@@ -39,6 +39,11 @@ export interface EpisodeUpload {
 
 type PodcastPatch = Omit<PodcastInput, 'slug'>;
 
+/** The strong entity tag of an image is its quoted SHA-256 (`null` when there is no image yet). */
+function quotedEtag(sha256: string | undefined): string | null {
+	return sha256 ? `"${sha256}"` : null;
+}
+
 function pageQuery({ page, size = DEFAULT_PAGE_SIZE }: PageRequest): Record<string, number> {
 	return { page, size };
 }
@@ -130,7 +135,7 @@ export class BergacastApi {
 	}
 
 	#podcastImageHref(podcast: Podcast): string {
-		return `${requireLinkHref(podcast, 'self')}/image`;
+		return requireLinkHref(podcast, 'image');
 	}
 
 	/**
@@ -139,7 +144,7 @@ export class BergacastApi {
 	 * is not silently overwritten.
 	 */
 	async uploadPodcastImage(podcast: Podcast, file: File): Promise<Versioned<PodcastImageResource>> {
-		const ifMatch = podcast.image ? `"${podcast.image.sha256}"` : null;
+		const ifMatch = quotedEtag(podcast.image?.sha256);
 		const response = await this.#client.putBlob<PodcastImageResource>(
 			this.#podcastImageHref(podcast),
 			file,
@@ -205,7 +210,7 @@ export class BergacastApi {
 	 * replacement is not silently overwritten.
 	 */
 	async uploadEpisodeImage(episode: Episode, file: File): Promise<Versioned<EpisodeImageResource>> {
-		const ifMatch = episode.image ? `"${episode.image.sha256}"` : null;
+		const ifMatch = quotedEtag(episode.image?.sha256);
 		const response = await this.#client.putBlob<EpisodeImageResource>(
 			requireLinkHref(episode, 'image'),
 			file,
@@ -222,9 +227,13 @@ export class BergacastApi {
 		await this.#client.delete(requireLinkHref(episode, 'self'));
 	}
 
-	async listApiTokens(podcast: Podcast): Promise<ApiToken[]> {
-		const response = await this.#client.get(requireLinkHref(podcast, 'apiTokens'));
-		return parseCollection<ApiToken>(response.body, 'apiTokens').items;
+	async listApiTokens(
+		podcast: Podcast,
+		pageRequest: PageRequest
+	): Promise<PagedCollection<ApiToken>> {
+		const href = withQuery(requireLinkHref(podcast, 'apiTokens'), pageQuery(pageRequest));
+		const response = await this.#client.get(href);
+		return parseCollection<ApiToken>(response.body, 'apiTokens');
 	}
 
 	async createApiToken(podcast: Podcast, name: string): Promise<CreatedApiToken> {
@@ -236,9 +245,10 @@ export class BergacastApi {
 		await this.#client.delete(requireLinkHref(token, 'self'));
 	}
 
-	async listAdminUsers(): Promise<AdminUser[]> {
-		const response = await this.#client.get(await this.#rootLink('adminUsers'));
-		return parseCollection<AdminUser>(response.body, 'adminUsers').items;
+	async listAdminUsers(pageRequest: PageRequest): Promise<PagedCollection<AdminUser>> {
+		const href = withQuery(await this.#rootLink('adminUsers'), pageQuery(pageRequest));
+		const response = await this.#client.get(href);
+		return parseCollection<AdminUser>(response.body, 'adminUsers');
 	}
 
 	async createAdminUser(username: string, password: string): Promise<AdminUser> {
