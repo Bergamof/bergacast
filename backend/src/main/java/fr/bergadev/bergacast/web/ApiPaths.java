@@ -3,7 +3,8 @@ package fr.bergadev.bergacast.web;
 /** URI templates of the REST API, shared by controllers (mappings), links and security rules. */
 public final class ApiPaths {
 
-    public static final String BASE = "/api/v1";
+    public static final String PREFIX = "/api/";
+    public static final String BASE = PREFIX + "v1";
     public static final String ACCESS_TOKENS = BASE + "/access-tokens";
     public static final String PODCASTS = BASE + "/podcasts";
     public static final String PODCAST = PODCASTS + "/{slug}";

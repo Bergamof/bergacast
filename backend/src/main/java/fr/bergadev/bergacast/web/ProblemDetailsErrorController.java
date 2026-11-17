@@ -13,7 +13,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Replaces Spring Boot's default error page so that errors raised outside of Spring MVC (servlet container, filters)
- * are also rendered as Problem Details, without exception messages nor stack traces.
+ * are also rendered as Problem Details, without exception messages nor stack traces. No {@code produces}: the
+ * request being forwarded may only accept {@code application/json}, and the content type is set explicitly.
  */
 @Hidden
 @RestController
@@ -21,7 +22,7 @@ public class ProblemDetailsErrorController implements ErrorController {
 
     static final String ERROR_PATH = "/error";
 
-    @RequestMapping(path = ERROR_PATH, produces = MediaType.APPLICATION_PROBLEM_JSON_VALUE)
+    @RequestMapping(path = ERROR_PATH)
     ResponseEntity<ProblemDetail> error(HttpServletRequest request) {
         HttpStatus status = statusOf(request);
         return ResponseEntity.status(status)

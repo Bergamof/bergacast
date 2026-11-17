@@ -71,8 +71,10 @@
 <h2 id="episodes-title" tabindex="-1" bind:this={listHeading}>Épisodes</h2>
 <StatusMessage message={deletionMessage} />
 
-{#if data.episodes.items.length === 0}
+{#if data.episodes.page.totalElements === 0}
 	<p class="card">Aucun épisode pour l’instant.</p>
+{:else if data.episodes.items.length === 0}
+	<Pagination page={data.episodes.page} url={page.url} />
 {:else}
 	<ul class="episodes" aria-labelledby="episodes-title">
 		{#each data.episodes.items as episode (episode.id)}

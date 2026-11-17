@@ -114,6 +114,19 @@ class PodcastApiIntegrationTest {
     }
 
     @Test
+    void rejectsUrlsThatAreNotWebUrls() throws Exception {
+        mockMvc.perform(post("/api/v1/podcasts")
+                        .header(HttpHeaders.AUTHORIZATION, admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"slug":"web-urls","title":"t","description":"d","language":"fr",
+                                 "imageUrl":"file:///etc/passwd","websiteUrl":"ftp://example.com/x"}"""))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.errors[*].field").value(hasItem("imageUrl")))
+                .andExpect(jsonPath("$.errors[*].field").value(hasItem("websiteUrl")));
+    }
+
+    @Test
     void rejectsReservedSlugs() throws Exception {
         mockMvc.perform(post("/api/v1/podcasts")
                         .header(HttpHeaders.AUTHORIZATION, admin)
