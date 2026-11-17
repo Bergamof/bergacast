@@ -482,6 +482,20 @@ première fois sur un tag `X.Y.Z` existant.
   **Une seule instance** (`max-scale` = 1) : l’écriture des flux est sérialisée dans le processus.
 - **frontend** : `BERGACAST_API_URL` = URL publique du backend ; 128 Mo de mémoire suffisent. Sonde : `/health`.
 
+Réglages recommandés **côté Scaleway et GitHub** (configuration, aucun code à modifier) :
+
+- **HTTPS seulement** : `http_option` = `redirected` sur le backend et le frontend, sinon un appel en `http://` enverrait
+  le JWT ou le jeton `bgc_` en clair.
+- **Base** : ajouter `sslmode=verify-full` (ou au moins `require`) à `SPRING_DATASOURCE_URL` et à
+  `BERGACAST_DATASOURCE_URL` ; sans lui, le pilote retombe en clair si le serveur ne propose pas TLS.
+- **Job de migration** : une fois l’administrateur initial créé, retirer `BERGACAST_ADMIN_USERNAME` et
+  `BERGACAST_ADMIN_PASSWORD` de la définition du job (le mot de passe y resterait en clair).
+- **GitHub** : placer `SCW_SECRET_KEY` (écriture dans le registry) dans un environnement restreint à `main`, comme
+  `SCW_DEPLOY_SECRET_KEY`, plutôt qu’en secret de dépôt lisible par toute branche.
+- **Mémoire du backend** : d’après la documentation Scaleway, `/tmp` est en RAM et reçoit les envois multipart. Avec des
+  audios de quelques Mo, 256 Mo suffisent ; en cas de gros fichiers, augmenter la mémoire ou baisser
+  `BERGACAST_MAX_UPLOAD_SIZE`.
+
 ### Stockage objet (Scaleway Object Storage)
 
 1. Créer un bucket (région `fr-par`) et une application IAM avec une clé d’API ayant le droit d’écrire dans Object
@@ -584,6 +598,8 @@ Chaque podcast a un objet `feed`, appliqué à chaque génération du flux, dans
   son mot de passe (jetons sans état).
 - Le flux est un instantané écrit à chaque modification : un épisode programmé n’apparaît pas tout seul à sa date.
 - L’audio d’un épisode programmé dans le futur est accessible à qui connaît son URL.
+- Une image de couverture de 3000 px ou moins est publiée telle quelle, métadonnées EXIF (GPS compris) incluses ; seules
+  les images réduites sont ré-encodées sans métadonnées.
 
 ## Documentation de l’API
 
