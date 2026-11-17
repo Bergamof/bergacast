@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -51,6 +52,16 @@ class AdminUserApiIntegrationTest {
                 .andExpect(
                         jsonPath("$._embedded.adminUsers[0]._links.self.href").isString())
                 .andExpect(jsonPath("$._embedded.adminUsers[0].passwordHash").doesNotExist());
+    }
+
+    @Test
+    void refusesToSortByAPropertyThatIsNotAnnounced() throws Exception {
+        mockMvc.perform(get("/api/v1/admin-users?sort=passwordHash").header(HttpHeaders.AUTHORIZATION, admin()))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value(containsString("username")));
+        mockMvc.perform(get("/api/v1/admin-users?sort=createdAt,desc").header(HttpHeaders.AUTHORIZATION, admin()))
+                .andExpect(status().isOk());
     }
 
     @Test
