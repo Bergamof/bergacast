@@ -109,6 +109,7 @@ public record PodcastInput(
     static final int MAX_URL_LENGTH = 2048;
     /** Only web URLs end up in the public feed ({@code file:}, {@code ftp:}… are refused). */
     static final String WEB_URL_PATTERN = "^https?://.*";
+
     static final String LANGUAGE_TAG_PATTERN = "^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$";
 
     static PodcastInput from(Podcast podcast) {
