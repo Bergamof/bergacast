@@ -33,12 +33,11 @@ public class JsonRequestSizeFilter extends OncePerRequestFilter {
     /** Far above any valid representation (descriptions included), far below what would strain the memory. */
     public static final DataSize MAX_JSON_BODY = DataSize.ofKilobytes(256);
 
-    private static final String API_PREFIX = "/api/";
     private static final String JSON_SUFFIX = "+json";
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().startsWith(API_PREFIX) || !isJson(request.getContentType());
+        return !request.getRequestURI().startsWith(ApiPaths.PREFIX) || !isJson(request.getContentType());
     }
 
     @Override
