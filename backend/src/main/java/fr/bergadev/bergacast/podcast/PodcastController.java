@@ -6,6 +6,7 @@ import fr.bergadev.bergacast.web.ApiPaths;
 import fr.bergadev.bergacast.web.EntityTagged;
 import fr.bergadev.bergacast.web.PagedModels;
 import fr.bergadev.bergacast.web.SecuritySchemes;
+import fr.bergadev.bergacast.web.SortableProperties;
 import fr.bergadev.bergacast.web.StorageResponses;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -14,6 +15,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
@@ -43,6 +45,8 @@ import tools.jackson.databind.JsonNode;
 @SecurityRequirement(name = SecuritySchemes.ADMIN_JWT)
 class PodcastController {
 
+    private static final Set<String> SORTABLE_PROPERTIES = Set.of("slug", "createdAt", "updatedAt");
+
     private final PodcastService podcastService;
     private final PodcastModelAssembler assembler;
     private final PagedResourcesAssembler<PodcastOverview> pagedAssembler;
@@ -63,7 +67,11 @@ class PodcastController {
             description = "Lists the podcasts with their episode count. Sorted by slug by default; sortable by slug, "
                     + "createdAt or updatedAt.")
     PagedModel<EntityModel<PodcastResponse>> list(@ParameterObject @PageableDefault(sort = "slug") Pageable pageable) {
-        return PagedModels.of(podcastService.list(pageable), pagedAssembler, assembler, PodcastResponse.class);
+        return PagedModels.of(
+                podcastService.list(SortableProperties.restrict(pageable, SORTABLE_PROPERTIES)),
+                pagedAssembler,
+                assembler,
+                PodcastResponse.class);
     }
 
     @PostMapping(path = ApiPaths.PODCASTS, consumes = MediaType.APPLICATION_JSON_VALUE)

@@ -222,6 +222,9 @@ class PodcastApiIntegrationTest {
         mockMvc.perform(get("/api/v1/podcasts?sort=nope").header(HttpHeaders.AUTHORIZATION, admin))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
+        mockMvc.perform(get("/api/v1/podcasts?sort=ownerEmail").header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
     }
 
     @Test
