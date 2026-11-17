@@ -80,7 +80,7 @@ Dépendances externes : PostgreSQL (métadonnées) et un stockage objet compatib
 | npm | 12.2.1 | épinglé par `packageManager` dans `frontend/package.json` (voir ci-dessous) |
 | [Docker](https://www.docker.com/) avec Docker Compose v2 | récent | <https://docs.docker.com/get-started/get-docker/> — requis pour la base locale, les tests backend (Testcontainers) et l’image |
 
-Gradle n’a pas besoin d’être installé : le wrapper `backend/gradlew` (Gradle 9.9.0) est fourni.
+Gradle n’a pas besoin d’être installé : le wrapper `backend/gradlew` (Gradle 9.9.1) est fourni.
 
 ## Activation de l’auto-configuration de l’environnement
 
@@ -361,7 +361,7 @@ Trois images, une par module, construites chacune depuis son dossier (contexte `
 |-------|--------|------------------|
 | `bergacast-backend` | `ghcr.io/graalvm/native-image-community:25` (AOT Spring + `nativeCompile`) → `gcr.io/distroless/base-debian13:nonroot` (glibc seule, pas de shell, utilisateur `nonroot`) | ~ 190 Mo, ~ 110–120 Mo de RAM (tient dans 256 Mo, upload de 200 Mo compris), démarrage ~ 1 s |
 | `bergacast-migration` | `eclipse-temurin:25-jdk` (Gradle `installDist`, JRE réduit par `jlink`) → `gcr.io/distroless/base-debian13:nonroot` (comme le backend, pas de shell) | s’arrête une fois la base à jour |
-| `bergacast-frontend` | `node:24-alpine` (build statique, précompressé brotli/gzip) → `joseluisq/static-web-server:2.44.1-alpine` (utilisateur `sws`) | ~ 18 Mo, ~ 10 Mo de RAM |
+| `bergacast-frontend` | `node:24-alpine` (build statique, précompressé brotli/gzip) → `joseluisq/static-web-server:2.44.3-alpine` (utilisateur `sws`) | ~ 18 Mo, ~ 10 Mo de RAM |
 
 ```sh
 cp .env.example .env
