@@ -6,7 +6,7 @@ SPA SvelteKit (Svelte 5, TypeScript, `adapter-static`) servie à la racine de so
 
 ## Prérequis
 
-Node 24 (voir `../.nvmrc`) et npm 12.
+Node 26 (voir `../.nvmrc`) et npm 12.
 
 ## Commandes
 
