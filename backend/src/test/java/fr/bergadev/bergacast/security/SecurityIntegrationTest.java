@@ -188,8 +188,9 @@ class SecurityIntegrationTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.instance").value("/no/such/page"));
+        // The bearer token is only read under /api/: elsewhere the caller stays anonymous.
         mockMvc.perform(get("/no/such/page").header(HttpHeaders.AUTHORIZATION, admin))
-                .andExpect(status().isForbidden())
+                .andExpect(status().isUnauthorized())
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
         mockMvc.perform(put("/api/v1/podcasts").header(HttpHeaders.AUTHORIZATION, admin))
                 .andExpect(status().isMethodNotAllowed())
