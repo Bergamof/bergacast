@@ -1,16 +1,17 @@
 package fr.bergadev.bergacast.token;
 
 import fr.bergadev.bergacast.podcast.Podcast;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 /** Persistence of {@link ApiToken}s. */
 interface ApiTokenRepository extends JpaRepository<ApiToken, UUID> {
 
-    List<ApiToken> findByPodcastOrderByCreatedAtAsc(Podcast podcast);
+    Page<ApiToken> findByPodcast(Podcast podcast, Pageable pageable);
 
     Optional<ApiToken> findByIdAndPodcast(UUID id, Podcast podcast);
 
