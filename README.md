@@ -4,27 +4,42 @@ Bergacast est un service **auto-hébergé de publication de podcasts**. Des outi
 production audio, CI…) publient un épisode — fichier audio + métadonnées — sur une API authentifiée propre à chaque
 podcast ; Bergacast stocke les métadonnées dans PostgreSQL, l’audio, les images et le flux RSS dans un **stockage objet
 S3** (public en lecture) et publie, pour chaque podcast, un **flux RSS public** compatible Apple Podcasts ainsi que les
-URL publiques des fichiers audio. Une interface d’administration web permet de
-tout gérer.
+URL publiques des fichiers audio. Une interface d’administration web permet de tout gérer.
 
 Dépôt : <https://github.com/Bergamof/bergacast> — licence [AGPL-3.0](LICENSE).
 
 ## Sommaire
 
-- [Fonctionnalités](#fonctionnalités)
-- [Architecture](#architecture)
-- [Prérequis](#prérequis)
-- [Activation de l’auto-configuration de l’environnement](#activation-de-lauto-configuration-de-lenvironnement)
+- [Présentation](#présentation)
+  - [Fonctionnalités](#fonctionnalités)
+  - [Architecture](#architecture)
+  - [Images Docker](#images-docker)
+- [Démarrage rapide avec Docker Compose](#démarrage-rapide-avec-docker-compose)
 - [Configuration](#configuration)
-- [Lancer en local (développement)](#lancer-en-local-développement)
-- [Tests, lint et build](#tests-lint-et-build)
-- [Docker](#docker)
+- [Développement](#développement)
+  - [Prérequis](#prérequis)
+  - [Activation de l’auto-configuration de l’environnement](#activation-de-lauto-configuration-de-lenvironnement)
+  - [Lancer en local (développement)](#lancer-en-local-développement)
+  - [Tests, lint et build](#tests-lint-et-build)
 - [Utilisation par des outils automatisés](#utilisation-par-des-outils-automatisés)
+  - [1. Obtenir un jeton d’API](#1-obtenir-un-jeton-dapi)
+  - [2. Publier un épisode](#2-publier-un-épisode)
+  - [3. URL publiques](#3-url-publiques)
+  - [4. Réglages du flux](#4-réglages-du-flux)
+  - [Limites connues](#limites-connues)
 - [Documentation de l’API](#documentation-de-lapi)
+- [Production (Scaleway)](#production-scaleway)
+  - [Stockage objet (Scaleway Object Storage)](#stockage-objet-scaleway-object-storage)
+  - [Migration de la base (Scaleway Serverless Job)](#migration-de-la-base-scaleway-serverless-job)
+  - [Déploiement (conteneurs serverless)](#déploiement-conteneurs-serverless)
+  - [Versions et publication](#versions-et-publication)
 - [Intégration continue](#intégration-continue)
+- [Sécurité](#sécurité)
 - [Licence](#licence)
 
-## Fonctionnalités
+## Présentation
+
+### Fonctionnalités
 
 - **Podcasts multiples**, identifiés par un *slug* immuable (`^[a-z0-9]+(-[a-z0-9]+)*$`, 64 caractères max., hors
   noms réservés : `api`, `admin`, `swagger-ui`, `v3`, `actuator`, `podcasts`, `admin-users`, `access-tokens`,
@@ -47,7 +62,7 @@ Dépôt : <https://github.com/Bergamof/bergacast> — licence [AGPL-3.0](LICENSE
   administrateurs.
 - **Documentation OpenAPI** publique (Swagger UI) pour brancher facilement des outils externes.
 
-## Architecture
+### Architecture
 
 Monorepo :
 
@@ -72,7 +87,74 @@ Chaque module produit sa propre image. Le backend et le frontend sont déployés
 
 Dépendances externes : PostgreSQL (métadonnées) et un stockage objet compatible S3 (médias et flux).
 
-## Prérequis
+### Images Docker
+
+Trois images, une par module, construites chacune depuis son dossier (contexte `backend/`, `frontend/` ou
+`migration/`) ; les tests ne sont pas lancés dans les builds Docker : ils tournent en CI.
+
+| Image | Étapes | Taille / mémoire |
+|-------|--------|------------------|
+| `bergacast-backend` | `ghcr.io/graalvm/native-image-community:25` (AOT Spring + `nativeCompile`) → `gcr.io/distroless/base-debian13:nonroot` (glibc seule, pas de shell, utilisateur `nonroot`) | ~ 70 Mo, ~ 120 Mo de RAM au repos (smoke test CI), démarrage ~ 1 s ; les parts multipart sont écrites dans `/tmp`, que la documentation Scaleway donne **en RAM** sur Serverless Containers (à vérifier) : dimensionner la mémoire du conteneur en conséquence (voir la limite d’envoi `BERGACAST_MAX_UPLOAD_SIZE`) |
+| `bergacast-migration` | `eclipse-temurin:25-jdk` (Gradle `installDist`, JRE réduit par `jlink`) → `gcr.io/distroless/base-debian13:nonroot` (comme le backend, pas de shell) | s’arrête une fois la base à jour |
+| `bergacast-frontend` | `node:26-alpine` (build statique, précompressé brotli/gzip) → `joseluisq/static-web-server:2.44.3-alpine` (utilisateur `sws`) | ~ 18 Mo, ~ 10 Mo de RAM |
+
+## Démarrage rapide avec Docker Compose
+
+Pour essayer Bergacast en une commande (base, stockage objet simulé, migration, backend et interface) :
+
+```sh
+cp .env.example .env
+# Éditer .env : BERGACAST_JWT_SECRET (openssl rand -base64 48), BERGACAST_ADMIN_PASSWORD, POSTGRES_PASSWORD,
+# éventuellement BERGACAST_PORT / BERGACAST_ADMIN_PORT et les URL publiques.
+docker compose up -d --build
+```
+
+Le service `migration` applique le schéma puis s’arrête, avant le démarrage du backend. L’administration est alors sur <http://localhost:8081>, l’API, les flux et l’audio sur <http://localhost:8080>. Les
+données PostgreSQL sont dans le volume `db-data`. La compilation native du backend prend plusieurs minutes.
+
+```sh
+docker compose logs -f backend   # logs du backend
+docker compose down              # arrêt (données conservées)
+docker compose down -v           # arrêt et suppression des données
+```
+
+## Configuration
+
+L’application se configure par variables d’environnement (liées aux propriétés `spring.*` et `bergacast.*` de
+`backend/src/main/resources/application.yaml`) :
+
+| Variable | Défaut | Rôle |
+|----------|--------|------|
+| `BERGACAST_JWT_SECRET` | *(aucun, obligatoire)* | Secret HMAC des JWT administrateur, **au moins 32 octets** ; l’application refuse de démarrer sinon. Générer avec `openssl rand -base64 48`. |
+| `BERGACAST_PUBLIC_BASE_URL` | `http://localhost:8080` | URL publique du backend, utilisée pour les URL absolues de l’API (URL de publication). |
+| `BERGACAST_MEDIA_BASE_URL` | *(aucun, obligatoire)* | URL publique du bucket (ou d’un CDN devant lui), base des URL des flux, de l’audio et des images, par ex. `https://s3.fr-par.scw.cloud/mon-bucket`. Doit différer de `BERGACAST_PUBLIC_BASE_URL`. |
+| `BERGACAST_STORAGE_ENDPOINT` | `https://s3.fr-par.scw.cloud` | Point d’accès de l’API S3 (adresses en *path-style*). |
+| `BERGACAST_STORAGE_REGION` | `fr-par` | Région du bucket. |
+| `BERGACAST_STORAGE_BUCKET` | *(aucun, obligatoire)* | Nom du bucket. |
+| `BERGACAST_STORAGE_ACCESS_KEY` / `BERGACAST_STORAGE_SECRET_KEY` | *(aucun, obligatoires)* | Clé d’API autorisée à écrire et supprimer dans le bucket. |
+| `BERGACAST_CORS_ALLOWED_ORIGINS` | *(vide : aucune)* | Origines (séparées par des virgules) autorisées à appeler l’API depuis un navigateur : l’URL publique de la SPA d’administration, par ex. `https://admin.example.com`. |
+| `PORT` | `8080` | Port d’écoute (fourni par la plateforme serverless). |
+| `BERGACAST_MAX_UPLOAD_SIZE` | `500MB` | Taille maximale d’un upload (fichier et requête multipart). |
+| `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/bergacast` | URL JDBC de PostgreSQL 18. |
+| `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | `bergacast` / `bergacast` | Identifiants PostgreSQL. |
+
+L’image de migration prend `BERGACAST_DATASOURCE_URL` (URL JDBC), `BERGACAST_DATASOURCE_USERNAME` et
+`BERGACAST_DATASOURCE_PASSWORD` (tous obligatoires), et `BERGACAST_ADMIN_USERNAME` / `BERGACAST_ADMIN_PASSWORD`
+(ensemble, mot de passe de 12 à 72 octets, au moins 12 caractères) : l’administrateur que le job crée **s’il n’en
+existe aucun** (jamais ensuite : les autres se gèrent par l’API). Non renseignés, le job le signale par un avertissement. L’utilisateur doit pouvoir créer et modifier les tables ;
+`SPRING_DATASOURCE_*` du backend ne lui sert à rien, elle ne migre pas.
+
+L’image frontend ne prend que `BERGACAST_API_URL` (obligatoire : origine publique du backend, par ex.
+`https://api.example.com`, écrite au démarrage dans `/config.js`) et `PORT` (`8080` par défaut).
+
+Avec Docker Compose s’ajoutent `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` (base du conteneur `db`),
+`BERGACAST_ADMIN_URL` (URL de la SPA, autorisée en CORS), `BERGACAST_PORT`, `BERGACAST_ADMIN_PORT` et
+`BERGACAST_MEDIA_PORT` (ports publiés sur l’hôte, sur `127.0.0.1` seulement, `8080`, `8081` et `9090` par défaut) ; le stockage objet y est un
+S3Mock local (bucket `bergacast`, sans authentification). Modèle : [`.env.example`](.env.example).
+
+## Développement
+
+### Prérequis
 
 | Outil | Version | Installation |
 |-------|---------|--------------|
@@ -83,13 +165,13 @@ Dépendances externes : PostgreSQL (métadonnées) et un stockage objet compatib
 
 Gradle n’a pas besoin d’être installé : le wrapper `backend/gradlew` (Gradle 9.9.1) est fourni.
 
-## Activation de l’auto-configuration de l’environnement
+### Activation de l’auto-configuration de l’environnement
 
 Les versions des outils sont épinglées dans des fichiers versionnés, lus aussi par la CI : `.sdkmanrc` (Java) et
 `.nvmrc` (Node), plus `packageManager`/`engines` dans `frontend/package.json` (npm, Node). Seuls SDKMAN! et nvm sont
 pris en charge.
 
-### Java avec SDKMAN!
+#### Java avec SDKMAN!
 
 Depuis la racine du dépôt :
 
@@ -113,7 +195,7 @@ Vérification :
 java -version   # doit afficher : openjdk version "25.0.5" … (Temurin)
 ```
 
-### Node avec nvm
+#### Node avec nvm
 
 Depuis la racine du dépôt :
 
@@ -208,7 +290,7 @@ Vérification :
 node -v   # doit afficher v26.x
 ```
 
-### npm 12.2.2
+#### npm 12.2.2
 
 `frontend/package.json` déclare `"packageManager": "npm@12.2.2"` et `frontend/.npmrc` active `engine-strict=true` :
 une autre version de Node que 26 fait échouer l’installation. Après avoir activé Node 26 :
@@ -220,41 +302,7 @@ npm -v   # 12.2.2
 
 Alternative avec Corepack (fourni avec Node 26), qui respecte le champ `packageManager` : `corepack enable npm`.
 
-## Configuration
-
-L’application se configure par variables d’environnement (liées aux propriétés `spring.*` et `bergacast.*` de
-`backend/src/main/resources/application.yaml`) :
-
-| Variable | Défaut | Rôle |
-|----------|--------|------|
-| `BERGACAST_JWT_SECRET` | *(aucun, obligatoire)* | Secret HMAC des JWT administrateur, **au moins 32 octets** ; l’application refuse de démarrer sinon. Générer avec `openssl rand -base64 48`. |
-| `BERGACAST_PUBLIC_BASE_URL` | `http://localhost:8080` | URL publique du backend, utilisée pour les URL absolues de l’API (URL de publication). |
-| `BERGACAST_MEDIA_BASE_URL` | *(aucun, obligatoire)* | URL publique du bucket (ou d’un CDN devant lui), base des URL des flux, de l’audio et des images, par ex. `https://s3.fr-par.scw.cloud/mon-bucket`. Doit différer de `BERGACAST_PUBLIC_BASE_URL`. |
-| `BERGACAST_STORAGE_ENDPOINT` | `https://s3.fr-par.scw.cloud` | Point d’accès de l’API S3 (adresses en *path-style*). |
-| `BERGACAST_STORAGE_REGION` | `fr-par` | Région du bucket. |
-| `BERGACAST_STORAGE_BUCKET` | *(aucun, obligatoire)* | Nom du bucket. |
-| `BERGACAST_STORAGE_ACCESS_KEY` / `BERGACAST_STORAGE_SECRET_KEY` | *(aucun, obligatoires)* | Clé d’API autorisée à écrire et supprimer dans le bucket. |
-| `BERGACAST_CORS_ALLOWED_ORIGINS` | *(vide : aucune)* | Origines (séparées par des virgules) autorisées à appeler l’API depuis un navigateur : l’URL publique de la SPA d’administration, par ex. `https://admin.example.com`. |
-| `PORT` | `8080` | Port d’écoute (fourni par la plateforme serverless). |
-| `BERGACAST_MAX_UPLOAD_SIZE` | `500MB` | Taille maximale d’un upload (fichier et requête multipart). |
-| `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/bergacast` | URL JDBC de PostgreSQL 18. |
-| `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | `bergacast` / `bergacast` | Identifiants PostgreSQL. |
-
-L’image de migration prend `BERGACAST_DATASOURCE_URL` (URL JDBC), `BERGACAST_DATASOURCE_USERNAME` et
-`BERGACAST_DATASOURCE_PASSWORD` (tous obligatoires), et `BERGACAST_ADMIN_USERNAME` / `BERGACAST_ADMIN_PASSWORD`
-(ensemble, mot de passe de 12 à 72 octets, au moins 12 caractères) : l’administrateur que le job crée **s’il n’en
-existe aucun** (jamais ensuite : les autres se gèrent par l’API). Non renseignés, le job le signale par un avertissement. L’utilisateur doit pouvoir créer et modifier les tables ;
-`SPRING_DATASOURCE_*` du backend ne lui sert à rien, elle ne migre pas.
-
-L’image frontend ne prend que `BERGACAST_API_URL` (obligatoire : origine publique du backend, par ex.
-`https://api.example.com`, écrite au démarrage dans `/config.js`) et `PORT` (`8080` par défaut).
-
-Avec Docker Compose s’ajoutent `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` (base du conteneur `db`),
-`BERGACAST_ADMIN_URL` (URL de la SPA, autorisée en CORS), `BERGACAST_PORT`, `BERGACAST_ADMIN_PORT` et
-`BERGACAST_MEDIA_PORT` (ports publiés sur l’hôte, sur `127.0.0.1` seulement, `8080`, `8081` et `9090` par défaut) ; le stockage objet y est un
-S3Mock local (bucket `bergacast`, sans authentification). Modèle : [`.env.example`](.env.example).
-
-## Lancer en local (développement)
+### Lancer en local (développement)
 
 1. **Base de données** — un PostgreSQL 18 jetable, port 5432 publié sur l’hôte (le service `db` de `compose.yaml` ne
    publie pas de port) :
@@ -309,9 +357,9 @@ S3Mock local (bucket `bergacast`, sans authentification). Modèle : [`.env.examp
 Arrêt : `docker rm -f bergacast-dev-db bergacast-dev-s3` (ajouter `docker volume rm bergacast-dev-db` pour effacer
 les données de la base).
 
-## Tests, lint et build
+### Tests, lint et build
 
-### Backend (dans `backend/`, Java 25)
+#### Backend (dans `backend/`, Java 25)
 
 | Commande | Rôle |
 |----------|------|
@@ -327,7 +375,7 @@ les données de la base).
 
 Rapports : `build/reports/tests/test/`, `build/reports/jacoco/test/`, `build/reports/checkstyle/`.
 
-### Migration (dans `migration/`, Java 25)
+#### Migration (dans `migration/`, Java 25)
 
 | Commande | Rôle |
 |----------|------|
@@ -340,7 +388,7 @@ d’objets du stockage, transformations de données) s’écrivent en Java (`cus
 le redéploiement du backend : elle doit rester compatible avec la version précédente du backend (ajouter d’abord, ne
 supprimer qu’à la version suivante).
 
-### Frontend (dans `frontend/`, Node 26, npm 12.2.2)
+#### Frontend (dans `frontend/`, Node 26, npm 12.2.2)
 
 | Commande | Rôle |
 |----------|------|
@@ -352,178 +400,6 @@ supprimer qu’à la version suivante).
 | `npm run test` | Vitest + couverture (`coverage/`). |
 | `npm run test:e2e` | Parcours clavier et lecteur d’écran + axe-core (Playwright, sur `build/` et l’API simulée de `lighthouse/` ; Chrome installé requis, ou `E2E_CHROMIUM_PATH`). Lancer `npm run build` avant. |
 | `npm run build` | Build statique dans `build/`. |
-
-## Docker
-
-Trois images, une par module, construites chacune depuis son dossier (contexte `backend/`, `frontend/` ou
-`migration/`) ; les tests ne sont pas lancés dans les builds Docker : ils tournent en CI.
-
-| Image | Étapes | Taille / mémoire |
-|-------|--------|------------------|
-| `bergacast-backend` | `ghcr.io/graalvm/native-image-community:25` (AOT Spring + `nativeCompile`) → `gcr.io/distroless/base-debian13:nonroot` (glibc seule, pas de shell, utilisateur `nonroot`) | ~ 70 Mo, ~ 120 Mo de RAM au repos (smoke test CI), démarrage ~ 1 s ; les parts multipart sont écrites dans `/tmp`, que la documentation Scaleway donne **en RAM** sur Serverless Containers (à vérifier) : dimensionner la mémoire du conteneur en conséquence (voir la limite d’envoi `BERGACAST_MAX_UPLOAD_SIZE`) |
-| `bergacast-migration` | `eclipse-temurin:25-jdk` (Gradle `installDist`, JRE réduit par `jlink`) → `gcr.io/distroless/base-debian13:nonroot` (comme le backend, pas de shell) | s’arrête une fois la base à jour |
-| `bergacast-frontend` | `node:26-alpine` (build statique, précompressé brotli/gzip) → `joseluisq/static-web-server:2.44.3-alpine` (utilisateur `sws`) | ~ 18 Mo, ~ 10 Mo de RAM |
-
-```sh
-cp .env.example .env
-# Éditer .env : BERGACAST_JWT_SECRET (openssl rand -base64 48), BERGACAST_ADMIN_PASSWORD, POSTGRES_PASSWORD,
-# éventuellement BERGACAST_PORT / BERGACAST_ADMIN_PORT et les URL publiques.
-docker compose up -d --build
-```
-
-Le service `migration` applique le schéma puis s’arrête, avant le démarrage du backend. L’administration est alors sur <http://localhost:8081>, l’API, les flux et l’audio sur <http://localhost:8080>. Les
-données PostgreSQL sont dans le volume `db-data`. La compilation native du backend prend plusieurs minutes.
-
-```sh
-docker compose logs -f backend   # logs du backend
-docker compose down              # arrêt (données conservées)
-docker compose down -v           # arrêt et suppression des données
-```
-
-## Production (Scaleway)
-
-### Versions et publication
-
-Une release se lance **à la main** depuis `main` (*Actions → Release → Run workflow*,
-[`.github/workflows/release.yml`](.github/workflows/release.yml)). Elle publie la version du commit de tête de `main`
-puis la déploie :
-
-1. **CI** ([`.github/scripts/wait-for-ci.sh`](.github/scripts/wait-for-ci.sh)) : la CI de ce commit doit être
-   entièrement verte. Une CI encore en cours est attendue (jusqu’à 90 min) ; une CI échouée, annulée ou absente arrête la
-   release.
-2. **Plan** ([`.github/scripts/release-plan.sh`](.github/scripts/release-plan.sh)) : modules modifiés depuis le
-   dernier tag `vX.Y.Z` (`migration/`, `backend/`, `frontend/` ; aucun → rien n’est publié) et prochaine version, déduite
-   des [Conventional Commits](https://www.conventionalcommits.org/fr/) de **tous** les commits depuis ce tag : `type!:`
-   ou pied `BREAKING CHANGE:` → majeure, `feat` → mineure, tout autre type → patch. Première version : `1.0.0`.
-3. **Publication** de l’image de chaque module modifié seulement, construite avec cette version (argument Docker
-   `VERSION`), dans le Container Registry Scaleway, namespace `bergacast` (région `fr-par`), pour `linux/amd64`, avec les
-   tags `X.Y.Z`, `X.Y`, `X`, `latest` et `sha-<sha court>` :
-   - `rg.fr-par.scw.cloud/bergacast/bergacast-migration`
-   - `rg.fr-par.scw.cloud/bergacast/bergacast-backend`
-   - `rg.fr-par.scw.cloud/bergacast/bergacast-frontend`
-4. **Migration** ([`.github/scripts/run-migration-job.sh`](.github/scripts/run-migration-job.sh)), si l’image de
-   migration a été publiée : la définition du job pointe sur la nouvelle image, le job est lancé et la release attend la
-   fin du run, qui doit réussir.
-5. **Redéploiement** ([`.github/scripts/deploy-container.sh`](.github/scripts/deploy-container.sh)) des conteneurs
-   dont l’image a été publiée : le backend d’abord, puis le frontend, chacun une fois la migration (si elle a eu lieu)
-   et le déploiement précédent terminés avec succès. Un conteneur est considéré déployé quand il est `ready` sur la
-   nouvelle image.
-6. **Tag `vX.Y.Z`** sur le commit et **release GitHub** (images publiées, changements groupés par type), posés
-   en dernier : les releases GitHub tiennent lieu de journal des modifications. En cas d’échec d’une étape, relancer la
-   release rejoue la même version (publication et migration sont idempotentes) tant que le tag n’est pas posé.
-
-Une seule version pour le dépôt, appliquée aux seuls modules modifiés : un module inchangé garde sa version
-précédente (et n’est pas redéployé). Les versions sont visibles dans le pied de page de la SPA (interface et serveur), à
-la racine de l’API (`GET /api/v1` → `version`) et dans `info.version` de l’OpenAPI. Dans le dépôt, `build.gradle.kts` et
-`package.json` restent en `0.0.0-dev` : la version n’existe que dans les tags Git et les images.
-
-Le titre de chaque PR doit donc suivre les Conventional Commits (job `pr-title`) : avec le merge squash (seul mode
-autorisé, titre du commit = titre de la PR), il devient le message du commit sur `main`. Dependabot préfixe ses PR
-par `build(deps)`, `build(deps-dev)` ou `ci(deps)`.
-
-Configuration requise :
-
-- secret de dépôt `SCW_SECRET_KEY` : clé d’API IAM ayant le droit d’écrire dans le registry ;
-- environnement GitHub `production` (*Settings → Environments*), utilisé par la migration et les déploiements :
-  secret `SCW_DEPLOY_SECRET_KEY` (clé d’API IAM distincte, autorisée à gérer les Serverless Jobs et les Serverless
-  Containers), variables `SCW_JOB_DEFINITION_ID` (job de migration), `SCW_BACKEND_CONTAINER_ID`,
-  `SCW_FRONTEND_CONTAINER_ID` (UUID) et, hors `fr-par`, `SCW_REGION`. Limiter l’environnement à la branche `main`
-  (*Deployment branches*), faute de quoi un workflow modifié sur une autre branche pourrait lire ces secrets, et y
-  ajouter des *required reviewers* pour confirmer chaque déploiement. `SCW_SECRET_KEY` (registry) est un secret de
-  dépôt : protéger `main` par un ruleset (pull request obligatoire) limite qui peut modifier le workflow qui le lit.
-
-Limites connues : un conteneur est déployé par tag (`X.Y.Z`), pas par empreinte (`@sha256:…`) : un tag republié par un
-rejeu depuis un autre commit n’est pris en compte que par un `redeploy`, que le script déclenche quand le conteneur est
-déjà sur ce tag (déploiement par empreinte : à voir avec #37). Une migration réussie suivie d’un déploiement du backend
-en échec laisse le schéma en avance sur le code : d’où des migrations compatibles avec la version précédente.
-
-### Migration de la base (Scaleway Serverless Job)
-
-La base est migrée par un **job serverless** qui exécute l’image `rg.fr-par.scw.cloud/bergacast/bergacast-migration`, et
-non par le backend : celui-ci démarre sans toucher à la base (une base serverless peut rester en pause). À créer une
-fois dans la console Scaleway (*Serverless → Jobs → Create job definition*) :
-
-- image `bergacast-migration`, tag `X.Y.Z` de la version à déployer ; 512 Mo de mémoire (la JVM et Liquibase) ;
-- variables `BERGACAST_DATASOURCE_URL` (`jdbc:postgresql://<hôte>:<port>/<base>`), `BERGACAST_DATASOURCE_USERNAME` et, en
-  variable **secrète**, `BERGACAST_DATASOURCE_PASSWORD` (Serverless SQL : utilisateur = ID du principal IAM, mot de passe
-  = secret key d’une clé d’API de ce principal) ; `BERGACAST_ADMIN_USERNAME` et, en variable **secrète**,
-  `BERGACAST_ADMIN_PASSWORD` (administrateur créé s’il n’en existe aucun) ;
-- aucune planification : la release lance le job (étape 4 ci-dessus) avant de redéployer le backend, et ne continue que si le
-  run réussit. Pour le lancer à la main : `scw jobs definition start <id>`.
-
-Deux rôles de base de données sont recommandés : celui du job possède le schéma (`CREATE`, `ALTER`, `DROP`, et
-l’écriture dans `databasechangelog*`) ; celui du backend n’a que `SELECT`, `INSERT`, `UPDATE`, `DELETE` sur les
-tables, pour qu’une compromission du backend ne puisse pas modifier le schéma. Les tables appartenant au rôle du job,
-le backend ne peut les lire qu’après des `GRANT` (ou `ALTER DEFAULT PRIVILEGES`) qu’aucune migration ne pose : sur
-Serverless SQL, où un seul principal sert souvent aux deux usages, c’est une limite acceptée tant que les deux rôles
-ne sont pas séparés.
-
-Un backend déployé avant la fin du job démarre (la sonde de vivacité ne lit pas la base) et ne signale le schéma
-manquant qu’à la première requête : ne le redéployer qu'une fois le run terminé avec succès.
-
-Liquibase verrouille la base par une ligne de sa table `DATABASECHANGELOGLOCK` (pas par un verrou consultatif
-PostgreSQL) : deux runs simultanés ne migrent pas en même temps. Au premier run sur la base de production, le schéma
-que Flyway avait créé est reconnu et simplement noté comme appliqué (rien n’est recréé), puis la table
-`flyway_schema_history` est supprimée.
-
-### Déploiement (conteneurs serverless)
-
-La release déplace chaque conteneur modifié sur le tag `X.Y.Z` de sa nouvelle image (déploiement explicite, retour
-arrière possible en relançant un conteneur sur un tag précédent depuis la console). Configurer chaque conteneur une
-première fois sur un tag `X.Y.Z` existant.
-
-
-- **backend** : port `8080` (la plateforme fournit `PORT`), variables de la section [Configuration](#configuration) ;
-  `BERGACAST_PUBLIC_BASE_URL` = URL publique du conteneur backend, `BERGACAST_CORS_ALLOWED_ORIGINS` = URL publique du
-  conteneur frontend, `SPRING_DATASOURCE_*` = base PostgreSQL (déjà migrée par le job), `BERGACAST_STORAGE_*` et `BERGACAST_MEDIA_BASE_URL` =
-  bucket (voir ci-dessous) ; secrets (`BERGACAST_JWT_SECRET`, `BERGACAST_STORAGE_SECRET_KEY`, mots de passe) en
-  variables secrètes. Sonde de santé : `/actuator/health/liveness` (n’interroge pas la base). Le pool de
-  connexions ne garde aucune connexion inactive (fermée après 30 s) : une base serverless peut se mettre en pause.
-  **Une seule instance** (`max-scale` = 1) : l’écriture des flux est sérialisée dans le processus.
-- **frontend** : `BERGACAST_API_URL` = URL publique du backend ; 128 Mo de mémoire suffisent. Sonde : `/health`.
-
-Réglages recommandés **côté Scaleway et GitHub** (configuration, aucun code à modifier) :
-
-- **HTTPS seulement** : `http_option` = `redirected` sur le backend et le frontend, sinon un appel en `http://` enverrait
-  le JWT ou le jeton `bgc_` en clair.
-- **Base** : ajouter `sslmode=verify-full` (ou au moins `require`) à `SPRING_DATASOURCE_URL` et à
-  `BERGACAST_DATASOURCE_URL` ; sans lui, le pilote retombe en clair si le serveur ne propose pas TLS.
-- **Job de migration** : une fois l’administrateur initial créé, retirer `BERGACAST_ADMIN_USERNAME` et
-  `BERGACAST_ADMIN_PASSWORD` de la définition du job (le mot de passe y resterait en clair).
-- **GitHub** : placer `SCW_SECRET_KEY` (écriture dans le registry) dans un environnement restreint à `main`, comme
-  `SCW_DEPLOY_SECRET_KEY`, plutôt qu’en secret de dépôt lisible par toute branche.
-- **Mémoire du backend** : d’après la documentation Scaleway, `/tmp` est en RAM et reçoit les envois multipart. Avec des
-  audios de quelques Mo, 256 Mo suffisent ; en cas de gros fichiers, augmenter la mémoire ou baisser
-  `BERGACAST_MAX_UPLOAD_SIZE`.
-
-### Stockage objet (Scaleway Object Storage)
-
-1. Créer un bucket (région `fr-par`) et une application IAM avec une clé d’API ayant le droit d’écrire dans Object
-   Storage (`ObjectStorageFullAccess`, idéalement limitée au projet) : `BERGACAST_STORAGE_ACCESS_KEY` /
-   `BERGACAST_STORAGE_SECRET_KEY`.
-2. Rendre les objets lisibles par tous, par une *bucket policy*. Chez Scaleway, une policy ne laisse passer **que**
-   les principaux qu’elle liste : y inclure l’application du backend (et son propre utilisateur, pour garder la main
-   depuis la console) :
-
-   ```json
-   {
-     "Version": "2023-04-17",
-     "Id": "bergacast",
-     "Statement": [
-       {"Sid": "PublicRead", "Effect": "Allow", "Principal": "*", "Action": ["s3:GetObject"],
-        "Resource": ["MON-BUCKET/*"]},
-       {"Sid": "Backend", "Effect": "Allow", "Principal": {"SCW": "application_id:ID-DE-L-APPLICATION"},
-        "Action": ["s3:*"], "Resource": ["MON-BUCKET", "MON-BUCKET/*"]}
-     ]
-   }
-   ```
-
-3. `BERGACAST_MEDIA_BASE_URL` = `https://s3.fr-par.scw.cloud/MON-BUCKET`, ou l’URL d’un domaine dédié : domaine
-   Edge Services (CDN) placé devant le bucket, ou `https://MON-BUCKET.s3.fr-par.scw.cloud`. Les robots ne lisent
-   `robots.txt` qu’à la racine d’un domaine : avec un domaine dédié, y déposer une fois un `robots.txt`
-   (`User-agent: *` / `Disallow: /`, type `text/plain`) ; avec l’URL path-style, la racine appartient à Scaleway et
-   aucun `robots.txt` n’est possible (les flux portent de toute façon `itunes:block`/`googleplay:block`, et l’audio
-   n’est lié que depuis eux).
 
 ## Utilisation par des outils automatisés
 
@@ -615,6 +491,152 @@ consécutifs pour un même identifiant, les connexions de cet identifiant sont r
 pendant 10 s, durée doublée à chaque nouvel échec (une heure au plus) jusqu’à une connexion réussie. Les corps JSON de
 l’API sont limités à 256 Kio (`413` au-delà).
 
+## Production (Scaleway)
+
+Ordre de mise en place : le stockage objet, la base (et son job de migration), les conteneurs, puis les releases qui déploient chaque nouvelle version.
+
+### Stockage objet (Scaleway Object Storage)
+
+1. Créer un bucket (région `fr-par`) et une application IAM avec une clé d’API ayant le droit d’écrire dans Object
+   Storage (`ObjectStorageFullAccess`, idéalement limitée au projet) : `BERGACAST_STORAGE_ACCESS_KEY` /
+   `BERGACAST_STORAGE_SECRET_KEY`.
+2. Rendre les objets lisibles par tous, par une *bucket policy*. Chez Scaleway, une policy ne laisse passer **que**
+   les principaux qu’elle liste : y inclure l’application du backend (et son propre utilisateur, pour garder la main
+   depuis la console) :
+
+   ```json
+   {
+     "Version": "2023-04-17",
+     "Id": "bergacast",
+     "Statement": [
+       {"Sid": "PublicRead", "Effect": "Allow", "Principal": "*", "Action": ["s3:GetObject"],
+        "Resource": ["MON-BUCKET/*"]},
+       {"Sid": "Backend", "Effect": "Allow", "Principal": {"SCW": "application_id:ID-DE-L-APPLICATION"},
+        "Action": ["s3:*"], "Resource": ["MON-BUCKET", "MON-BUCKET/*"]}
+     ]
+   }
+   ```
+
+3. `BERGACAST_MEDIA_BASE_URL` = `https://s3.fr-par.scw.cloud/MON-BUCKET`, ou l’URL d’un domaine dédié : domaine
+   Edge Services (CDN) placé devant le bucket, ou `https://MON-BUCKET.s3.fr-par.scw.cloud`. Les robots ne lisent
+   `robots.txt` qu’à la racine d’un domaine : avec un domaine dédié, y déposer une fois un `robots.txt`
+   (`User-agent: *` / `Disallow: /`, type `text/plain`) ; avec l’URL path-style, la racine appartient à Scaleway et
+   aucun `robots.txt` n’est possible (les flux portent de toute façon `itunes:block`/`googleplay:block`, et l’audio
+   n’est lié que depuis eux).
+
+### Migration de la base (Scaleway Serverless Job)
+
+La base est migrée par un **job serverless** qui exécute l’image `rg.fr-par.scw.cloud/bergacast/bergacast-migration`, et
+non par le backend : celui-ci démarre sans toucher à la base (une base serverless peut rester en pause). À créer une
+fois dans la console Scaleway (*Serverless → Jobs → Create job definition*) :
+
+- image `bergacast-migration`, tag `X.Y.Z` de la version à déployer ; 512 Mo de mémoire (la JVM et Liquibase) ;
+- variables `BERGACAST_DATASOURCE_URL` (`jdbc:postgresql://<hôte>:<port>/<base>`), `BERGACAST_DATASOURCE_USERNAME` et, en
+  variable **secrète**, `BERGACAST_DATASOURCE_PASSWORD` (Serverless SQL : utilisateur = ID du principal IAM, mot de passe
+  = secret key d’une clé d’API de ce principal) ; `BERGACAST_ADMIN_USERNAME` et, en variable **secrète**,
+  `BERGACAST_ADMIN_PASSWORD` (administrateur créé s’il n’en existe aucun) ;
+- aucune planification : la release lance le job (étape 4 de [Versions et publication](#versions-et-publication)) avant de redéployer le backend, et ne continue que si le
+  run réussit. Pour le lancer à la main : `scw jobs definition start <id>`.
+
+Deux rôles de base de données sont recommandés : celui du job possède le schéma (`CREATE`, `ALTER`, `DROP`, et
+l’écriture dans `databasechangelog*`) ; celui du backend n’a que `SELECT`, `INSERT`, `UPDATE`, `DELETE` sur les
+tables, pour qu’une compromission du backend ne puisse pas modifier le schéma. Les tables appartenant au rôle du job,
+le backend ne peut les lire qu’après des `GRANT` (ou `ALTER DEFAULT PRIVILEGES`) qu’aucune migration ne pose : sur
+Serverless SQL, où un seul principal sert souvent aux deux usages, c’est une limite acceptée tant que les deux rôles
+ne sont pas séparés.
+
+Un backend déployé avant la fin du job démarre (la sonde de vivacité ne lit pas la base) et ne signale le schéma
+manquant qu’à la première requête : ne le redéployer qu'une fois le run terminé avec succès.
+
+Liquibase verrouille la base par une ligne de sa table `DATABASECHANGELOGLOCK` (pas par un verrou consultatif
+PostgreSQL) : deux runs simultanés ne migrent pas en même temps. Au premier run sur la base de production, le schéma
+que Flyway avait créé est reconnu et simplement noté comme appliqué (rien n’est recréé), puis la table
+`flyway_schema_history` est supprimée.
+
+### Déploiement (conteneurs serverless)
+
+La release déplace chaque conteneur modifié sur le tag `X.Y.Z` de sa nouvelle image (déploiement explicite, retour
+arrière possible en relançant un conteneur sur un tag précédent depuis la console). Configurer chaque conteneur une
+première fois sur un tag `X.Y.Z` existant.
+
+- **backend** : port `8080` (la plateforme fournit `PORT`), variables de la section [Configuration](#configuration) ;
+  `BERGACAST_PUBLIC_BASE_URL` = URL publique du conteneur backend, `BERGACAST_CORS_ALLOWED_ORIGINS` = URL publique du
+  conteneur frontend, `SPRING_DATASOURCE_*` = base PostgreSQL (déjà migrée par le job), `BERGACAST_STORAGE_*` et `BERGACAST_MEDIA_BASE_URL` =
+  bucket (voir [Stockage objet](#stockage-objet-scaleway-object-storage)) ; secrets (`BERGACAST_JWT_SECRET`, `BERGACAST_STORAGE_SECRET_KEY`, mots de passe) en
+  variables secrètes. Sonde de santé : `/actuator/health/liveness` (n’interroge pas la base). Le pool de
+  connexions ne garde aucune connexion inactive (fermée après 30 s) : une base serverless peut se mettre en pause.
+  **Une seule instance** (`max-scale` = 1) : l’écriture des flux est sérialisée dans le processus.
+- **frontend** : `BERGACAST_API_URL` = URL publique du backend ; 128 Mo de mémoire suffisent. Sonde : `/health`.
+
+Réglages recommandés **côté Scaleway et GitHub** (configuration, aucun code à modifier) :
+
+- **HTTPS seulement** : `http_option` = `redirected` sur le backend et le frontend, sinon un appel en `http://` enverrait
+  le JWT ou le jeton `bgc_` en clair.
+- **Base** : ajouter `sslmode=verify-full` (ou au moins `require`) à `SPRING_DATASOURCE_URL` et à
+  `BERGACAST_DATASOURCE_URL` ; sans lui, le pilote retombe en clair si le serveur ne propose pas TLS.
+- **Job de migration** : une fois l’administrateur initial créé, retirer `BERGACAST_ADMIN_USERNAME` et
+  `BERGACAST_ADMIN_PASSWORD` de la définition du job (le mot de passe y resterait en clair).
+- **GitHub** : placer `SCW_SECRET_KEY` (écriture dans le registry) dans un environnement restreint à `main`, comme
+  `SCW_DEPLOY_SECRET_KEY`, plutôt qu’en secret de dépôt lisible par toute branche.
+- **Mémoire du backend** : d’après la documentation Scaleway, `/tmp` est en RAM et reçoit les envois multipart. Avec des
+  audios de quelques Mo, 256 Mo suffisent ; en cas de gros fichiers, augmenter la mémoire ou baisser
+  `BERGACAST_MAX_UPLOAD_SIZE`.
+
+### Versions et publication
+
+Une release se lance **à la main** depuis `main` (*Actions → Release → Run workflow*,
+[`.github/workflows/release.yml`](.github/workflows/release.yml)). Elle publie la version du commit de tête de `main`
+puis la déploie :
+
+1. **CI** ([`.github/scripts/wait-for-ci.sh`](.github/scripts/wait-for-ci.sh)) : la CI de ce commit doit être
+   entièrement verte. Une CI encore en cours est attendue (jusqu’à 90 min) ; une CI échouée, annulée ou absente arrête la
+   release.
+2. **Plan** ([`.github/scripts/release-plan.sh`](.github/scripts/release-plan.sh)) : modules modifiés depuis le
+   dernier tag `vX.Y.Z` (`migration/`, `backend/`, `frontend/` ; aucun → rien n’est publié) et prochaine version, déduite
+   des [Conventional Commits](https://www.conventionalcommits.org/fr/) de **tous** les commits depuis ce tag : `type!:`
+   ou pied `BREAKING CHANGE:` → majeure, `feat` → mineure, tout autre type → patch. Première version : `1.0.0`.
+3. **Publication** de l’image de chaque module modifié seulement, construite avec cette version (argument Docker
+   `VERSION`), dans le Container Registry Scaleway, namespace `bergacast` (région `fr-par`), pour `linux/amd64`, avec les
+   tags `X.Y.Z`, `X.Y`, `X`, `latest` et `sha-<sha court>` :
+   - `rg.fr-par.scw.cloud/bergacast/bergacast-migration`
+   - `rg.fr-par.scw.cloud/bergacast/bergacast-backend`
+   - `rg.fr-par.scw.cloud/bergacast/bergacast-frontend`
+4. **Migration** ([`.github/scripts/run-migration-job.sh`](.github/scripts/run-migration-job.sh)), si l’image de
+   migration a été publiée : la définition du job pointe sur la nouvelle image, le job est lancé et la release attend la
+   fin du run, qui doit réussir.
+5. **Redéploiement** ([`.github/scripts/deploy-container.sh`](.github/scripts/deploy-container.sh)) des conteneurs
+   dont l’image a été publiée : le backend d’abord, puis le frontend, chacun une fois la migration (si elle a eu lieu)
+   et le déploiement précédent terminés avec succès. Un conteneur est considéré déployé quand il est `ready` sur la
+   nouvelle image.
+6. **Tag `vX.Y.Z`** sur le commit et **release GitHub** (images publiées, changements groupés par type), posés
+   en dernier : les releases GitHub tiennent lieu de journal des modifications. En cas d’échec d’une étape, relancer la
+   release rejoue la même version (publication et migration sont idempotentes) tant que le tag n’est pas posé.
+
+Une seule version pour le dépôt, appliquée aux seuls modules modifiés : un module inchangé garde sa version
+précédente (et n’est pas redéployé). Les versions sont visibles dans le pied de page de la SPA (interface et serveur), à
+la racine de l’API (`GET /api/v1` → `version`) et dans `info.version` de l’OpenAPI. Dans le dépôt, `build.gradle.kts` et
+`package.json` restent en `0.0.0-dev` : la version n’existe que dans les tags Git et les images.
+
+Le titre de chaque PR doit donc suivre les Conventional Commits (job `pr-title`) : avec le merge squash (seul mode
+autorisé, titre du commit = titre de la PR), il devient le message du commit sur `main`. Dependabot préfixe ses PR
+par `build(deps)`, `build(deps-dev)` ou `ci(deps)`.
+
+Configuration requise :
+
+- secret de dépôt `SCW_SECRET_KEY` : clé d’API IAM ayant le droit d’écrire dans le registry ;
+- environnement GitHub `production` (*Settings → Environments*), utilisé par la migration et les déploiements :
+  secret `SCW_DEPLOY_SECRET_KEY` (clé d’API IAM distincte, autorisée à gérer les Serverless Jobs et les Serverless
+  Containers), variables `SCW_JOB_DEFINITION_ID` (job de migration), `SCW_BACKEND_CONTAINER_ID`,
+  `SCW_FRONTEND_CONTAINER_ID` (UUID) et, hors `fr-par`, `SCW_REGION`. Limiter l’environnement à la branche `main`
+  (*Deployment branches*), faute de quoi un workflow modifié sur une autre branche pourrait lire ces secrets, et y
+  ajouter des *required reviewers* pour confirmer chaque déploiement. `SCW_SECRET_KEY` (registry) est un secret de
+  dépôt : protéger `main` par un ruleset (pull request obligatoire) limite qui peut modifier le workflow qui le lit.
+
+Limites connues : un conteneur est déployé par tag (`X.Y.Z`), pas par empreinte (`@sha256:…`) : un tag republié par un
+rejeu depuis un autre commit n’est pris en compte que par un `redeploy`, que le script déclenche quand le conteneur est
+déjà sur ce tag (déploiement par empreinte : à voir avec #37). Une migration réussie suivie d’un déploiement du backend
+en échec laisse le schéma en avance sur le code : d’où des migrations compatibles avec la version précédente.
+
 ## Intégration continue
 
 Le workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) s’exécute sur chaque pull request (création, mise à
@@ -660,7 +682,9 @@ tests*, *Backend build*, *OpenAPI lint*, *Frontend lint*, *Frontend tests*, *Fro
 *Frontend dependencies (CVE)*, *Migration lint and tests*, *Migration image*, *Migration dependencies (CVE)*, *Secrets (gitleaks)*, *CodeQL*, *Frontend Lighthouse*, *Backend native image*, *Frontend
 image* (le job *PR report* ne doit pas être obligatoire : il rend compte, il ne juge pas).
 
-Sécurité : voir [`SECURITY.md`](SECURITY.md) pour signaler une vulnérabilité.
+## Sécurité
+
+Pour signaler une vulnérabilité, voir [`SECURITY.md`](SECURITY.md).
 
 ## Licence
 
