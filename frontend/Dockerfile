@@ -28,7 +28,7 @@ RUN npm pkg set version="${VERSION}" && npm run build
 # ---------------------------------------------------------------------------
 # Runtime: static-web-server on Alpine (a shell is needed to write the runtime configuration)
 # ---------------------------------------------------------------------------
-FROM joseluisq/static-web-server:2.44.1-alpine@sha256:2fe3e5c0a20691f23fb270338578c8d31b5f7a19abb308c4c1ec901a7eefbe2e AS runtime
+FROM joseluisq/static-web-server:2.44.3-alpine@sha256:b3f7db31db9a68754205b3c0831fe5b066bd1daeb4f45aaa5007847a8c29ede2 AS runtime
 ENV SPA_ROOT=/srv/admin
 USER root
 # The image is rebuilt upstream only at each static-web-server release: pick up the Alpine security fixes
