@@ -29,7 +29,7 @@ class AdminUserServiceTest {
     void refusesToDeleteTheLastAdministrator() {
         when(repository.findAllForUpdate()).thenReturn(List.of(target));
 
-        assertThatThrownBy(() -> service.delete(target.getId(), UUID.randomUUID()))
+        assertThatThrownBy(() -> service.delete(target.getId(), UUID.randomUUID(), null))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("last administrator");
         verify(repository, never()).delete(any());
@@ -39,7 +39,8 @@ class AdminUserServiceTest {
     void refusesToDeleteOneself() {
         when(repository.findAllForUpdate()).thenReturn(List.of(target, other));
 
-        assertThatThrownBy(() -> service.delete(target.getId(), target.getId())).isInstanceOf(ConflictException.class);
+        assertThatThrownBy(() -> service.delete(target.getId(), target.getId(), null))
+                .isInstanceOf(ConflictException.class);
         verify(repository, never()).delete(any());
     }
 
@@ -47,7 +48,7 @@ class AdminUserServiceTest {
     void reportsAnUnknownAdministrator() {
         when(repository.findAllForUpdate()).thenReturn(List.of(target, other));
 
-        assertThatThrownBy(() -> service.delete(UUID.randomUUID(), other.getId()))
+        assertThatThrownBy(() -> service.delete(UUID.randomUUID(), other.getId(), null))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -55,7 +56,7 @@ class AdminUserServiceTest {
     void deletesAnotherAdministrator() {
         when(repository.findAllForUpdate()).thenReturn(List.of(target, other));
 
-        service.delete(target.getId(), other.getId());
+        service.delete(target.getId(), other.getId(), null);
 
         verify(repository).delete(target);
     }

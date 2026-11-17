@@ -17,6 +17,7 @@ const ROOT = {
 
 const PODCAST_LINKS = {
 	self: { href: '/api/v1/podcasts/demo' },
+	image: { href: '/api/v1/podcasts/demo/image' },
 	episodes: { href: '/api/v1/demo/episodes' },
 	apiTokens: { href: '/api/v1/podcasts/demo/api-tokens' },
 	feedPublications: { href: '/api/v1/podcasts/demo/feed-publications' }
@@ -55,12 +56,12 @@ describe('BergacastApi', () => {
 		);
 
 		await api.listPodcasts({ page: 2 });
-		await api.listAdminUsers();
+		await api.listAdminUsers({ page: 0 });
 
 		expect(requests.map((request) => request.url)).toEqual([
 			'/api/v1',
 			`/api/v1/podcasts?page=2&size=${DEFAULT_PAGE_SIZE}`,
-			'/api/v1/admin-users'
+			`/api/v1/admin-users?page=0&size=${DEFAULT_PAGE_SIZE}`
 		]);
 	});
 
@@ -71,8 +72,8 @@ describe('BergacastApi', () => {
 			jsonResponse(200, {})
 		);
 
-		await expect(api.listAdminUsers()).rejects.toMatchObject({ status: 503 });
-		await expect(api.listAdminUsers()).resolves.toEqual([]);
+		await expect(api.listAdminUsers({ page: 0 })).rejects.toMatchObject({ status: 503 });
+		await expect(api.listAdminUsers({ page: 0 })).resolves.toMatchObject({ items: [] });
 	});
 
 	it('gets the server version from the API root', async () => {
@@ -86,10 +87,13 @@ describe('BergacastApi', () => {
 		const { api, requests } = createApi(jsonResponse(200, ROOT), jsonResponse(200, {}));
 
 		await api.getServerVersion();
-		await api.listAdminUsers();
+		await api.listAdminUsers({ page: 0 });
 		await api.getServerVersion();
 
-		expect(requests.map((request) => request.url)).toEqual(['/api/v1', '/api/v1/admin-users']);
+		expect(requests.map((request) => request.url)).toEqual([
+			'/api/v1',
+			`/api/v1/admin-users?page=0&size=${DEFAULT_PAGE_SIZE}`
+		]);
 	});
 
 	it('retries the root discovery of the server version after a failure', async () => {
@@ -385,14 +389,16 @@ describe('BergacastApi', () => {
 			emptyResponse(204)
 		);
 
-		await expect(api.listApiTokens(podcast)).resolves.toEqual([token]);
+		await expect(api.listApiTokens(podcast, { page: 0 })).resolves.toMatchObject({
+			items: [token]
+		});
 		await expect(api.createApiToken(podcast, 'CI')).resolves.toMatchObject({
 			token: 'bgc_secret'
 		});
 		await api.revokeApiToken(token as never);
 
 		expect(requests.map((request) => `${request.method} ${request.url}`)).toEqual([
-			'GET /api/v1/podcasts/demo/api-tokens',
+			`GET /api/v1/podcasts/demo/api-tokens?page=0&size=${DEFAULT_PAGE_SIZE}`,
 			'POST /api/v1/podcasts/demo/api-tokens',
 			'DELETE /api/v1/podcasts/demo/api-tokens/t1'
 		]);

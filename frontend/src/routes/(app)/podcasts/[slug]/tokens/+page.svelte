@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { tick } from 'svelte';
+	import { page } from '$app/state';
 	import { invalidate } from '$app/navigation';
 	import { api } from '#lib/app.ts';
 	import type { ApiToken, CreatedApiToken } from '#lib/api/resources.ts';
 	import ConfirmButton from '#lib/components/ConfirmButton.svelte';
+	import Pagination from '#lib/components/Pagination.svelte';
 	import CopyableText from '#lib/components/CopyableText.svelte';
 	import FormField from '#lib/components/FormField.svelte';
 	import PendingButton from '#lib/components/PendingButton.svelte';
@@ -129,7 +131,7 @@
 	<!-- Receives the focus after a revocation, the button that started it being gone. -->
 	<h2 id="tokens-title" tabindex="-1" bind:this={tokensHeading}>Jetons existants</h2>
 	<StatusMessage message={revocationMessage} />
-	{#if data.apiTokens.length === 0}
+	{#if data.apiTokens.items.length === 0}
 		<p>Aucun jeton : aucun outil automatisé ne peut publier sur ce podcast.</p>
 	{:else}
 		<div class="table-wrapper">
@@ -144,7 +146,7 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each data.apiTokens as token (token.id)}
+					{#each data.apiTokens.items as token (token.id)}
 						<tr>
 							<td>{token.name}</td>
 							<td><code>{token.tokenPrefix}…</code></td>
@@ -172,4 +174,5 @@
 			</table>
 		</div>
 	{/if}
+	<Pagination page={data.apiTokens.page} url={page.url} />
 </section>
