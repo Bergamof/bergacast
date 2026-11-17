@@ -77,8 +77,8 @@ Dépendances externes : PostgreSQL (métadonnées) et un stockage objet compatib
 | Outil | Version | Installation |
 |-------|---------|--------------|
 | [SDKMAN!](https://sdkman.io/) | récent | <https://sdkman.io/install> — fournit Java 25 (Temurin `25.0.5-tem`, épinglé dans `.sdkmanrc`) |
-| [nvm](https://github.com/nvm-sh/nvm) | récent | <https://github.com/nvm-sh/nvm#installing-and-updating> — fournit Node 24 (épinglé dans `.nvmrc`) |
-| npm | 12.2.1 | épinglé par `packageManager` dans `frontend/package.json` (voir ci-dessous) |
+| [nvm](https://github.com/nvm-sh/nvm) | récent | <https://github.com/nvm-sh/nvm#installing-and-updating> — fournit Node 26 (épinglé dans `.nvmrc`) |
+| npm | 12.2.2 | épinglé par `packageManager` dans `frontend/package.json` (voir ci-dessous) |
 | [Docker](https://www.docker.com/) avec Docker Compose v2 | récent | <https://docs.docker.com/get-started/get-docker/> — requis pour la base locale, les tests backend (Testcontainers) et l’image |
 
 Gradle n’a pas besoin d’être installé : le wrapper `backend/gradlew` (Gradle 9.9.1) est fourni.
@@ -118,7 +118,7 @@ java -version   # doit afficher : openjdk version "25.0.5" … (Temurin)
 Depuis la racine du dépôt :
 
 ```sh
-nvm install   # installe la version de .nvmrc (24) si elle manque
+nvm install   # installe la version de .nvmrc (26) si elle manque
 nvm use       # active cette version dans le shell courant
 ```
 
@@ -205,20 +205,20 @@ cdnvm "$PWD" || exit
 Vérification :
 
 ```sh
-node -v   # doit afficher v24.x
+node -v   # doit afficher v26.x
 ```
 
-### npm 12.2.1
+### npm 12.2.2
 
-`frontend/package.json` déclare `"packageManager": "npm@12.2.1"` et `frontend/.npmrc` active `engine-strict=true` :
-une autre version de Node que 24 fait échouer l’installation. Après avoir activé Node 24 :
+`frontend/package.json` déclare `"packageManager": "npm@12.2.2"` et `frontend/.npmrc` active `engine-strict=true` :
+une autre version de Node que 26 fait échouer l’installation. Après avoir activé Node 26 :
 
 ```sh
-npm install -g npm@12.2.1
-npm -v   # 12.2.1
+npm install -g npm@12.2.2
+npm -v   # 12.2.2
 ```
 
-Alternative avec Corepack (fourni avec Node 24), qui respecte le champ `packageManager` : `corepack enable npm`.
+Alternative avec Corepack (fourni avec Node 26), qui respecte le champ `packageManager` : `corepack enable npm`.
 
 ## Configuration
 
@@ -296,7 +296,7 @@ S3Mock local (bucket `bergacast`, sans authentification). Modèle : [`.env.examp
 
    L’API écoute sur <http://localhost:8080> (identifiants de base par défaut : `bergacast`/`bergacast`).
 
-5. **Frontend** (dans `frontend/`, Node 24 et npm 12.2.1 actifs) :
+5. **Frontend** (dans `frontend/`, Node 26 et npm 12.2.2 actifs) :
 
    ```sh
    npm ci
@@ -340,7 +340,7 @@ d’objets du stockage, transformations de données) s’écrivent en Java (`cus
 le redéploiement du backend : elle doit rester compatible avec la version précédente du backend (ajouter d’abord, ne
 supprimer qu’à la version suivante).
 
-### Frontend (dans `frontend/`, Node 24, npm 12.2.1)
+### Frontend (dans `frontend/`, Node 26, npm 12.2.2)
 
 | Commande | Rôle |
 |----------|------|
@@ -362,7 +362,7 @@ Trois images, une par module, construites chacune depuis son dossier (contexte `
 |-------|--------|------------------|
 | `bergacast-backend` | `ghcr.io/graalvm/native-image-community:25` (AOT Spring + `nativeCompile`) → `gcr.io/distroless/base-debian13:nonroot` (glibc seule, pas de shell, utilisateur `nonroot`) | ~ 70 Mo, ~ 120 Mo de RAM au repos (smoke test CI), démarrage ~ 1 s ; les parts multipart sont écrites dans `/tmp`, que la documentation Scaleway donne **en RAM** sur Serverless Containers (à vérifier) : dimensionner la mémoire du conteneur en conséquence (voir la limite d’envoi `BERGACAST_MAX_UPLOAD_SIZE`) |
 | `bergacast-migration` | `eclipse-temurin:25-jdk` (Gradle `installDist`, JRE réduit par `jlink`) → `gcr.io/distroless/base-debian13:nonroot` (comme le backend, pas de shell) | s’arrête une fois la base à jour |
-| `bergacast-frontend` | `node:24-alpine` (build statique, précompressé brotli/gzip) → `joseluisq/static-web-server:2.44.3-alpine` (utilisateur `sws`) | ~ 18 Mo, ~ 10 Mo de RAM |
+| `bergacast-frontend` | `node:26-alpine` (build statique, précompressé brotli/gzip) → `joseluisq/static-web-server:2.44.3-alpine` (utilisateur `sws`) | ~ 18 Mo, ~ 10 Mo de RAM |
 
 ```sh
 cp .env.example .env
@@ -629,7 +629,7 @@ GitHub sont épinglées par SHA de commit (mis à jour par Dependabot).
 | `backend-image` | Build de l’image native (non publiée), démarrage contre PostgreSQL puis `backend/scripts/smoke-test.sh`, Trivy sur l’image |
 | `frontend-image` | Build de l’image (non publiée), vérification du service (`config.js`, repli SPA, cache, refus d’une URL d’API invalide), Trivy sur l’image (nuit comprise) |
 
-Les outils de sécurité (Trivy 0.76.1, gitleaks 8.30.1) sont installés depuis leurs releases avec une somme SHA-256
+Les outils de sécurité (Trivy 0.76.2, gitleaks 8.30.1) sont installés depuis leurs releases avec une somme SHA-256
 épinglée. Exceptions Trivy : `.trivyignore.yaml` (vide par défaut ; chaque entrée justifiée et datée d’une
 expiration).
 
