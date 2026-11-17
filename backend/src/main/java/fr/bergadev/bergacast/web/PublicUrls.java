@@ -6,6 +6,7 @@ import fr.bergadev.bergacast.storage.MediaKeys;
 import java.net.URI;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * Builds the absolute public URLs advertised to podcast clients: the API on {@code BERGACAST_PUBLIC_BASE_URL}, the
@@ -27,7 +28,10 @@ public class PublicUrls {
     }
 
     public URI publish(String podcastSlug) {
-        return URI.create(baseUrl + "/api/v1/" + podcastSlug + "/episodes");
+        return UriComponentsBuilder.fromUri(baseUrl)
+                .path(ApiPaths.EPISODES)
+                .buildAndExpand(podcastSlug)
+                .toUri();
     }
 
     public URI feed(String podcastSlug) {

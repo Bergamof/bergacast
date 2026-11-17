@@ -82,7 +82,7 @@ public record PodcastInput(
                         + "PNG of 1400 to 3000 pixels.",
                 example = "https://example.com/cover.jpg",
                 nullable = true)
-        @URL
+        @URL(regexp = PodcastInput.WEB_URL_PATTERN)
         @Size(max = PodcastInput.MAX_URL_LENGTH)
         @Nullable
         String imageUrl,
@@ -92,7 +92,7 @@ public record PodcastInput(
                         + "of the server.",
                 example = "https://example.com",
                 nullable = true)
-        @URL
+        @URL(regexp = PodcastInput.WEB_URL_PATTERN)
         @Size(max = PodcastInput.MAX_URL_LENGTH)
         @Nullable
         String websiteUrl,
@@ -107,6 +107,9 @@ public record PodcastInput(
 
     static final int MAX_TEXT_LENGTH = 255;
     static final int MAX_URL_LENGTH = 2048;
+    /** Only web URLs end up in the public feed ({@code file:}, {@code ftp:}… are refused). */
+    static final String WEB_URL_PATTERN = "^https?://.*";
+
     static final String LANGUAGE_TAG_PATTERN = "^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$";
 
     static PodcastInput from(Podcast podcast) {

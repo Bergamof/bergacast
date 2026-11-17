@@ -1,5 +1,6 @@
 package fr.bergadev.bergacast.audio;
 
+import fr.bergadev.bergacast.storage.MediaCacheControl;
 import fr.bergadev.bergacast.storage.MediaKeys;
 import fr.bergadev.bergacast.storage.ObjectStorage;
 import fr.bergadev.bergacast.web.Sha256;
@@ -8,10 +9,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.security.MessageDigest;
-import java.time.Duration;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
-import org.springframework.http.CacheControl;
 import org.springframework.http.InvalidMediaTypeException;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -23,9 +22,6 @@ public class AudioUploads {
 
     private static final String AUDIO_TYPE = "audio";
     private static final int BUFFER_SIZE = 64 * 1024;
-    /** The content of an episode never changes (its key holds the episode id). */
-    private static final CacheControl IMMUTABLE_FOR_A_YEAR =
-            CacheControl.maxAge(Duration.ofDays(365)).cachePublic().immutable();
 
     private final ObjectStorage storage;
 
@@ -51,7 +47,7 @@ public class AudioUploads {
                 sha256Of(upload),
                 AudioFormats.extensionFor(audioType, upload.getOriginalFilename()));
         String key = MediaKeys.episodeAudio(podcastSlug, episodeId, audioFile.getFileExtension());
-        storage.put(key, upload, upload.getSize(), mimeType, IMMUTABLE_FOR_A_YEAR);
+        storage.put(key, upload, upload.getSize(), mimeType, MediaCacheControl.AUDIO);
         return audioFile;
     }
 
