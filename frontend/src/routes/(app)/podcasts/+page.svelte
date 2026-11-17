@@ -19,8 +19,10 @@
 	<a class="button" href={resolve('/(app)/podcasts/new')}>Nouveau podcast</a>
 </div>
 
-{#if data.podcasts.items.length === 0}
+{#if data.podcasts.page.totalElements === 0}
 	<p class="card">Aucun podcast pour l’instant. Créez le premier !</p>
+{:else if data.podcasts.items.length === 0}
+	<Pagination page={data.podcasts.page} url={page.url} />
 {:else}
 	<div class="table-wrapper">
 		<table aria-labelledby="podcasts-title">
