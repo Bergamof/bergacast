@@ -207,8 +207,9 @@ request PATCH "$ADMIN_USER_PATH" 200 "${ADMIN[@]}" -H 'Content-Type: application
     -d '{"password":"another-long-enough-password"}' >/dev/null
 request DELETE "$ADMIN_USER_PATH" 204 "${ADMIN[@]}" >/dev/null
 
-step "Unknown route is a Problem Details 404"
-request GET /no/such/route 404 >/dev/null
+step "A route that is not listed as public is denied by default (Problem Details 401)"
+request GET /no/such/route 401 >/dev/null
+[[ "$(header Content-Type)" == application/problem+json* ]] || fail "401 is not application/problem+json"
 
 step "Cleanup: the objects of a deleted podcast are removed from the storage"
 request DELETE "/api/v1/podcasts/$SLUG" 204 "${ADMIN[@]}" >/dev/null

@@ -18,7 +18,8 @@ import org.springframework.util.unit.DataSize;
  * @param storage object storage where feeds, audio files and images are written
  * @param jwt settings of the admin access tokens
  * @param cors cross-origin access to the API, needed by the admin SPA served from another origin
- * @param maxImageUploadSize largest podcast cover image accepted for upload, before any downscaling
+ * @param maxImageUploadSize largest cover image (of a podcast or an episode) accepted for upload, before any
+ *     downscaling
  */
 @ConfigurationProperties("bergacast")
 public record BergacastProperties(
