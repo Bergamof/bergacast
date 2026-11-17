@@ -603,7 +603,7 @@ jobs:
         run: |
           npm audit --package-lock-only --omit=dev --json > "$RUNNER_TEMP/audit-prod.json" || true
           npm audit --package-lock-only --json > "$RUNNER_TEMP/audit-all.json" || true
-          npm audit --package-lock-only --audit-level=high
+          ../.github/scripts/npm-audit-gate.sh "$RUNNER_TEMP/audit-all.json" npm-audit-exceptions.json
       - name: Summarize
         id: summary
         if: always()

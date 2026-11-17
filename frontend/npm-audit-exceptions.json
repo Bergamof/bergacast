@@ -1,0 +1,8 @@
+[
+  {
+    "advisory": "https://github.com/advisories/GHSA-fc5q-39xc-vjpf",
+    "package": "picomatch",
+    "reason": "ReDoS through single-branch repeated extglobs, vulnerable range <=4.0.7: no fixed version exists (4.0.7 is the latest). Transitive build-time dependency of Vite, Vitest and svelte-check: not shipped in the image, never fed with user input. Remove as soon as a fixed picomatch is published.",
+    "added": "2026-11-17"
+  }
+]
