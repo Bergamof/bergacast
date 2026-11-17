@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { invalidate } from '$app/navigation';
+	import { page } from '$app/state';
 	import { api } from '#lib/app.ts';
 	import type { AdminUser } from '#lib/api/resources.ts';
 	import ConfirmButton from '#lib/components/ConfirmButton.svelte';
 	import FormField from '#lib/components/FormField.svelte';
+	import Pagination from '#lib/components/Pagination.svelte';
 	import PasswordChangeForm from '#lib/components/PasswordChangeForm.svelte';
 	import PendingButton from '#lib/components/PendingButton.svelte';
 	import ProblemAlert from '#lib/components/ProblemAlert.svelte';
@@ -68,7 +70,7 @@
 	<h2 id="admin-users-title" tabindex="-1" bind:this={usersHeading}>Comptes existants</h2>
 	<StatusMessage message={deletionMessage} />
 	<ul class="users" aria-labelledby="admin-users-title">
-		{#each data.adminUsers as user (user.id)}
+		{#each data.adminUsers.items as user (user.id)}
 			<li>
 				<div class="toolbar">
 					<div>
@@ -78,22 +80,23 @@
 						{/if}
 						<p class="muted">Créé le {formatDateTime(user.createdAt)}</p>
 					</div>
-					<ConfirmButton
-						label="Supprimer"
-						accessibleLabel="Supprimer le compte « {user.username} »"
-						title="Supprimer le compte « {user.username} » ?"
-						onConfirm={() => deleteUser(user)}
-						afterConfirm={() =>
-							focusThenAnnounce(
-								usersHeading,
-								() => (deletionMessage = `Compte « ${user.username} » supprimé.`)
-							)}
-					>
-						<p>
-							Ce compte ne pourra plus se connecter. Il est impossible de supprimer son propre
-							compte ou le dernier administrateur.
-						</p>
-					</ConfirmButton>
+					{#if user.username === data.session.username}
+						<p class="muted">Vous ne pouvez pas supprimer votre propre compte.</p>
+					{:else}
+						<ConfirmButton
+							label="Supprimer"
+							accessibleLabel="Supprimer le compte « {user.username} »"
+							title="Supprimer le compte « {user.username} » ?"
+							onConfirm={() => deleteUser(user)}
+							afterConfirm={() =>
+								focusThenAnnounce(
+									usersHeading,
+									() => (deletionMessage = `Compte « ${user.username} » supprimé.`)
+								)}
+						>
+							<p>Ce compte ne pourra plus se connecter.</p>
+						</ConfirmButton>
+					{/if}
 				</div>
 				<details>
 					<summary>
@@ -108,6 +111,7 @@
 			</li>
 		{/each}
 	</ul>
+	<Pagination page={data.adminUsers.page} url={page.url} />
 </section>
 
 <section class="card" aria-labelledby="new-admin-title">

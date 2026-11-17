@@ -320,16 +320,24 @@ class EpisodeController {
     @Operation(
             operationId = "deleteEpisode",
             summary = "Delete an episode",
-            description = "Deletes the episode and its audio file: it disappears from the feed and its audio URL "
-                    + "stops working.",
+            description = "Deletes the episode, its audio file and its image: it disappears from the feed and its "
+                    + "audio URL stops working. Send the ETag in `If-Match` to be sure of deleting the version you "
+                    + "looked at.",
             security = @SecurityRequirement(name = SecuritySchemes.ADMIN_JWT))
     @ApiResponse(responseCode = "204", description = "Episode deleted")
+    @ApiResponse(
+            responseCode = "412",
+            description = "If-Match does not match the current ETag: the episode has changed",
+            content = @Content)
     @ApiResponse(
             responseCode = StorageResponses.UNAVAILABLE,
             description = StorageResponses.FEED_NOT_WRITTEN,
             content = @Content)
-    ResponseEntity<Void> delete(@PathVariable String slug, @PathVariable UUID episodeId) {
-        episodeService.delete(slug, episodeId);
+    ResponseEntity<Void> delete(
+            @PathVariable String slug,
+            @PathVariable UUID episodeId,
+            @RequestHeader(name = HttpHeaders.IF_MATCH, required = false) @Nullable String ifMatch) {
+        episodeService.delete(slug, episodeId, ifMatch);
         return ResponseEntity.noContent().build();
     }
 }

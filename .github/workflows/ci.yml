@@ -27,7 +27,7 @@ env:
   SPECTRAL_CLI_VERSION: 6.17.0
   # Run through npx, like Spectral, rather than as a dev dependency: its dependency tree (puppeteer, proxy-agent…)
   # carries unfixed high vulnerabilities that would fail npm audit, while it only ever audits our local pages in CI.
-  LHCI_CLI_VERSION: 0.15.1
+  LHCI_CLI_VERSION: 0.16.1
 
 # Every verification job publishes a one-line `summary` output (plus a few detailed ones), computed in a step
 # that runs `if: always()` so the outputs exist even when the verification fails. The `report` job gathers them.
@@ -603,7 +603,7 @@ jobs:
         run: |
           npm audit --package-lock-only --omit=dev --json > "$RUNNER_TEMP/audit-prod.json" || true
           npm audit --package-lock-only --json > "$RUNNER_TEMP/audit-all.json" || true
-          npm audit --package-lock-only --audit-level=high
+          ../.github/scripts/npm-audit-gate.sh "$RUNNER_TEMP/audit-all.json" npm-audit-exceptions.json
       - name: Summarize
         id: summary
         if: always()

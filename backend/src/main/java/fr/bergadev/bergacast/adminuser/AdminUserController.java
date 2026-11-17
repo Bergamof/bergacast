@@ -3,6 +3,7 @@ package fr.bergadev.bergacast.adminuser;
 import fr.bergadev.bergacast.web.ApiLinks;
 import fr.bergadev.bergacast.web.ApiMediaTypes;
 import fr.bergadev.bergacast.web.ApiPaths;
+import fr.bergadev.bergacast.web.EntityTagged;
 import fr.bergadev.bergacast.web.PagedModels;
 import fr.bergadev.bergacast.web.SecuritySchemes;
 import fr.bergadev.bergacast.web.SortableProperties;
@@ -14,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -23,6 +25,7 @@ import org.springframework.hateoas.IanaLinkRelations;
 import org.springframework.hateoas.MediaTypes;
 import org.springframework.hateoas.PagedModel;
 import org.springframework.hateoas.server.RepresentationModelAssembler;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -32,6 +35,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -76,9 +80,15 @@ class AdminUserController {
     @Operation(
             operationId = "getAdminUser",
             summary = "Get an administrator",
-            description = "Returns the administrator identified by its id. Passwords are never returned.")
-    EntityModel<AdminUserResponse> get(@PathVariable UUID adminUserId) {
-        return ASSEMBLER.toModel(adminUserService.get(adminUserId));
+            description = "Returns the administrator identified by its id. Passwords are never returned. Supports "
+                    + "conditional requests with If-None-Match.")
+    @ApiResponse(
+            responseCode = "304",
+            description = "Not modified since the ETag sent in If-None-Match",
+            content = @Content)
+    @EntityTagged
+    ResponseEntity<EntityModel<AdminUserResponse>> get(@PathVariable UUID adminUserId) {
+        return withEntityTag(adminUserService.get(adminUserId));
     }
 
     @PostMapping(path = ApiPaths.ADMIN_USERS, consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -90,9 +100,11 @@ class AdminUserController {
     @ApiResponse(responseCode = "201", description = "Administrator created")
     @ApiResponse(responseCode = "409", description = "Username already taken", content = @Content)
     @ApiResponse(responseCode = "422", description = "Invalid content, listed in errors", content = @Content)
+    @EntityTagged
     ResponseEntity<EntityModel<AdminUserResponse>> create(@Valid @RequestBody CreateAdminUserRequest request) {
         AdminUser created = adminUserService.create(request.username(), request.password());
         return ResponseEntity.created(ApiLinks.uri(ApiPaths.ADMIN_USER, created.getId()))
+                .eTag(AdminUserService.entityTag(created))
                 .body(ASSEMBLER.toModel(created));
     }
 
@@ -106,10 +118,17 @@ class AdminUserController {
                     + "member is the new password, the only modifiable field. Access tokens already issued stay "
                     + "valid until they expire.")
     @ApiResponse(responseCode = "200", description = "Password changed")
+    @ApiResponse(
+            responseCode = "412",
+            description = "If-Match does not match the current ETag: the administrator has changed",
+            content = @Content)
     @ApiResponse(responseCode = "422", description = "Invalid password, listed in errors", content = @Content)
-    EntityModel<AdminUserResponse> changePassword(
-            @PathVariable UUID adminUserId, @Valid @RequestBody ChangePasswordRequest request) {
-        return ASSEMBLER.toModel(adminUserService.changePassword(adminUserId, request.password()));
+    @EntityTagged
+    ResponseEntity<EntityModel<AdminUserResponse>> changePassword(
+            @PathVariable UUID adminUserId,
+            @RequestHeader(name = HttpHeaders.IF_MATCH, required = false) @Nullable String ifMatch,
+            @Valid @RequestBody ChangePasswordRequest request) {
+        return withEntityTag(adminUserService.changePassword(adminUserId, request.password(), ifMatch));
     }
 
     @DeleteMapping(ApiPaths.ADMIN_USER)
@@ -121,8 +140,19 @@ class AdminUserController {
                     + "expire.")
     @ApiResponse(responseCode = "204", description = "Administrator deleted")
     @ApiResponse(responseCode = "409", description = "Deleting oneself or the last administrator", content = @Content)
-    ResponseEntity<Void> delete(@PathVariable UUID adminUserId, Authentication authentication) {
-        adminUserService.delete(adminUserId, UUID.fromString(authentication.getName()));
+    @ApiResponse(
+            responseCode = "412",
+            description = "If-Match does not match the current ETag: the administrator has changed",
+            content = @Content)
+    ResponseEntity<Void> delete(
+            @PathVariable UUID adminUserId,
+            @RequestHeader(name = HttpHeaders.IF_MATCH, required = false) @Nullable String ifMatch,
+            Authentication authentication) {
+        adminUserService.delete(adminUserId, UUID.fromString(authentication.getName()), ifMatch);
         return ResponseEntity.noContent().build();
+    }
+
+    private static ResponseEntity<EntityModel<AdminUserResponse>> withEntityTag(AdminUser adminUser) {
+        return ResponseEntity.ok().eTag(AdminUserService.entityTag(adminUser)).body(ASSEMBLER.toModel(adminUser));
     }
 }

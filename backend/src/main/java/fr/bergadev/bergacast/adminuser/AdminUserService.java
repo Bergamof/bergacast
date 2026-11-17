@@ -1,10 +1,14 @@
 package fr.bergadev.bergacast.adminuser;
 
 import fr.bergadev.bergacast.web.ConflictException;
+import fr.bergadev.bergacast.web.EntityTags;
 import fr.bergadev.bergacast.web.ResourceNotFoundException;
+import fr.bergadev.bergacast.web.Sha256;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -46,8 +50,15 @@ public class AdminUserService {
         return adminUserRepository.save(new AdminUser(username, passwordEncoder.encode(password), clock.instant()));
     }
 
-    public AdminUser changePassword(UUID id, String newPassword) {
+    /** Strong entity tag of an administrator: a digest of the stored password hash, the only modifiable member. */
+    public static String entityTag(AdminUser adminUser) {
+        return EntityTags.strong(Sha256.hex(adminUser.getPasswordHash().getBytes(StandardCharsets.UTF_8)));
+    }
+
+    /** @param ifMatch optional {@code If-Match} header value, checked against the current entity tag */
+    public AdminUser changePassword(UUID id, String newPassword, @Nullable String ifMatch) {
         AdminUser adminUser = get(id);
+        EntityTags.requireIfMatch(ifMatch, entityTag(adminUser));
         adminUser.changePasswordHash(passwordEncoder.encode(newPassword));
         return adminUser;
     }
@@ -56,15 +67,17 @@ public class AdminUserService {
      * Deletes an administrator.
      *
      * @param currentAdminId identifier of the administrator performing the deletion
+     * @param ifMatch optional {@code If-Match} header value, checked against the current entity tag
      * @throws ConflictException when deleting oneself or the last administrator, which would lock everybody out
      */
-    public void delete(UUID id, UUID currentAdminId) {
+    public void delete(UUID id, UUID currentAdminId, @Nullable String ifMatch) {
         // Locking every administrator serializes concurrent deletions, which could otherwise remove the last two.
         List<AdminUser> administrators = adminUserRepository.findAllForUpdate();
         AdminUser adminUser = administrators.stream()
                 .filter(administrator -> administrator.getId().equals(id))
                 .findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("No administrator " + id));
+        EntityTags.requireIfMatch(ifMatch, entityTag(adminUser));
         if (id.equals(currentAdminId)) {
             throw new ConflictException("An administrator cannot delete their own account");
         }

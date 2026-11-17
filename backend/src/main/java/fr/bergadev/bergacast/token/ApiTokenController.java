@@ -2,21 +2,26 @@ package fr.bergadev.bergacast.token;
 
 import fr.bergadev.bergacast.web.ApiLinks;
 import fr.bergadev.bergacast.web.ApiPaths;
-import fr.bergadev.bergacast.web.CollectionModels;
+import fr.bergadev.bergacast.web.PagedModels;
 import fr.bergadev.bergacast.web.SecuritySchemes;
+import fr.bergadev.bergacast.web.SortableProperties;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
-import org.springframework.hateoas.CollectionModel;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.data.web.PagedResourcesAssembler;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.IanaLinkRelations;
 import org.springframework.hateoas.MediaTypes;
+import org.springframework.hateoas.PagedModel;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -34,26 +39,30 @@ import org.springframework.web.bind.annotation.RestController;
 @SecurityRequirement(name = SecuritySchemes.ADMIN_JWT)
 class ApiTokenController {
 
-    private final ApiTokenService apiTokenService;
+    private static final Set<String> SORTABLE_PROPERTIES = Set.of("createdAt", "name", "lastUsedAt");
 
-    ApiTokenController(ApiTokenService apiTokenService) {
+    private final ApiTokenService apiTokenService;
+    private final PagedResourcesAssembler<ApiToken> pagedAssembler;
+
+    ApiTokenController(ApiTokenService apiTokenService, PagedResourcesAssembler<ApiToken> pagedAssembler) {
         this.apiTokenService = apiTokenService;
+        this.pagedAssembler = pagedAssembler;
     }
 
     @GetMapping(ApiPaths.PODCAST_API_TOKENS)
     @Operation(
             operationId = "listApiTokens",
             summary = "List the API tokens of a podcast",
-            description = "Lists the API tokens of the podcast, with their prefix and last use. Plain token values "
-                    + "are never returned after their creation.")
-    CollectionModel<EntityModel<ApiTokenResponse>> list(@PathVariable String slug) {
-        List<EntityModel<ApiTokenResponse>> tokens = apiTokenService.list(slug).stream()
-                .map(apiToken -> toModel(slug, apiToken, null))
-                .toList();
-        return CollectionModels.of(
-                tokens,
-                ApiTokenResponse.class,
-                ApiLinks.link(IanaLinkRelations.SELF, ApiPaths.PODCAST_API_TOKENS, slug));
+            description = "Lists the API tokens of the podcast, oldest first by default, with their prefix and last "
+                    + "use; sortable by createdAt, name or lastUsedAt. Plain token values are never returned after "
+                    + "their creation.")
+    PagedModel<EntityModel<ApiTokenResponse>> list(
+            @PathVariable String slug, @ParameterObject @PageableDefault(sort = "createdAt") Pageable pageable) {
+        return PagedModels.of(
+                apiTokenService.list(slug, SortableProperties.restrict(pageable, SORTABLE_PROPERTIES)),
+                pagedAssembler,
+                apiToken -> toModel(slug, apiToken, null),
+                ApiTokenResponse.class);
     }
 
     @PostMapping(path = ApiPaths.PODCAST_API_TOKENS, consumes = MediaType.APPLICATION_JSON_VALUE)

@@ -161,10 +161,17 @@ class PodcastController {
             operationId = "deletePodcast",
             summary = "Delete a podcast",
             description = "Deletes the podcast with its episodes, their audio files and its API tokens: its feed and "
-                    + "audio URLs stop working. Cannot be undone.")
+                    + "audio URLs stop working. Cannot be undone. Send the ETag in `If-Match` to be sure of deleting "
+                    + "the version you looked at.")
     @ApiResponse(responseCode = "204", description = "Podcast deleted")
-    ResponseEntity<Void> delete(@PathVariable String slug) {
-        podcastService.delete(slug);
+    @ApiResponse(
+            responseCode = "412",
+            description = "If-Match does not match the current ETag: the podcast has changed",
+            content = @Content)
+    ResponseEntity<Void> delete(
+            @PathVariable String slug,
+            @RequestHeader(name = HttpHeaders.IF_MATCH, required = false) @Nullable String ifMatch) {
+        podcastService.delete(slug, ifMatch);
         return ResponseEntity.noContent().build();
     }
 }

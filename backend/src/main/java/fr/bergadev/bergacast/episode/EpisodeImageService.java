@@ -4,6 +4,7 @@ import fr.bergadev.bergacast.image.ImageFormat;
 import fr.bergadev.bergacast.image.ProcessedImage;
 import fr.bergadev.bergacast.podcast.PodcastFeedChanged;
 import fr.bergadev.bergacast.storage.AfterCommit;
+import fr.bergadev.bergacast.storage.AfterCommitScope;
 import fr.bergadev.bergacast.web.EntityTags;
 import fr.bergadev.bergacast.web.ResourceNotFoundException;
 import fr.bergadev.bergacast.web.UnprocessableContentException;
@@ -21,6 +22,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * changes the episode (its version, hence its entity tag) and its feed, written again once the change is committed.
  */
 @Service
+@AfterCommitScope
 class EpisodeImageService {
 
     private final EpisodeService episodeService;
