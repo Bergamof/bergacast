@@ -105,9 +105,13 @@ public class PodcastService {
     /**
      * Deletes a podcast with its episodes, image and API tokens (database cascades and triggers); its objects (feed,
      * image, audio files) are removed from the storage once the deletion is committed.
+     *
+     * @param ifMatch optional {@code If-Match} header value, checked against the current entity tag
      */
-    public void delete(String slug) {
-        podcastRepository.delete(getBySlug(slug));
+    public void delete(String slug, @Nullable String ifMatch) {
+        PodcastOverview current = get(slug);
+        EntityTags.requireIfMatch(ifMatch, current.entityTag());
+        podcastRepository.delete(current.podcast());
         events.publishEvent(new PodcastDeleted(slug));
     }
 
@@ -123,17 +127,19 @@ public class PodcastService {
         if (podcasts.isEmpty()) {
             return Map.of();
         }
-        List<UUID> ids = podcasts.stream().map(Podcast::getId).toList();
-        return imageRepository.findAllMetadata(ids).stream()
+        return imageRepository.findAllMetadata(idsOf(podcasts)).stream()
                 .collect(Collectors.toMap(PodcastImageMetadata::podcastId, Function.identity()));
+    }
+
+    private static List<UUID> idsOf(List<Podcast> podcasts) {
+        return podcasts.stream().map(Podcast::getId).toList();
     }
 
     private Map<UUID, Long> countEpisodes(List<Podcast> podcasts) {
         if (podcasts.isEmpty()) {
             return Map.of();
         }
-        List<UUID> ids = podcasts.stream().map(Podcast::getId).toList();
-        return podcastRepository.countEpisodes(ids).stream()
+        return podcastRepository.countEpisodes(idsOf(podcasts)).stream()
                 .collect(Collectors.toMap(EpisodeCount::podcastId, EpisodeCount::count));
     }
 }

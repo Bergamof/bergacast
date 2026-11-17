@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -20,6 +21,7 @@ import org.jspecify.annotations.Nullable;
 public class ApiToken {
 
     static final int MAX_NAME_LENGTH = 100;
+    static final Duration LAST_USE_PRECISION = Duration.ofMinutes(1);
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -56,8 +58,11 @@ public class ApiToken {
         this.createdAt = createdAt;
     }
 
+    /** Written at most once per {@link #LAST_USE_PRECISION}: authenticating must not write on every request. */
     void markUsed(Instant now) {
-        this.lastUsedAt = now;
+        if (lastUsedAt == null || Duration.between(lastUsedAt, now).compareTo(LAST_USE_PRECISION) >= 0) {
+            this.lastUsedAt = now;
+        }
     }
 
     public UUID getId() {

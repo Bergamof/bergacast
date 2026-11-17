@@ -158,9 +158,12 @@ public class EpisodeService {
     /**
      * Deletes an episode (its audio file row is deleted by a database trigger); once committed, the feed is written
      * again and the audio and image objects are removed from the storage.
+     *
+     * @param ifMatch optional {@code If-Match} header value, checked against the current entity tag
      */
-    public void delete(String slug, UUID episodeId) {
+    public void delete(String slug, UUID episodeId, @Nullable String ifMatch) {
         Episode episode = get(slug, episodeId);
+        EntityTags.requireIfMatch(ifMatch, entityTag(episode));
         String audioExtension = episode.getAudioFile().getFileExtension();
         Optional<EpisodeImage> image = episode.getImage();
         episodeRepository.delete(episode);

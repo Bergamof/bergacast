@@ -209,6 +209,14 @@ textarea {
 	font-weight: normal;
 }
 
+/* A comfortable target: the native 13 px box is smaller than the 24 px of WCAG 2.5.8 without its label. */
+.choice input[type='checkbox'],
+.choice input[type='radio'] {
+	flex: none;
+	width: 1.25rem;
+	height: 1.25rem;
+}
+
 button,
 .button {
 	display: inline-block;

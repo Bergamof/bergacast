@@ -21,7 +21,7 @@
 - SvelteKit 3 : pas de `svelte.config.js` (config dans `vite.config.ts`) ; imports `#lib/*` (champ `imports` de package.json) avec extension explicite au lieu de `$lib` ; `resolve()` de `$app/paths` prend l’id de route avec groupe (`resolve('/(app)/podcasts')`).
 - `@vitest/coverage-v8` a `vitest` en peer exact : toujours les monter ensemble (groupe Dependabot `vitest`).
 - `FROM` des Dockerfile sans `ARG` : Dependabot ne résout pas `${…}` dans un `FROM`, donc ni tag ni empreinte ne seraient mis à jour ; relever une empreinte : requête `HEAD` sur `/v2/<image>/manifests/<tag>` du registre (en-tête `Docker-Content-Digest`, avec `Accept` index OCI/liste de manifestes pour l’empreinte multi-architecture).
-- `engine-strict=true` : Node ≠ 24 ou npm ≠ 12.2.1 → `npm ci` échoue ; installer `npm install -g npm@12.2.1`.
+- `engine-strict=true` : Node ≠ 26 ou npm ≠ 12.2.2 → `npm ci` échoue ; installer `npm install -g npm@12.2.2`.
 - Spotless formate aussi les `*.gradle.kts` (ktlint) : lancer `spotlessApply` après toute modif du build.
 - `github/codeql-action/init` et `analyze` doivent avoir la même version (sinon « configuration error » de CodeQL) : groupe Dependabot `codeql-action` dans `.github/dependabot.yml`, à monter ensemble à la main si deux PR séparées subsistent.
 - Ports : 8080 (backend), 5173 (Vite), 5432 (base de dev) ; conflit fréquent avec un autre PostgreSQL/une autre app → libérer le port ou changer `BERGACAST_PORT`/`SPRING_DATASOURCE_URL`.

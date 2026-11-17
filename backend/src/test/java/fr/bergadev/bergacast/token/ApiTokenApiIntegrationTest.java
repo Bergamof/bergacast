@@ -50,6 +50,29 @@ class ApiTokenApiIntegrationTest {
     }
 
     @Test
+    void paginatesTheTokensOldestFirstAndRefusesToSortByTheHash() throws Exception {
+        for (String name : new String[] {"First", "Second", "Third"}) {
+            mockMvc.perform(post("/api/v1/podcasts/{slug}/api-tokens", slug)
+                            .header(HttpHeaders.AUTHORIZATION, admin)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"name\":\"" + name + "\"}"))
+                    .andExpect(status().isCreated());
+        }
+
+        mockMvc.perform(get("/api/v1/podcasts/{slug}/api-tokens?size=2&page=1", slug)
+                        .header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$._embedded.apiTokens.length()").value(1))
+                .andExpect(jsonPath("$._embedded.apiTokens[0].name").value("Third"))
+                .andExpect(jsonPath("$.page.totalElements").value(3))
+                .andExpect(jsonPath("$.page.totalPages").value(2))
+                .andExpect(jsonPath("$._links.prev.href").isString());
+        mockMvc.perform(get("/api/v1/podcasts/{slug}/api-tokens?sort=tokenHash", slug)
+                        .header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void createsListsUsesAndRevokesATokenShownOnlyOnce() throws Exception {
         MvcResult created = mockMvc.perform(post("/api/v1/podcasts/{slug}/api-tokens", slug)
                         .header(HttpHeaders.AUTHORIZATION, admin)

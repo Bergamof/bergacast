@@ -1,4 +1,5 @@
 import { isAbortError } from './abort';
+import { translateDetail, translateTitle, translateViolation } from './problem-messages';
 
 /** A single invalid field, as listed in the `errors` member of a validation problem. */
 export interface FieldViolation {
@@ -58,7 +59,9 @@ const DEFAULT_TITLES: Record<number, string> = {
 	413: 'Contenu trop volumineux',
 	415: 'Type de contenu non supporté',
 	422: 'Données invalides',
-	429: 'Trop de tentatives, réessayez plus tard'
+	429: 'Trop de tentatives, réessayez plus tard',
+	500: 'Erreur du serveur',
+	503: 'Service indisponible'
 };
 
 function isFieldViolation(value: unknown): value is FieldViolation {
@@ -69,22 +72,41 @@ function isFieldViolation(value: unknown): value is FieldViolation {
 	return typeof candidate.field === 'string' && typeof candidate.message === 'string';
 }
 
+function translated(violation: FieldViolation): FieldViolation {
+	return { field: violation.field, message: translateViolation(violation.message) };
+}
+
 function optionalString(value: unknown): string | undefined {
 	return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-/** Builds a well-formed problem from an untrusted response body, filling in a French default title. */
+/** Builds a well-formed problem from an untrusted response body, in French (default title, known API messages). */
 export function toProblemDetails(status: number, body: unknown): ProblemDetails {
 	const source = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
-	const errors = Array.isArray(source.errors) ? source.errors.filter(isFieldViolation) : [];
+	const errors = Array.isArray(source.errors)
+		? source.errors.filter(isFieldViolation).map(translated)
+		: [];
+	const title = optionalString(source.title);
+	const detail = optionalString(source.detail);
 	return {
 		type: optionalString(source.type),
-		title: optionalString(source.title) ?? DEFAULT_TITLES[status] ?? `Erreur HTTP ${status}`,
+		title: title
+			? translateTitle(status, title)
+			: (DEFAULT_TITLES[status] ?? `Erreur HTTP ${status}`),
 		status,
-		detail: optionalString(source.detail),
+		detail: detail ? translateDetail(detail) : undefined,
 		instance: optionalString(source.instance),
 		errors: errors.length > 0 ? errors : undefined
 	};
+}
+
+/** Tells how long to wait when the server answered `429` with a `Retry-After` in seconds. */
+export function withRetryDelay(problem: ProblemDetails, retryAfter: string | null): ProblemDetails {
+	const seconds = Number(retryAfter);
+	if (retryAfter === null || !Number.isInteger(seconds) || seconds <= 0) {
+		return problem;
+	}
+	return { ...problem, detail: `${problem.detail ?? ''} Réessayez dans ${seconds} s.`.trim() };
 }
 
 /** Converts anything thrown by an API call into a problem that forms can display. */

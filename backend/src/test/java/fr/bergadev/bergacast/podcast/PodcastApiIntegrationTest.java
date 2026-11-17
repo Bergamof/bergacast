@@ -315,6 +315,20 @@ class PodcastApiIntegrationTest {
 
     /** Objects are listed by prefix: deleting a podcast keeps those of a podcast whose slug extends its slug. */
     @Test
+    void refusesToDeleteAPodcastWhenIfMatchIsStale() throws Exception {
+        String slug = ApiTestClient.uniqueSlug("stale-delete");
+        api.createPodcast(slug);
+
+        mockMvc.perform(delete("/api/v1/podcasts/{slug}", slug)
+                        .header(HttpHeaders.AUTHORIZATION, admin)
+                        .header(HttpHeaders.IF_MATCH, "\"stale\""))
+                .andExpect(status().isPreconditionFailed())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
+        mockMvc.perform(get("/api/v1/podcasts/{slug}", slug).header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void keepsTheObjectsOfOtherPodcastsWhenDeletingAPodcast() throws Exception {
         String slug = ApiTestClient.uniqueSlug("prefix");
         String longerSlug = slug + "-2";
