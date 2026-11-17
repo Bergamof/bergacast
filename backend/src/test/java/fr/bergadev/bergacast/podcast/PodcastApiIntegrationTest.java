@@ -262,7 +262,7 @@ class PodcastApiIntegrationTest {
             mockMvc.perform(get("/api/v1/podcasts?" + query).header(HttpHeaders.AUTHORIZATION, admin))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.page.number").value(0))
-                    .andExpect(jsonPath("$.page.size").value(20));
+                    .andExpect(jsonPath("$.page.size").value(10));
         }
         mockMvc.perform(get("/api/v1/podcasts?size=100000").header(HttpHeaders.AUTHORIZATION, admin))
                 .andExpect(status().isOk())
