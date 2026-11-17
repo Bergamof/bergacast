@@ -88,7 +88,7 @@ Docker (racine) : `cp .env.example .env` (renseigner `BERGACAST_JWT_SECRET`, mot
 
 ## État du projet
 - Fait : API complète, flux RSS, SPA d'administration, images de production (natif GraalVM + static-web-server), médias et flux sur S3 (Scaleway), migrations Liquibase en job serverless, release manuelle avec déploiement, CI complète (sécurité, Lighthouse, e2e), équipe d'agents, protection de `main`.
-- Audit complet du 2026-11-17 (7 spécialistes) : corrections appliquées par PR ; points d'arbitrage remontés à Adrien (mémoire du conteneur backend, textes d'erreur anglais côté SPA, EXIF des images, durcissements Scaleway, Node 26 LTS).
+- Audit complet du 2026-11-17 (7 spécialistes) : corrigé et mergé ; arbitrages d'Adrien dans `docs/decisions.md`. Restent des mineurs non traités (refactors de clean code sans enjeu : `ImageResizer`, constructeurs de records, `Transactions` helper ; confiance aux en-têtes `X-Forwarded-*` pour les liens ; déploiement par empreinte ; scan nocturne des images distroless ; épinglage des outils lancés par `npx` ; seuils de couverture) et les réglages Scaleway/GitHub à faire par Adrien (README, « Déploiement »).
 - Aucune issue de code ouverte.
 
 ## Licence
