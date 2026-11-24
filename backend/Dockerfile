@@ -36,7 +36,7 @@ RUN mkdir /dist \
 # ---------------------------------------------------------------------------
 # Runtime: glibc, CA certificates and tzdata only, no shell
 # ---------------------------------------------------------------------------
-FROM gcr.io/distroless/base-debian13:nonroot@sha256:7fe4df6a4413adf5889960d345a28b4574aea0872ea47684c7244c8d88027dca AS runtime
+FROM gcr.io/distroless/base-debian13:nonroot@sha256:a08d9054afbaf1af9b90fd02cdc7b32236319b5376d374505a41548d42b0c5db AS runtime
 
 # Native-image looks for the JDK libraries in the directory of the executable.
 COPY --from=build /dist/ /app/
