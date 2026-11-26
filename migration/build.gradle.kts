@@ -25,7 +25,7 @@ val liquibaseVersion = "4.33.0" // last 4.x line (Apache-2.0): Liquibase 5 moved
 val postgresqlDriverVersion = "42.7.14"
 // The same password encoder as the backend (Spring Security delegating encoder), so that it can check what is stored.
 val springSecurityCryptoVersion = "7.1.2"
-val springCoreVersion = "7.0.10"
+val springCoreVersion = "7.1.0"
 val junitVersion = "6.1.3"
 val assertjVersion = "3.27.7"
 val testcontainersVersion = "2.0.5"
