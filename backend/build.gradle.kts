@@ -4,7 +4,7 @@ plugins {
     checkstyle
     id("org.springframework.boot") version "4.1.2"
     id("com.diffplug.spotless") version "8.11.0"
-    id("org.graalvm.buildtools.native") version "1.1.18"
+    id("org.graalvm.buildtools.native") version "1.1.19"
 }
 
 group = "fr.bergadev"
