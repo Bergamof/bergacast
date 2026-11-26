@@ -12,7 +12,7 @@
 # ---------------------------------------------------------------------------
 # Build: the application and its dependencies as jars, and the JRE they need
 # ---------------------------------------------------------------------------
-FROM eclipse-temurin:25-jdk@sha256:83f4a7fc27df94dcc7b8de04d14cbbba8da14406f921e966969c3b09000aa507 AS build
+FROM eclipse-temurin:25-jdk@sha256:ce2ef9d2d67a68de5e196d4de9d743327c44a10b57fe02ec39f572c652cacfd3 AS build
 WORKDIR /workspace
 ENV GRADLE_OPTS="-Dorg.gradle.daemon=false"
 
